@@ -1,0 +1,245 @@
+@import "tailwindcss";
+
+/* Identidade Biomech: fundo verde-quase-preto de painel de laboratório, verde
+   neon como cor de ação e de dado, amarelo como segundo acento (o "canto" dos
+   cards e os destaques). Os cards têm contorno verde fino em vez de sombra —
+   no escuro, sombra não aparece; o contorno é o que desenha a forma.
+
+   "ink" é a cor de estado ATIVO (pílula selecionada, botão principal) e
+   "on-ink" o texto por cima dela. No tema claro antigo era preto sobre branco;
+   aqui é verde neon com texto escuro — os componentes não precisam saber. */
+@theme {
+  --color-bg: #050f0a;
+  --color-surface: #0a1a12;
+  --color-surface-2: #10261a;
+  --color-panel: #030a06;
+  --color-border: #1c3d2b;
+  --color-line: #2fe38c;
+  --color-text: #eafcf1;
+  --color-muted: #8db5a0;
+  --color-accent: #2fe38c;
+  --color-accent-strong: #2fe38c;
+  --color-yellow: #f2d417;
+  --color-ink: #2fe38c;
+  --color-ink-2: #1fb56c;
+  --color-on-ink: #04130b;
+  --color-hot: #ff7a59;
+  --color-warm: #f2d417;
+  --color-cold: #5eb8ff;
+
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
+
+  --shadow-card: 0 0 0 1px rgb(47 227 140 / 0.35),
+    0 18px 40px -24px rgb(0 0 0 / 0.9);
+}
+
+/* Superfície padrão: contorno verde e o triângulo amarelo no canto inferior
+   direito, a assinatura visual dos cards da Biomech. */
+@utility card {
+  position: relative;
+  border-radius: 28px;
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  &::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 34px;
+    height: 34px;
+    background: var(--color-yellow);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    border-bottom-right-radius: 28px;
+    pointer-events: none;
+  }
+}
+
+/* Botão redondo com ícone, o "↗" que leva ao detalhe. */
+@utility icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+  &:hover {
+    background-color: var(--color-ink);
+    border-color: var(--color-ink);
+    color: var(--color-on-ink);
+  }
+}
+
+/* Títulos em caixa alta pesada, como "ESCOLHA SUA AVALIAÇÃO". */
+@utility display {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  /* Brilho verde no alto e uma grade fina, lembrando o painel de dados do
+     material da Biomech. Tudo em CSS: nenhuma imagem para baixar. */
+  background-image:
+    radial-gradient(1200px 520px at 85% -10%, rgb(47 227 140 / 0.14), transparent 70%),
+    radial-gradient(900px 480px at -10% 110%, rgb(47 227 140 / 0.08), transparent 70%),
+    linear-gradient(rgb(47 227 140 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(47 227 140 / 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+/* O kanban rola na horizontal; a barra padrão do Windows é grossa e feia. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #24523a transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #24523a;
+  border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hachura diagonal usada como "trilho" vazio dos gráficos. */
+.hatch,
+.hatch-dark {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(47 227 140 / 0.1) 0 2px,
+    transparent 2px 7px
+  );
+}
+
+/* Card sendo arrastado: levanta da superfície em vez de sumir. */
+.dragging {
+  opacity: 0.4;
+}
+
+/* Texto do playbook (Markdown renderizado). Espaçamento de leitura longa. */
+.markdown {
+  font-size: 0.925rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.markdown > * + * {
+  margin-top: 0.9em;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font-weight: 800;
+  line-height: 1.25;
+  margin-top: 1.6em;
+}
+.markdown h1 {
+  font-size: 1.5rem;
+}
+.markdown h2 {
+  font-size: 1.2rem;
+  color: var(--color-accent);
+}
+.markdown h3 {
+  font-size: 1.02rem;
+}
+.markdown :first-child {
+  margin-top: 0;
+}
+.markdown strong {
+  font-weight: 700;
+  color: var(--color-text);
+}
+.markdown a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+.markdown ul {
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown li + li {
+  margin-top: 0.3em;
+}
+.markdown li::marker {
+  color: var(--color-accent);
+}
+.markdown blockquote {
+  border-left: 3px solid var(--color-yellow);
+  background: color-mix(in srgb, var(--color-yellow) 7%, transparent);
+  padding: 0.6em 1em;
+  border-radius: 0 12px 12px 0;
+}
+.markdown code {
+  font-size: 0.85em;
+  background: var(--color-surface-2);
+  padding: 0.1em 0.4em;
+  border-radius: 6px;
+}
+.markdown hr {
+  border-color: var(--color-border);
+}
+.markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.markdown th {
+  background: var(--color-accent);
+  color: var(--color-on-ink);
+  font-weight: 800;
+  text-align: left;
+}
+.markdown th,
+.markdown td {
+  padding: 0.5em 0.8em;
+  border: 1px solid var(--color-border);
+  vertical-align: top;
+}
+.markdown tr:nth-child(even) td {
+  background: var(--color-surface-2);
+}
+.markdown input[type="checkbox"] {
+  accent-color: var(--color-accent);
+  margin-right: 0.4em;
+}
+
+/* Os <select> nativos abrem uma lista do sistema; sem isso ela vem branca. */
+option {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}

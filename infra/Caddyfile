@@ -1,0 +1,13 @@
+{$DOMAIN} {
+	# HTTPS é automático: o Caddy pede o certificado ao Let's Encrypt na primeira
+	# requisição. Só funciona se o DNS do domínio já apontar para o IP da VPS.
+	reverse_proxy evolution:8080
+
+	# O painel da Evolution e o QR Code não deveriam aparecer em buscador.
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	encode gzip
+}

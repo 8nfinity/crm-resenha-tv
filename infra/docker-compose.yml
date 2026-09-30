@@ -1,0 +1,85 @@
+# Evolution API na VPS.
+#
+# Roda separado do CRM porque precisa de processo persistente: a sessão do
+# WhatsApp é uma conexão WebSocket viva. Funções serverless morrem entre
+# requisições e a conexão cairia a cada poucos minutos.
+#
+# Postgres e Redis aqui são da Evolution, NÃO são o banco do CRM (esse fica no
+# Supabase). A Evolution guarda a sessão, as credenciais do WhatsApp e o cache
+# de mensagens; o CRM lê isso pela API na importação.
+
+services:
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    restart: always
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      SERVER_URL: ${SERVER_URL}
+      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY}
+
+      # Sem estas quatro, a Evolution não persiste nada e a importação do CRM
+      # volta vazia. É o erro de configuração mais comum aqui.
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${POSTGRES_PASSWORD}@postgres:5432/evolution
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      DATABASE_SAVE_DATA_LABELS: "true"
+      DATABASE_SAVE_DATA_HISTORIC: "true"
+
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+
+      # Só eventos que o CRM consome. Ligar tudo enche o log e gasta banda à toa.
+      WEBHOOK_GLOBAL_ENABLED: "false"
+
+      CONFIG_SESSION_PHONE_CLIENT: CRM
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      QRCODE_LIMIT: "10"
+      LOG_LEVEL: ERROR
+      DEL_INSTANCE: "false"
+    volumes:
+      - ./data/evolution_instances:/evolution/instances
+    expose:
+      - "8080"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: evolution
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    # Sem portas publicadas: só a rede interna do compose alcança o banco.
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - ./data/redis:/data
+
+  # Caddy resolve HTTPS sozinho (Let's Encrypt) desde que o domínio já aponte
+  # para o IP da VPS. É o único serviço exposto à internet.
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - evolution
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy_data:/data
+      - ./data/caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}

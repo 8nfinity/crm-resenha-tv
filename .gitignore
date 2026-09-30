@@ -1,0 +1,19 @@
+node_modules/
+.next/
+out/
+build/
+# Qualquer variante (.env, .env.local, .env.bak, .env.producao...) fica de fora.
+# Listar uma a uma é como se vaza credencial: basta criar um nome novo.
+.env*
+!.env.example
+next-env.d.ts
+*.tsbuildinfo
+
+# Cliente do Prisma: gerado por `prisma generate` no build, não versionado
+lib/generated/
+.vercel
+.DS_Store
+
+# Infra: volumes e segredos da VPS
+infra/data/
+infra/.env

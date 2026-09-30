@@ -1,0 +1,319 @@
+// CRM de WhatsApp — modelo de dados
+//
+// Regra central deste schema: o funil é histórico, não só estado.
+// `Deal.stageId` diz onde o lead está agora; `StageTransition` diz por onde ele passou.
+// Sem a segunda tabela, perguntas como "quantos leads chegaram a reunião este mês"
+// ficam impossíveis de responder depois — e não dá para reconstruir o passado.
+
+// Prisma 7: a URL do banco não mora mais aqui — está em prisma.config.ts, e o
+// PrismaClient recebe um driver adapter (lib/db.ts). O engine em Rust saiu.
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+  // Sem isto, um `include` de relacao vira uma consulta SEPARADA por relacao.
+  // Com o banco a 200ms de distancia, cada relacao custava uma viagem inteira:
+  // o funil fazia oito idas para montar uma tela. Com relationJoins da para
+  // pedir JOIN de verdade e resolver tudo numa consulta so.
+  previewFeatures = ["relationJoins"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Um número de WhatsApp conectado ao CRM.
+///
+/// Cada conta é uma instância própria na Evolution API, com sessão e QR Code
+/// separados. Desconectar uma não afeta as outras.
+model WhatsAppAccount {
+  id           String  @id @default(cuid())
+  /// Nome da instância na Evolution API. É a chave que liga os dois lados.
+  instanceName String  @unique
+  /// Apelido que você dá: "Comercial", "Suporte", "Meu pessoal".
+  label        String?
+  /// Número conectado, preenchido quando a sessão abre.
+  phone        String?
+  status       String  @default("disconnected")
+  /// Cor para distinguir as contas no funil de relance.
+  color        String  @default("#25d366")
+
+  lastImportAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  contacts Contact[]
+  labels   WhatsAppLabel[]
+
+  @@index([status])
+}
+
+/// Uma etiqueta do WhatsApp Business, espelhada do aparelho.
+///
+/// Etiquetas só existem em contas Business — num WhatsApp pessoal esta tabela
+/// fica vazia e nada aqui tem efeito.
+///
+/// `stageId` é o mapeamento: quando você aplica esta etiqueta numa conversa no
+/// celular, o lead vai para esse estágio do funil. Nulo significa "etiqueta
+/// conhecida, mas sem efeito no funil".
+model WhatsAppLabel {
+  id        String  @id @default(cuid())
+  accountId String
+  /// Id da etiqueta no WhatsApp. Estável por conta, não entre contas.
+  labelId   String
+  name      String
+  color     String?
+  stageId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account WhatsAppAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// SetNull, não Cascade: apagar um estágio desfaz o mapeamento, mas não pode
+  /// apagar a etiqueta — ela existe no celular independente do CRM.
+  stage   Stage?          @relation(fields: [stageId], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, labelId])
+  @@index([accountId])
+  @@index([stageId])
+}
+
+/// Uma pessoa no WhatsApp, dentro de UMA conta.
+///
+/// O mesmo contato falando com dois números seus vira dois registros, de
+/// propósito: o relacionamento é diferente em cada canal, e misturar as duas
+/// conversas num lead só produziria um histórico que nunca existiu.
+model Contact {
+  id            String    @id @default(cuid())
+  accountId     String
+  waJid         String // "5511999999999@s.whatsapp.net" ou "6219...@lid"
+  phone         String?
+  pushName      String? // nome que a pessoa definiu no WhatsApp
+  savedName     String? // nome como está salvo na sua agenda
+  profilePicUrl String?
+  isGroup       Boolean   @default(false)
+  isBusiness    Boolean   @default(false)
+  importedAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  account  WhatsAppAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  messages Message[]
+  deals    Deal[]
+
+  /// A unicidade é por conta, não global: o mesmo JID pode existir em duas
+  /// contas suas sem conflito.
+  @@unique([accountId, waJid])
+  @@index([phone])
+  @@index([isGroup])
+  @@index([accountId])
+}
+
+enum CustomFieldType {
+  TEXT
+  SELECT
+  NUMBER
+  DATE
+}
+
+/// Um campo que VOCÊ define para os seus leads: origem, segmento, o que for.
+///
+/// A definição fica aqui e o valor fica em `Deal.customValues`, indexado pelo
+/// id do campo. Guardar o valor em JSON em vez de uma tabela de valores evita
+/// um join por campo em toda listagem do funil — e num CRM de um usuário só,
+/// o custo de não poder indexar esses valores é irrelevante.
+model CustomField {
+  id      String          @id @default(cuid())
+  name    String
+  type    CustomFieldType @default(TEXT)
+  /// Opções do SELECT, como array de strings. Nulo nos outros tipos.
+  options Json?
+  order   Int
+  /// Mostrar no card do funil, não só no painel do lead.
+  showOnCard Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+/// Coluna do kanban. Editável pela interface — nada de estágio hardcoded no código.
+model Stage {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int      @unique
+  color     String   @default("#64748b")
+  isWon     Boolean  @default(false)
+  isLost    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  deals          Deal[]
+  transitionsIn  StageTransition[] @relation("ToStage")
+  transitionsOut StageTransition[] @relation("FromStage")
+  labels         WhatsAppLabel[]
+
+  @@index([order])
+}
+
+/// O card do funil: um contato sendo trabalhado como oportunidade.
+model Deal {
+  id        String  @id @default(cuid())
+  contactId String
+  stageId   String
+  title     String? // se vazio, a interface cai para o nome do contato
+  value     Decimal? @db.Decimal(12, 2)
+
+  /// Score de temperatura (0-100), calculado em lib/scoring.ts.
+  score        Int      @default(0)
+  /// Fatores que produziram o score, em JSON. Existe para o Claude poder
+  /// justificar a recomendação em vez de só citar um número.
+  scoreFactors Json?
+  scoreUpdatedAt DateTime?
+
+  /// Quando entrou no estágio atual — base do cálculo de "dias parado".
+  enteredStageAt    DateTime  @default(now())
+  /// Última mensagem em qualquer direção.
+  lastInteractionAt DateTime?
+  /// Última mensagem recebida DELE. Sinal mais forte que o anterior.
+  lastInboundAt     DateTime?
+
+  /// Valores dos campos que você definiu, como { "<id do campo>": valor }.
+  /// A definição de cada campo está em CustomField.
+  customValues Json?
+
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  contact     Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  stage       Stage             @relation(fields: [stageId], references: [id])
+  transitions StageTransition[]
+  activities  Activity[]
+  notes       Note[]
+
+  @@unique([contactId])
+  @@index([stageId, score])
+  @@index([lastInboundAt])
+  @@index([archivedAt])
+}
+
+/// Cada movimento de card no kanban vira uma linha aqui. É a fonte de verdade
+/// das métricas de conversão e de tempo por estágio.
+model StageTransition {
+  id          String   @id @default(cuid())
+  dealId      String
+  fromStageId String?  // nulo quando o deal nasce
+  toStageId   String
+  at          DateTime @default(now())
+  /// Quanto tempo o deal passou no estágio de origem, em horas.
+  hoursInFrom Float?
+
+  deal      Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  fromStage Stage? @relation("FromStage", fields: [fromStageId], references: [id])
+  toStage   Stage  @relation("ToStage", fields: [toStageId], references: [id])
+
+  @@index([dealId, at])
+  @@index([toStageId, at])
+  @@index([at])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  STICKER
+  LOCATION
+  CONTACT
+  OTHER
+}
+
+/// Mensagem trocada. Somente leitura no MVP: o envio continua pelo WhatsApp normal.
+model Message {
+  id          String      @id @default(cuid())
+  contactId   String
+  waMessageId String
+  fromMe      Boolean
+  type        MessageType @default(TEXT)
+  body        String?     @db.Text
+  timestamp   DateTime
+  createdAt   DateTime    @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  /// Idempotência por contato, não global. Com várias contas conectadas, um
+  /// mesmo identificador de mensagem pode aparecer em duas delas — sendo
+  /// global, a segunda seria descartada como duplicata e a mensagem sumiria.
+  @@unique([contactId, waMessageId])
+  @@index([contactId, timestamp])
+  @@index([timestamp])
+  @@index([fromMe])
+}
+
+enum ActivityType {
+  FOLLOW_UP
+  MEETING
+  CALL
+  PROPOSAL
+  OTHER
+}
+
+/// O que você fez ou vai fazer com o lead. Base dos relatórios de follow-up
+/// e de reuniões que o Claude precisa responder.
+model Activity {
+  id        String       @id @default(cuid())
+  dealId    String
+  type      ActivityType
+  title     String?
+  notes     String?      @db.Text
+  dueAt     DateTime?
+  doneAt    DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId, createdAt])
+  @@index([type, doneAt])
+  @@index([dueAt])
+}
+
+/// Anotação livre no card.
+model Note {
+  id        String   @id @default(cuid())
+  dealId    String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId, createdAt])
+}
+
+/// Estado geral do sistema. Tabela de uma linha só (`id = "singleton"`).
+///
+/// O estado de conexão mora em WhatsAppAccount, não aqui: com várias contas
+/// conectadas, um status global não significaria nada.
+model SystemState {
+  id                String    @id @default("singleton")
+  lastImportAt      DateTime?
+  lastImportSummary Json?
+  updatedAt         DateTime  @updatedAt
+}
+
+/// Uma seção do playbook comercial: roteiros, objeções, preços, processos.
+///
+/// O conteúdo é Markdown — títulos, listas e negrito sem precisar de editor
+/// visual. A ordem é manual: o playbook se lê de cima para baixo, como um
+/// treinamento, não por data.
+model PlaybookSection {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @default("") @db.Text
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
