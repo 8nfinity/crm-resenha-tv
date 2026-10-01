@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { contactName } from "@/lib/queries";
+import { numerosDeFollowUp } from "@/lib/follow-ups";
 
 /**
  * Atividades para o calendário.
@@ -16,6 +17,8 @@ export type AtividadeCalendario = {
   dueAt: string | null;
   doneAt: string | null;
   createdAt: string;
+  /** Número do follow-up no lead (1º, 2º…); nulo para os outros tipos. */
+  numero: number | null;
   deal: {
     id: string;
     nome: string;
@@ -53,6 +56,8 @@ export async function atividadesEntre(inicio: Date, fim: Date): Promise<Atividad
     },
   });
 
+  const numeros = await numerosDeFollowUp(linhas.filter((a) => a.type === "FOLLOW_UP").map((a) => a.deal.id));
+
   return linhas.map((a) => ({
     id: a.id,
     type: a.type,
@@ -60,6 +65,7 @@ export async function atividadesEntre(inicio: Date, fim: Date): Promise<Atividad
     dueAt: a.dueAt?.toISOString() ?? null,
     doneAt: a.doneAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
+    numero: numeros.get(a.id) ?? null,
     deal: {
       id: a.deal.id,
       nome: a.deal.title ?? contactName(a.deal.contact),

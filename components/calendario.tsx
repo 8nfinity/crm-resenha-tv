@@ -22,6 +22,8 @@ import {
   hora,
   juntarDataHora,
   rotuloTipo,
+  nomeDaAtividade,
+  ordinalFollowUp,
   situacao,
   TIPOS_ATIVIDADE,
   type TipoAtividade,
@@ -66,6 +68,12 @@ const deChave = (k: string) => {
 const somarDias = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 /** Segunda-feira da semana de `d`. */
 const inicioSemana = (d: Date) => somarDias(d, -((d.getDay() + 6) % 7));
+/** Título curto na grade: o número do follow-up vem na frente ("2º · Ligar"). */
+function tituloNaAgenda(a: AtividadeCalendario): string {
+  if (a.numero && a.title?.trim()) return `${a.numero}º · ${a.title.trim()}`;
+  return nomeDaAtividade(a);
+}
+
 const instanteDa = (a: AtividadeCalendario) => a.dueAt ?? a.doneAt ?? a.createdAt;
 const diaDa = (a: AtividadeCalendario) => chaveDia(instanteDa(a));
 
@@ -476,7 +484,7 @@ function Chip({ a, onAbrir }: { a: AtividadeCalendario; onAbrir: (id: string) =>
         e.stopPropagation();
         onAbrir(a.id);
       }}
-      title={`${a.title || rotuloTipo(a.type)} · ${a.deal.nome}`}
+      title={`${tituloNaAgenda(a)} · ${a.deal.nome}`}
       className={cn(
         "flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-left text-[11px] leading-tight hover:bg-[var(--color-surface-2)]",
         a.doneAt && "opacity-55",
@@ -643,7 +651,7 @@ function VisaoGrade({
                       }}
                     >
                       <span className={cn("block truncate font-semibold", a.doneAt && "line-through")}>
-                        {a.title || rotuloTipo(a.type)}
+                        {tituloNaAgenda(a)}
                       </span>
                       <span className="block truncate text-[var(--color-muted)]">
                         {hora(horarioNaGrade(a)!)} · {a.deal.nome}
@@ -722,7 +730,7 @@ function VisaoAgenda({
                   </span>
                   <button onClick={() => onAbrir(a.id)} className="min-w-0 flex-1 truncate text-left text-sm">
                     <span className={cn("font-semibold", a.doneAt && "text-[var(--color-muted)] line-through")}>
-                      {a.title || rotuloTipo(a.type)}
+                      {tituloNaAgenda(a)}
                     </span>
                     <span className="text-[var(--color-muted)]"> · {a.deal.nome}</span>
                   </button>
@@ -789,9 +797,9 @@ function Detalhe({
       <div className="flex gap-3">
         <span className="mt-1.5 size-3.5 shrink-0 rounded" style={{ backgroundColor: corDo(a.type) }} />
         <div className="min-w-0">
-          <h2 className={cn("text-xl font-bold", a.doneAt && "line-through opacity-70")}>{a.title || rotuloTipo(a.type)}</h2>
+          <h2 className={cn("text-xl font-bold", a.doneAt && "line-through opacity-70")}>{nomeDaAtividade(a)}</h2>
           <p className="mt-0.5 text-sm text-[var(--color-muted)]">
-            {rotuloTipo(a.type)}
+            {a.numero ? <span className="font-semibold text-[var(--color-accent)]">{ordinalFollowUp(a.numero)}</span> : rotuloTipo(a.type)}
             {s === "atrasada" && <span className="font-semibold text-[var(--color-hot)]"> · Atrasada</span>}
             {s === "hoje" && <span className="font-semibold text-[var(--color-yellow)]"> · Hoje</span>}
             {s === "feita" && <span className="font-semibold text-[var(--color-accent)]"> · Feita</span>}

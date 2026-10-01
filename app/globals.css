@@ -394,3 +394,40 @@ option {
   background-color: var(--color-solido);
   color: var(--color-text);
 }
+
+/* Leitor de e-book do playbook: a página entra girando de leve, como uma
+   folha virando, para a frente ou para trás. */
+@keyframes virar-frente {
+  from {
+    opacity: 0;
+    transform: perspective(1800px) rotateY(-12deg) translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes virar-tras {
+  from {
+    opacity: 0;
+    transform: perspective(1800px) rotateY(12deg) translateX(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.virar-frente {
+  transform-origin: left center;
+  animation: virar-frente 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.virar-tras {
+  transform-origin: right center;
+  animation: virar-tras 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .virar-frente,
+  .virar-tras {
+    animation: none;
+  }
+}

@@ -8,9 +8,6 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpen,
-  Download,
-  ExternalLink,
-  FileText,
   FileUp,
   Pencil,
   Plus,
@@ -21,6 +18,7 @@ import { dataHora } from "@/lib/atividades";
 import { MODELO_PLAYBOOK } from "@/lib/playbook-modelo";
 import { PageHeader } from "@/components/ui";
 import { useEhAdmin } from "@/components/sessao";
+import { LeitorEbook } from "@/components/leitor-ebook";
 import { cn } from "@/lib/utils";
 
 type Secao = { id: string; title: string; body: string; updatedAt: string };
@@ -29,11 +27,6 @@ type Secao = { id: string; title: string; body: string; updatedAt: string };
 type Pdf = { id: string; name: string; size: number; text: string; createdAt: string; autor: string | null };
 
 const LIMITE_PDF = 25 * 1024 * 1024;
-
-function tamanho(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
-}
 
 function tituloPdf(nome: string): string {
   return nome.replace(/\.pdf$/i, "").replace(/_+/g, " ").trim() || "Documento";
@@ -237,7 +230,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
               className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-50"
             >
               <FileUp className="size-4" />
-              {enviando ? "Enviando PDF…" : "Enviar PDF"}
+              {enviando ? "Enviando e-book…" : "Enviar e-book (PDF)"}
             </button>
             <button
               onClick={() => void novaSecao()}
@@ -265,7 +258,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
             {admin ? (
               <>
                 <p className="mt-2 text-sm text-[var(--color-muted)]">
-                  Envie o seu playbook pronto em PDF (“Enviar PDF”), comece do zero com
+                  Envie o seu playbook pronto em PDF (“Enviar e-book”), comece do zero com
                   “Nova seção”, ou use o modelo: ele já traz a tabela das
                   Avaliações 0 a 3 com os valores do Rodrigo e do Henrique, e tópicos de roteiro,
                   objeções e follow-up para vocês completarem.
@@ -334,7 +327,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
             {pdfsFiltrados.length > 0 && (
               <>
                 <p className="mt-4 px-3 text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">
-                  Documentos em PDF
+                  E-books
                 </p>
                 <nav className="mt-1 flex flex-col gap-0.5">
                   {pdfsFiltrados.map((p) => {
@@ -350,7 +343,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                         )}
                       >
                         <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-                          <FileText className="size-3.5 shrink-0 opacity-70" />
+                          <BookOpen className="size-3.5 shrink-0 opacity-70" />
                           <span className="truncate">{tituloPdf(p.name)}</span>
                         </span>
                         {achado && <span className="mt-0.5 line-clamp-2 text-[11px] opacity-70">{achado}</span>}
@@ -363,47 +356,24 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
           </aside>
 
           {pdfAtual && (
-            <article className="card min-w-0 p-6 sm:p-8">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-2xl font-black uppercase tracking-tight">{tituloPdf(pdfAtual.name)}</h2>
-                  <p className="mt-1 text-xs text-[var(--color-muted)]">
-                    PDF · {tamanho(pdfAtual.size)} · enviado em {dataHora(pdfAtual.createdAt)}
-                    {pdfAtual.autor ? ` por ${pdfAtual.autor}` : ""}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <a
-                    href={`/api/playbook/arquivos/${pdfAtual.id}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            <article className="min-w-0">
+              <div className="mb-1 flex items-center justify-between gap-3 px-1">
+                <h2 className="truncate text-2xl font-black uppercase tracking-tight">{tituloPdf(pdfAtual.name)}</h2>
+                {admin && (
+                  <button
+                    onClick={() => setConfirmarPdf(true)}
+                    aria-label="Excluir e-book"
+                    title="Excluir e-book"
+                    className="icon-btn shrink-0 text-[var(--color-muted)] hover:text-[var(--color-hot)]"
                   >
-                    <ExternalLink className="size-3.5" />
-                    Tela cheia
-                  </a>
-                  <a
-                    href={`/api/playbook/arquivos/${pdfAtual.id}?baixar=1`}
-                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
-                  >
-                    <Download className="size-3.5" />
-                    Baixar
-                  </a>
-                  {admin && (
-                    <button
-                      onClick={() => setConfirmarPdf(true)}
-                      aria-label="Excluir PDF"
-                      className="rounded-full border p-2 text-[var(--color-muted)] hover:text-[var(--color-hot)]"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
-                </div>
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
               </div>
 
               {confirmarPdf && (
-                <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-hot)] p-3 text-sm">
-                  <span>Excluir o PDF “{tituloPdf(pdfAtual.name)}”? Não dá para desfazer.</span>
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-hot)] p-3 text-sm">
+                  <span>Excluir o e-book “{tituloPdf(pdfAtual.name)}”? Não dá para desfazer.</span>
                   <button onClick={() => void excluirPdf()} className="rounded-full bg-[var(--color-hot)] px-3 py-1 font-semibold text-[var(--color-on-ink)]">
                     Excluir
                   </button>
@@ -413,15 +383,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                 </div>
               )}
 
-              <iframe
-                key={pdfAtual.id}
-                src={`/api/playbook/arquivos/${pdfAtual.id}#view=FitH`}
-                title={tituloPdf(pdfAtual.name)}
-                className="mt-5 h-[78vh] w-full rounded-2xl border border-[var(--color-border)] bg-white"
-              />
-              <p className="mt-2 text-[11px] text-[var(--color-muted)]">
-                No celular, se o PDF não aparecer inteiro aqui, toque em “Tela cheia”.
-              </p>
+              <LeitorEbook key={pdfAtual.id} id={pdfAtual.id} titulo={tituloPdf(pdfAtual.name)} />
             </article>
           )}
 

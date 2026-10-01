@@ -40,3 +40,20 @@ test("rótulo do tipo em português", () => {
   assert.equal(rotuloTipo("FOLLOW_UP"), "Follow-up");
   assert.equal(rotuloTipo("DESCONHECIDO"), "DESCONHECIDO");
 });
+
+test("follow-ups numerados pela ordem em que acontecem: 1º, 2º, 3º…", async () => {
+  const { numerarFollowUps, nomeDaAtividade, ordinalFollowUp } = await import("../lib/atividades");
+  const n = numerarFollowUps([
+    { id: "c", type: "FOLLOW_UP", dueAt: "2026-10-20T12:00:00Z", doneAt: null, createdAt: "2026-10-01T10:00:00Z" },
+    { id: "r", type: "MEETING", dueAt: "2026-10-05T12:00:00Z", doneAt: null, createdAt: "2026-10-01T10:00:00Z" },
+    // Feito agora, sem prazo: conta pela hora em que foi feito.
+    { id: "a", type: "FOLLOW_UP", dueAt: null, doneAt: "2026-10-02T12:00:00Z", createdAt: "2026-10-02T12:00:00Z" },
+    // Marcado depois, mas para ANTES do "c": entra na frente dele.
+    { id: "b", type: "FOLLOW_UP", dueAt: "2026-10-10T12:00:00Z", doneAt: null, createdAt: "2026-10-03T10:00:00Z" },
+  ]);
+  assert.deepEqual(Object.fromEntries(n), { a: 1, b: 2, c: 3 });
+  assert.equal(n.has("r"), false, "reunião não é follow-up");
+  assert.equal(ordinalFollowUp(5), "5º follow-up");
+  assert.equal(nomeDaAtividade({ title: null, type: "FOLLOW_UP", numero: 2 }), "2º follow-up");
+  assert.equal(nomeDaAtividade({ title: "Mandar proposta", type: "FOLLOW_UP", numero: 2 }), "Mandar proposta");
+});

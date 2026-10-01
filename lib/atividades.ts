@@ -77,3 +77,42 @@ export function juntarDataHora(data: string, horaStr: string): string | null {
   const d = new Date(`${data}T${horaStr || "09:00"}`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+
+/**
+ * Número de cada follow-up do lead: 1º, 2º, 3º…
+ *
+ * A ordem é a do momento do follow-up — o prazo; sem prazo, quando foi feito;
+ * sem nenhum dos dois, quando foi criado. Assim um follow-up agendado para
+ * antes de outro já marcado entra na frente dele, como na vida real.
+ * Recebe as atividades de UM lead; as que não são follow-up ficam de fora.
+ */
+export function numerarFollowUps(
+  atividades: {
+    id: string;
+    type: string;
+    dueAt: string | Date | null;
+    doneAt: string | Date | null;
+    createdAt: string | Date;
+  }[],
+): Map<string, number> {
+  const momento = (a: (typeof atividades)[number]) => new Date(a.dueAt ?? a.doneAt ?? a.createdAt).getTime();
+  const ordenados = atividades
+    .filter((a) => a.type === "FOLLOW_UP")
+    .sort((a, b) => momento(a) - momento(b) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return new Map(ordenados.map((a, i) => [a.id, i + 1]));
+}
+
+/** "3º follow-up" */
+export function ordinalFollowUp(n: number): string {
+  return `${n}º follow-up`;
+}
+
+/** Tipo da atividade, com o número quando é follow-up: "2º follow-up", "Reunião". */
+export function rotuloTipoNumerado(tipo: string, numero?: number | null): string {
+  return tipo === "FOLLOW_UP" && numero ? ordinalFollowUp(numero) : rotuloTipo(tipo);
+}
+
+/** Nome da atividade para listas: o título, ou o tipo numerado. */
+export function nomeDaAtividade(a: { title: string | null; type: string; numero?: number | null }): string {
+  return a.title?.trim() || rotuloTipoNumerado(a.type, a.numero);
+}

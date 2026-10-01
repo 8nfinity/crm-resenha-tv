@@ -6,6 +6,8 @@ import {
   dataHora,
   diaSemanaHora,
   juntarDataHora,
+  numerarFollowUps,
+  ordinalFollowUp,
   rotuloTipo,
   situacao,
   sugestaoDePrazo,
@@ -87,6 +89,24 @@ export function AtividadesLead({
     onMudou();
   }
 
+  // 1º, 2º, 3º follow-up deste lead.
+  const numeros = numerarFollowUps(atividades);
+  // Qual será o número do follow-up que está sendo marcado agora (pela data
+  // escolhida: um follow-up marcado antes de outro entra na frente dele).
+  const proximoNumero =
+    tipo === "FOLLOW_UP"
+      ? numerarFollowUps([
+          ...atividades,
+          {
+            id: "__novo__",
+            type: "FOLLOW_UP",
+            dueAt: juntarDataHora(data, horaStr),
+            doneAt: null,
+            createdAt: new Date().toISOString(),
+          },
+        ]).get("__novo__") ?? null
+      : null;
+
   // A fazer: a mais urgente primeiro (sem data vai para o fim).
   const aFazer = atividades
     .filter((a) => !a.doneAt)
@@ -167,19 +187,24 @@ export function AtividadesLead({
             Já fiz agora
           </button>
         </div>
+        {proximoNumero && (
+          <p className="mt-2 text-xs text-[var(--color-muted)]">
+            Este será o <span className="font-bold text-[var(--color-accent)]">{ordinalFollowUp(proximoNumero)}</span> deste lead.
+          </p>
+        )}
         {erro && <p className="mt-2 text-xs text-[var(--color-hot)]">{erro}</p>}
       </section>
 
       <Lista titulo="A fazer" vazio="Nada agendado para este lead.">
         {aFazer.map((a) => (
-          <Item key={a.id} a={a} onAlternar={() => void alterar(a.id, { feita: true })} onApagar={() => void apagar(a.id)} />
+          <Item key={a.id} a={a} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: true })} onApagar={() => void apagar(a.id)} />
         ))}
       </Lista>
 
       {feitas.length > 0 && (
         <Lista titulo="Feitas">
           {feitas.map((a) => (
-            <Item key={a.id} a={a} onAlternar={() => void alterar(a.id, { feita: false })} onApagar={() => void apagar(a.id)} />
+            <Item key={a.id} a={a} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: false })} onApagar={() => void apagar(a.id)} />
           ))}
         </Lista>
       )}
@@ -220,10 +245,13 @@ const ROTULO_SITUACAO = {
 
 function Item({
   a,
+  numero,
   onAlternar,
   onApagar,
 }: {
   a: AtividadeDoLead;
+  /** Número do follow-up (1º, 2º…); só para follow-ups. */
+  numero?: number;
   onAlternar: () => void;
   onApagar: () => void;
 }) {
@@ -248,10 +276,11 @@ function Item({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
+          {numero && <NumeroFollowUp n={numero} />}
           <span className={cn("text-sm font-semibold", feita && "text-[var(--color-muted)] line-through")}>
-            {a.title || rotuloTipo(a.type)}
+            {a.title || (numero ? "Follow-up" : rotuloTipo(a.type))}
           </span>
-          {a.title && (
+          {a.title && !numero && (
             <span className="rounded-full border px-1.5 text-[10px] text-[var(--color-muted)]">
               {rotuloTipo(a.type)}
             </span>
@@ -299,5 +328,17 @@ function Item({
         <Trash2 className="size-3.5" />
       </button>
     </li>
+  );
+}
+
+/** Selo do número do follow-up: "3º follow-up". */
+export function NumeroFollowUp({ n }: { n: number }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--color-accent)_18%,transparent)] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-[var(--color-accent)]"
+      title={`Este é o ${ordinalFollowUp(n)} deste lead`}
+    >
+      {ordinalFollowUp(n)}
+    </span>
   );
 }

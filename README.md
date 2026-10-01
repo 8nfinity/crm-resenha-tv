@@ -248,12 +248,24 @@ Com `RESEND_API_KEY` e `EMAIL_REMETENTE` definidas (veja `.env.example`):
 Cada pessoa liga ou desliga os e-mails em Configurações → Minha conta. Em
 Configurações → Avisos por e-mail há um botão de teste.
 
-## Playbook em PDF
+## Playbook em e-book
 
-No Playbook, “Enviar PDF” (administradores) sobe um arquivo de até 25 MB. Ele
-abre dentro do CRM, pode ser baixado, e a busca do playbook acha o texto de
-dentro do PDF. PDF digitalizado (só imagem) abre normalmente, mas não entra na
-busca pelo conteúdo.
+No Playbook, “Enviar e-book (PDF)” (administradores) sobe um arquivo de até
+25 MB. Ele abre dentro do CRM como um livro — capa, depois duas páginas lado a
+lado (uma no celular) — e vira página pelas setas, pelo teclado, tocando na
+metade do livro ou arrastando o dedo; tem tela cheia e lembra onde cada pessoa
+parou. A busca do playbook acha o texto de dentro do e-book. PDF digitalizado
+(só imagem) abre normalmente, mas não entra na busca pelo conteúdo.
+
+O leitor usa o pdf.js, servido pelo próprio CRM: `npm run dev` e
+`npm run build` copiam os arquivos para `public/pdfjs` sozinhos.
+
+## Follow-ups numerados
+
+Cada follow-up do lead mostra a ordem dele — 1º, 2º, 3º… — no painel do lead,
+no calendário e na tela Hoje. A ordem é a da data do follow-up (o prazo, ou
+quando foi feito): um follow-up marcado para antes de outro entra na frente.
+Ao agendar, o painel avisa “Este será o 3º follow-up deste lead”.
 
 ## Comandos
 

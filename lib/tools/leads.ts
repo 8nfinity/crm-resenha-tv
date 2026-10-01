@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { contactName, daysSince } from "@/lib/queries";
 import { formatPhone } from "@/lib/evolution/parse";
 import type { StoredScoreFactors } from "@/lib/types";
+import { numerarFollowUps, ordinalFollowUp } from "@/lib/atividades";
 
 /**
  * Ferramentas de leitura sobre leads.
@@ -238,12 +239,13 @@ export const historicoContato = {
     ];
 
     if (deal.activities.length > 0) {
+      const numeros = numerarFollowUps(deal.activities);
       partes.push(
         "\n## Atividades",
         deal.activities
           .map(
             (a) =>
-              `- ${a.type}${a.title ? `: ${a.title}` : ""} — ${
+              `- ${numeros.has(a.id) ? ordinalFollowUp(numeros.get(a.id)!) : a.type}${a.title ? `: ${a.title}` : ""} — ${
                 a.doneAt ? `feito há ${daysSince(a.doneAt)}d` : "em aberto"
               }`,
           )

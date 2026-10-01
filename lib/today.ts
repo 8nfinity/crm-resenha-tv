@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { contactName, daysSince } from "@/lib/queries";
 import { describeScore } from "@/lib/scoring";
+import { numerosDeFollowUp } from "@/lib/follow-ups";
+import { ordinalFollowUp } from "@/lib/atividades";
 
 /**
  * A agenda do dia.
@@ -131,10 +133,16 @@ export async function agendaDeHoje(): Promise<AgendaHoje> {
   const atrasados: ItemHoje[] = [];
   const hoje: ItemHoje[] = [];
 
+  // "2º follow-up" em vez de só "Follow-up": diz em que ponto da insistência
+  // você está com aquele lead.
+  const numeros = await numerosDeFollowUp(pendentes.filter((a) => a.type === "FOLLOW_UP").map((a) => a.dealId));
+
   for (const a of pendentes) {
     const venceu = a.dueAt!;
     const dias = daysSince(venceu);
-    const rotulo = a.title ?? ROTULO_ATIVIDADE[a.type] ?? "Tarefa";
+    const numero = numeros.get(a.id);
+    const tipo = numero ? ordinalFollowUp(numero) : (ROTULO_ATIVIDADE[a.type] ?? "Tarefa");
+    const rotulo = a.title ? (numero ? `${tipo}: ${a.title}` : a.title) : tipo;
 
     if (venceu < agora && dias >= 1) {
       atrasados.push(

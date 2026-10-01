@@ -17,3 +17,6 @@ lib/generated/
 # Infra: volumes e segredos da VPS
 infra/data/
 infra/.env
+
+# Arquivos do leitor de PDF, copiados de node_modules (scripts/copiar-pdfjs.mjs)
+/public/pdfjs/

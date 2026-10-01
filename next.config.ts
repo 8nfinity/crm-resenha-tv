@@ -15,7 +15,9 @@ const producao = process.env.NODE_ENV === "production";
  */
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // wasm-unsafe-eval: o leitor de e-book (pdf.js) decodifica algumas imagens
+  // de PDF com WebAssembly. Não libera eval de JavaScript.
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.whatsapp.net https://*.fbcdn.net",
   "font-src 'self' data:",
@@ -59,21 +61,7 @@ const nextConfig: NextConfig = {
       { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
       ...(producao ? [{ key: "Content-Security-Policy", value: csp }] : []),
     ];
-    return [
-      { source: "/:path*", headers: seguranca },
-      // O PDF do playbook abre DENTRO do CRM (num iframe da página do
-      // playbook). Só para essa rota, o próprio CRM pode embutir — sites de
-      // fora continuam bloqueados. Esta regra vem depois e sobrescreve a geral.
-      {
-        source: "/api/playbook/arquivos/:id",
-        headers: [
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          ...(producao
-            ? [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }]
-            : []),
-        ],
-      },
-    ];
+    return [{ source: "/:path*", headers: seguranca }];
   },
 };
 
