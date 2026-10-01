@@ -349,6 +349,18 @@ export const evolution = {
       .filter((l) => l.labelId && l.name);
   },
 
+  /**
+   * Aplica ou retira uma etiqueta de uma conversa. Antes de mexer, a
+   * biblioteca do WhatsApp baixa de novo TODAS as etiquetas da conta — é o que
+   * usamos para forçar a leitura (ver forcarLeituraDasEtiquetas).
+   */
+  async handleLabel(instanceName: string, numero: string, labelId: string, acao: "add" | "remove"): Promise<unknown> {
+    return request(`/label/handleLabel/${instanceName}`, {
+      method: "POST",
+      body: { number: numero, labelId, action: acao },
+    });
+  },
+
   /** Para onde a instância está mandando os eventos hoje (null se nada configurado). */
   async findWebhook(instanceName: string): Promise<{ url: string; enabled: boolean } | null> {
     const data = await request<{ url?: string; enabled?: boolean } | null>(`/webhook/find/${instanceName}`);

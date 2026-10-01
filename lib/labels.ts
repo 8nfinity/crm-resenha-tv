@@ -48,19 +48,60 @@ export async function sincronizarEtiquetas(accountId: string) {
 
   // Etiquetas apagadas do celular somem daqui junto. Manter uma regra apontando
   // para etiqueta que não existe mais só geraria confusão na tela.
+  // Lista VAZIA não apaga nada: quase sempre é a Evolution que ainda não
+  // recebeu as etiquetas, e apagar levaria junto toda a configuração feita.
   const idsAtuais = doAparelho.map((e) => e.labelId);
-  await prisma.whatsAppLabel.deleteMany({
-    where: {
-      accountId,
-      ...(idsAtuais.length > 0 ? { labelId: { notIn: idsAtuais } } : {}),
-    },
-  });
+  if (idsAtuais.length > 0) {
+    await prisma.whatsAppLabel.deleteMany({ where: { accountId, labelId: { notIn: idsAtuais } } });
+  }
 
   return prisma.whatsAppLabel.findMany({
     where: { accountId },
     include: { stage: true },
     orderBy: { name: "asc" },
   });
+}
+
+/** Id que não existe em nenhum celular: retirá-la de uma conversa não muda nada. */
+const ETIQUETA_INEXISTENTE = "987654321";
+
+/**
+ * Força a Evolution a ler as etiquetas do WhatsApp agora, sem desconectar.
+ *
+ * As etiquetas chegam por um canal separado das mensagens (os "dados da
+ * conta"), e às vezes a conexão nunca faz essa leitura. Pedir para RETIRAR
+ * uma etiqueta inexistente da conversa "Mensagem para mim" não muda nada no
+ * celular, mas obriga a biblioteca do WhatsApp a baixar antes todas as
+ * etiquetas da conta e quem está com cada uma — e a Evolution repassa ao CRM.
+ *
+ * Se o WhatsApp nunca entregou a chave desses dados para esta conexão, a
+ * resposta diz exatamente isso ("App state key not present").
+ */
+export async function forcarLeituraDasEtiquetas(accountId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const conta = await prisma.whatsAppAccount.findUnique({ where: { id: accountId } });
+  if (!conta) return { ok: false, erro: "Conta não encontrada." };
+  if (conta.status !== "open") return { ok: false, erro: "Conecte o número antes de buscar as etiquetas." };
+
+  const numero =
+    conta.phone ??
+    (await prisma.contact.findFirst({ where: { accountId, phone: { not: null } }, select: { phone: true } }))?.phone;
+  if (!numero) return { ok: false, erro: "Não encontrei um número desta conta para fazer a leitura." };
+
+  try {
+    await evolution.handleLabel(conta.instanceName, numero, ETIQUETA_INEXISTENTE, "remove");
+    return { ok: true };
+  } catch (error) {
+    const detalhe = `${(error as Error).message} ${(error as { body?: string }).body ?? ""}`;
+    if (/app state key not present/i.test(detalhe)) {
+      return {
+        ok: false,
+        erro:
+          "O WhatsApp não liberou as etiquetas para esta conexão: ele não enviou a chave dos dados da conta " +
+          "(etiquetas e agenda). Não é algo do CRM — é preciso parear o número de novo como aplicativo de computador.",
+      };
+    }
+    return { ok: false, erro: `A leitura forçada das etiquetas falhou: ${detalhe.trim().slice(0, 300)}` };
+  }
 }
 
 export type ResultadoEtiqueta =

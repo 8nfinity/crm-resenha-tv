@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { registrarAtendenteDeQuemJaTemAEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
+import { forcarLeituraDasEtiquetas, registrarAtendenteDeQuemJaTemAEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
 import { avisarMudanca } from "@/lib/eventos";
 import { ignorarQuemJaTemAEtiqueta } from "@/lib/ignorar";
 
@@ -29,11 +29,16 @@ export async function GET(
   let erroSync: string | null = null;
 
   if (sincronizar) {
+    // Primeiro obriga a Evolution a reler as etiquetas do celular (sem
+    // desconectar); depois copia a lista para o CRM.
+    const leitura = await forcarLeituraDasEtiquetas(id);
+    if (!leitura.ok) erroSync = leitura.erro;
+    else await new Promise((r) => setTimeout(r, 4000)); // a Evolution grava em seguida
     try {
       await sincronizarEtiquetas(id);
     } catch (error) {
       // Falhar a sincronização não pode esconder o que já está mapeado.
-      erroSync =
+      erroSync ??=
         error instanceof Error
           ? error.message
           : "Não consegui ler as etiquetas do aparelho";
