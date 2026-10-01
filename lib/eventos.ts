@@ -16,7 +16,7 @@ import { EventEmitter } from "node:events";
 export type Mudanca = {
   /** Deals afetados. Vazio quando a mudança é ampla (ex.: importação). */
   dealIds: string[];
-  motivo: "mensagem" | "etiqueta" | "importacao" | "atividade" | "funil" | "playbook";
+  motivo: "mensagem" | "etiqueta" | "importacao" | "atividade" | "funil" | "playbook" | "conexao";
 };
 
 // Um emissor por processo, mesmo que o Next carregue este módulo mais de uma

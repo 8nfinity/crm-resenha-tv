@@ -285,6 +285,12 @@ export const evolution = {
       .filter((l) => l.labelId && l.name);
   },
 
+  /** Para onde a instância está mandando os eventos hoje (null se nada configurado). */
+  async findWebhook(instanceName: string): Promise<{ url: string; enabled: boolean } | null> {
+    const data = await request<{ url?: string; enabled?: boolean } | null>(`/webhook/find/${instanceName}`);
+    return data?.url ? { url: data.url, enabled: data.enabled !== false } : null;
+  },
+
   /**
    * Aponta a instância para o webhook do CRM. Chamado ao gerar o QR Code;
    * evita configurar isso na mão no painel da Evolution.

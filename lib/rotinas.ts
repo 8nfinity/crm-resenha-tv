@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { recalculateAllScores } from "@/lib/deals";
 import { evolution } from "@/lib/evolution/client";
 import { estaHospedado, urlDoWebhook } from "@/lib/url-publica";
+import { varrerTudo } from "@/lib/sincronizacao";
 
 /**
  * Rotinas que o próprio servidor executa — sem depender de cron externo.
@@ -24,11 +25,25 @@ export function iniciarRotinasDoServidor() {
   agendarRecalculoDiario();
   void criarAdministradorInicial();
 
+  if (process.env.EVOLUTION_API_URL) {
+    // Varredura de segurança: a primeira logo depois de subir (recupera o que
+    // chegou enquanto o CRM estava fora do ar), depois a cada minuto.
+    setTimeout(() => void varrerTudo().catch(() => {}), 20_000).unref();
+    setInterval(() => void varrerTudo().catch(() => {}), INTERVALO_VARREDURA_MS).unref();
+  }
+
   if (estaHospedado()) {
-    // Espera o servidor terminar de subir antes de falar com a Evolution.
+    // Espera o servidor terminar de subir antes de falar com a Evolution, e
+    // depois confere de tempos em tempos: se a Evolution for reinstalada ou
+    // alguém mexer no painel dela, o webhook volta a apontar para cá sozinho.
     setTimeout(() => void apontarWebhooks(), 15_000).unref();
+    setInterval(() => void apontarWebhooks(), INTERVALO_WEBHOOK_MS).unref();
   }
 }
+
+/** A cada minuto: atraso máximo de uma mensagem quando o webhook falhar. */
+const INTERVALO_VARREDURA_MS = 60_000;
+const INTERVALO_WEBHOOK_MS = 10 * 60_000;
 
 /**
  * Primeiro administrador a partir das variáveis ADMIN_EMAIL, ADMIN_NOME e
@@ -104,8 +119,12 @@ async function apontarWebhooks() {
     const contas = await prisma.whatsAppAccount.findMany({ select: { instanceName: true } });
     for (const { instanceName } of contas) {
       try {
+        // Só reconfigura se estiver errado: na conferência periódica, o
+        // normal é já estar certo.
+        const atual = await evolution.findWebhook(instanceName).catch(() => null);
+        if (atual?.enabled && atual.url === url) continue;
         await evolution.setWebhook(instanceName, url, segredo);
-        console.log(`Webhook de ${instanceName} → ${url}`);
+        console.log(`Webhook de ${instanceName} → ${url}${atual ? ` (estava em ${atual.url})` : ""}`);
       } catch (error) {
         // Instância que ainda não existe na Evolution nova: é configurada ao
         // gerar o QR Code em Conexão.

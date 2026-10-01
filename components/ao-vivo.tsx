@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Evento de janela para componentes que buscam dados por conta própria. */
@@ -16,16 +18,22 @@ const FORA_DA_ABA_MS = 30_000;
 // Rede de segurança: de quanto em quanto tempo conferir o carimbo dos dados.
 const CONFERIR_MS = 15_000;
 
+type Carimbo = { versao: string; whatsapp: { conectados: number; contas: number } };
+
 /**
  * Mantém a tela em dia com o WhatsApp.
  *
  * Escuta /api/eventos e, a cada aviso, pede ao Next os dados novos da tela
  * atual (router.refresh): o funil, a agenda e as métricas se atualizam sem
  * perder o que está aberto — filtros, painel do lead, rolagem.
+ *
+ * Também mostra, no topo, quando nenhum WhatsApp está conectado: é o único
+ * caso em que mensagens novas NÃO têm como chegar, e precisa ficar visível.
  */
 export function AoVivo() {
   const router = useRouter();
   const [conectado, setConectado] = useState(false);
+  const [whatsapp, setWhatsapp] = useState<Carimbo["whatsapp"] | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ultimaRecarga = useRef(Date.now());
 
@@ -35,7 +43,16 @@ export function AoVivo() {
     const lerVersao = async (): Promise<string | null> => {
       try {
         const r = await fetch("/api/eventos/versao", { cache: "no-store" });
-        return r.ok ? ((await r.json()) as { versao: string }).versao : null;
+        // Sessão venceu (ou o acesso foi desativado): volta para o login em vez
+        // de ficar com uma tela parada que parece funcionar.
+        if (r.status === 401) {
+          window.location.assign(`/login?de=${encodeURIComponent(location.pathname)}`);
+          return null;
+        }
+        if (!r.ok) return null;
+        const c = (await r.json()) as Carimbo;
+        setWhatsapp(c.whatsapp);
+        return c.versao;
       } catch {
         return null;
       }
@@ -109,22 +126,36 @@ export function AoVivo() {
     };
   }, [router]);
 
+  const semWhatsapp = whatsapp !== null && whatsapp.conectados === 0;
+
   return (
-    <span
-      className="hidden shrink-0 items-center gap-1.5 text-xs text-[var(--color-muted)] md:inline-flex"
-      title={
-        conectado
-          ? "Conversas novas aparecem sozinhas"
-          : "Reconectando — as telas voltam a se atualizar sozinhas em instantes"
-      }
-    >
+    <span className="flex shrink-0 items-center gap-3">
+      {semWhatsapp && (
+        <Link
+          href="/conexao"
+          title="Mensagens novas não chegam enquanto nenhum número estiver conectado. Conecte em Conexão."
+          className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--color-hot)_18%,transparent)] px-3 py-1.5 text-xs font-bold text-[var(--color-hot)] ring-1 ring-[var(--color-hot)]/40"
+        >
+          <WifiOff className="size-3.5" />
+          {whatsapp.contas === 0 ? "Nenhum WhatsApp conectado" : "WhatsApp desconectado"}
+        </Link>
+      )}
       <span
-        className={cn(
-          "size-2 rounded-full",
-          conectado ? "animate-pulse bg-[var(--color-accent)]" : "bg-[var(--color-warm)]",
-        )}
-      />
-      {conectado ? "Ao vivo" : "Reconectando"}
+        className="hidden items-center gap-1.5 text-xs text-[var(--color-muted)] md:inline-flex"
+        title={
+          conectado
+            ? "Conversas novas aparecem sozinhas"
+            : "Reconectando — as telas voltam a se atualizar sozinhas em instantes"
+        }
+      >
+        <span
+          className={cn(
+            "size-2 rounded-full",
+            conectado ? "animate-pulse bg-[var(--color-accent)]" : "bg-[var(--color-warm)]",
+          )}
+        />
+        {conectado ? "Ao vivo" : "Reconectando"}
+      </span>
     </span>
   );
 }

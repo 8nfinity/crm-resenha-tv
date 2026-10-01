@@ -11,9 +11,12 @@ export const dynamic = "force-dynamic";
  * cobre: aviso perdido numa reconexão, servidor reiniciado, dado gravado por
  * outro processo. A tela pergunta de tempos em tempos; se o carimbo mudou,
  * recarrega. Uma consulta só, barata.
+ *
+ * Aproveita a viagem para dizer quantos números de WhatsApp estão conectados:
+ * é o que acende o aviso "WhatsApp desconectado" no topo da tela.
  */
 export async function GET() {
-  const [linha] = await prisma.$queryRaw<{ versao: string }[]>`
+  const [linha] = await prisma.$queryRaw<{ versao: string; conectados: number; contas: number }[]>`
     SELECT concat_ws('|',
       (SELECT max("createdAt") FROM "Message"),
       (SELECT count(*) FROM "Deal"),
@@ -22,11 +25,17 @@ export async function GET() {
       (SELECT count(*) FROM "Activity"),
       (SELECT count(*) FROM "Stage"),
       (SELECT max("updatedAt") FROM "PlaybookSection"),
-      (SELECT count(*) FROM "PlaybookSection")
-    ) AS versao
+      (SELECT count(*) FROM "PlaybookSection"),
+      (SELECT string_agg("status", ',' ORDER BY "id") FROM "WhatsAppAccount")
+    ) AS versao,
+    (SELECT count(*) FROM "WhatsAppAccount" WHERE "status" = 'open')::int AS conectados,
+    (SELECT count(*) FROM "WhatsAppAccount")::int AS contas
   `;
   return NextResponse.json(
-    { versao: linha?.versao ?? "" },
+    {
+      versao: linha?.versao ?? "",
+      whatsapp: { conectados: linha?.conectados ?? 0, contas: linha?.contas ?? 0 },
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
