@@ -59,3 +59,15 @@ test("atendente: o histórico conta quem atendeu e a passagem entre atendentes",
   assert.equal(nomeDoAtendente({ name: "  João " }), "João");
   assert.equal(nomeDoAtendente({ name: "" }), "Atendente");
 });
+
+test("listas automáticas do WhatsApp ficam de fora; listas criadas e Favoritos entram", async () => {
+  const { corrigirNomeEtiqueta, ehFiltroAutomatico } = await import("../lib/etiquetas-nomes");
+  for (const nome of ["No lidas", "Não lidas", "Grupos", "Comunidades", "Unread"]) {
+    assert.equal(ehFiltroAutomatico(nome), true, nome);
+  }
+  for (const nome of ["Favoritos", "Follow up", "Novo cliente", "João"]) {
+    assert.equal(ehFiltroAutomatico(nome), false, nome);
+  }
+  assert.equal(corrigirNomeEtiqueta("No lidas"), "Não lidas");
+  assert.equal(corrigirNomeEtiqueta("Follow up"), "Follow up");
+});

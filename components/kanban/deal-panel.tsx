@@ -8,6 +8,7 @@ import { useEhAdmin } from "@/components/sessao";
 import type { ScoreFactor } from "@/lib/scoring";
 import type { Campo } from "@/lib/custom-fields";
 import { cn, initials } from "@/lib/utils";
+import { corrigirNomeEtiqueta } from "@/lib/etiquetas-nomes";
 import { EVENTO_MUDOU, type DetalheMudou } from "@/components/ao-vivo";
 
 type DealDetail = {
@@ -468,7 +469,7 @@ function EventoDeEtiqueta({ evento }: { evento: EventoEtiqueta }) {
         <UserRound className="mt-0.5 size-3.5 shrink-0 text-[var(--color-accent)]" />
         <div className="min-w-0 flex-1">
           <p>
-            <span className="font-semibold text-[var(--color-accent)]">{evento.labelName}</span> atendeu o lead
+            <span className="font-semibold text-[var(--color-accent)]">{corrigirNomeEtiqueta(evento.labelName)}</span> atendeu o lead
           </p>
           {evento.detail && <p className="text-xs text-[var(--color-muted)]">{evento.detail}</p>}
           <p className="mt-0.5 text-[10px] text-[var(--color-muted)]">{dataHora(evento.createdAt)}</p>
@@ -504,9 +505,9 @@ function EventoComum({
       <div className="min-w-0 flex-1">
         <p>
           <span className="text-[var(--color-muted)]">
-            {saiu ? (vendedor ? "Etiqueta de atendente retirada: " : "Etiqueta retirada: ") : "Etiqueta aplicada: "}
+            {saiu ? (vendedor ? "Saiu do atendimento: " : "Removido de: ") : "Adicionado a: "}
           </span>
-          <span className={cn("font-medium", saiu && "line-through opacity-70")}>{evento.labelName}</span>
+          <span className={cn("font-medium", saiu && "line-through opacity-70")}>{corrigirNomeEtiqueta(evento.labelName)}</span>
         </p>
         {evento.detail && (
           <p className={cn("text-xs", vendedor ? "font-medium text-[var(--color-accent)]" : "text-[var(--color-muted)]")}>

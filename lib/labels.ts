@@ -4,6 +4,7 @@ import { evolution } from "@/lib/evolution/client";
 import { isPersonJid } from "@/lib/evolution/parse";
 import { acharContato, upsertContact } from "@/lib/ingest";
 import { etiquetasDoChat, ignorarContato, voltarAMostrar } from "@/lib/ignorar";
+import { corrigirNomeEtiqueta } from "@/lib/etiquetas-nomes";
 
 /**
  * Etiquetas do WhatsApp Business → estágios do funil.
@@ -36,11 +37,11 @@ export async function sincronizarEtiquetas(accountId: string) {
       where: {
         accountId_labelId: { accountId, labelId: etiqueta.labelId },
       },
-      update: { name: etiqueta.name, color: etiqueta.color },
+      update: { name: corrigirNomeEtiqueta(etiqueta.name), color: etiqueta.color },
       create: {
         accountId,
         labelId: etiqueta.labelId,
-        name: etiqueta.name,
+        name: corrigirNomeEtiqueta(etiqueta.name),
         color: etiqueta.color,
       },
     });

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Loader2, ArrowRight, Tag } from "lucide-react";
+import { corrigirNomeEtiqueta, ehFiltroAutomatico } from "@/lib/etiquetas-nomes";
 
 type Estagio = { id: string; name: string; color: string };
 
@@ -150,7 +151,11 @@ export function LabelMapping({
       )}
 
       {contas.map((conta) => {
-        const etiquetas = porConta[conta.id] ?? [];
+        // Listas automáticas (Não lidas, Grupos, Comunidades) não recebem
+        // conversas: ficam fora do mapeamento, só citadas no rodapé.
+        const todas = porConta[conta.id] ?? [];
+        const etiquetas = todas.filter((e) => !ehFiltroAutomatico(e.name));
+        const filtros = todas.filter((e) => ehFiltroAutomatico(e.name));
         const conectado = conta.status === "open";
 
         return (
@@ -176,10 +181,8 @@ export function LabelMapping({
             {etiquetas.length === 0 ? (
               <p className="text-xs text-[var(--color-muted)]">
                 {conectado
-                  ? "Nenhuma etiqueta encontrada. Etiquetas existem apenas no " +
-                    "WhatsApp Business — num WhatsApp pessoal o recurso não existe. " +
-                    "Se este número é Business, crie as etiquetas no celular e " +
-                    'clique em "Buscar do aparelho".'
+                  ? "Nenhuma etiqueta ou lista encontrada. Crie etiquetas (WhatsApp Business) ou listas " +
+                    "(aba Conversas → Listas, no WhatsApp) no celular e clique em “Buscar do aparelho”."
                   : "Conecte este número para buscar as etiquetas."}
               </p>
             ) : (
@@ -191,7 +194,7 @@ export function LabelMapping({
                       style={{ color: etiqueta.color ?? "var(--color-muted)" }}
                     />
                     <span className="min-w-0 flex-1 truncate text-sm">
-                      {etiqueta.name}
+                      {corrigirNomeEtiqueta(etiqueta.name)}
                     </span>
 
                     <ArrowRight className="size-3.5 shrink-0 text-[var(--color-muted)]" />
@@ -222,6 +225,12 @@ export function LabelMapping({
                   </li>
                 ))}
               </ul>
+            )}
+            {filtros.length > 0 && (
+              <p className="mt-3 text-[11px] text-[var(--color-muted)]">
+                Listas automáticas do WhatsApp, fora do mapeamento (é o próprio WhatsApp que decide quem entra nelas):{" "}
+                {filtros.map((f) => corrigirNomeEtiqueta(f.name)).join(", ")}.
+              </p>
             )}
           </div>
         );

@@ -127,10 +127,10 @@ export default async function ConfiguracoesPage() {
 
           <section className="card p-6">
             <h2 className="text-base font-semibold">
-              Etiquetas do WhatsApp Business
+              Etiquetas e listas do WhatsApp
             </h2>
             <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
-              Etiquete uma conversa no celular e o lead anda no funil sozinho,
+              Etiquete a conversa (ou coloque numa lista) no celular e o lead anda no funil sozinho,
               registra quem atendeu (opção “Atendente”) ou, com “Ignorar contato”,
               some do CRM (família, fornecedor, equipe). Toda etiqueta fica no
               histórico do lead, na aba Notas. O sentido é único: mover o card aqui não aplica etiqueta lá.
