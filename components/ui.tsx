@@ -26,9 +26,12 @@ export function PageHeader({
             <span
               key={i}
               className={cn(
-                "block",
-                // A última linha em verde, como o "BIOMECH" do material.
-                linhas.length > 1 && i === linhas.length - 1 && "text-[var(--color-accent)]",
+                // Texto com leve degradê (luz vindo de cima), como nos títulos
+                // da Apple. A última linha em verde, como o "BIOMECH" do material.
+                "block bg-clip-text pb-[0.06em] text-transparent",
+                linhas.length > 1 && i === linhas.length - 1
+                  ? "bg-gradient-to-r from-[var(--color-accent)] via-[#7ff0b4] to-[#d6ffe8]"
+                  : "bg-gradient-to-b from-white to-white/70",
               )}
             >
               {linha}
@@ -118,7 +121,7 @@ export function CardHeader({
   );
 }
 
-/** Pílula de seleção: preta quando ativa, contorno quando não. */
+/** Pílula de seleção: vidro quando solta, "bolha" de vidro verde quando ativa. */
 export function Pill({
   href,
   active,
@@ -132,10 +135,10 @@ export function Pill({
     <Link
       href={href}
       className={cn(
-        "rounded-full px-4 py-2 text-sm transition-colors",
+        "rounded-full px-4 py-2 text-sm transition-all duration-300",
         active
-          ? "bg-[var(--color-ink)] font-medium text-[var(--color-on-ink)]"
-          : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-[var(--shadow-card)] hover:text-[var(--color-text)]",
+          ? "bolha font-semibold text-white"
+          : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-[var(--shadow-card)] backdrop-blur-2xl hover:text-[var(--color-text)]",
       )}
     >
       {children}

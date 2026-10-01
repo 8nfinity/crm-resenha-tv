@@ -128,32 +128,51 @@ export function AoVivo() {
 
   const semWhatsapp = whatsapp !== null && whatsapp.conectados === 0;
 
-  return (
-    <span className="flex shrink-0 items-center gap-3">
-      {semWhatsapp && (
-        <Link
-          href="/conexao"
-          title="Mensagens novas não chegam enquanto nenhum número estiver conectado. Conecte em Conexão."
-          className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--color-hot)_18%,transparent)] px-3 py-1.5 text-xs font-bold text-[var(--color-hot)] ring-1 ring-[var(--color-hot)]/40"
-        >
-          <WifiOff className="size-3.5" />
-          {whatsapp.contas === 0 ? "Nenhum WhatsApp conectado" : "WhatsApp desconectado"}
-        </Link>
-      )}
-      <span
-        className="hidden items-center gap-1.5 text-xs text-[var(--color-muted)] md:inline-flex"
-        title={
-          conectado
-            ? "Conversas novas aparecem sozinhas"
-            : "Reconectando — as telas voltam a se atualizar sozinhas em instantes"
-        }
+  // Uma "ilha" só, no espírito da Dynamic Island: discreta enquanto está tudo
+  // bem (ponto verde + "Ao vivo"); quando o WhatsApp cai, ela se expande em
+  // vermelho e vira um link para Conexão.
+  if (semWhatsapp) {
+    return (
+      <Link
+        href="/conexao"
+        title="Mensagens novas não chegam enquanto nenhum número estiver conectado. Conecte em Conexão."
+        className="ilha inline-flex shrink-0 items-center gap-2 py-2 pl-2.5 pr-3.5 text-xs font-semibold transition-transform hover:scale-[1.03]"
       >
+        <span className="grid size-6 place-items-center rounded-full bg-[var(--color-hot)]/20">
+          <WifiOff className="size-3.5 text-[var(--color-hot)]" />
+        </span>
+        <span className="hidden text-white sm:inline">
+          {whatsapp.contas === 0 ? "Nenhum WhatsApp" : "WhatsApp desconectado"}
+        </span>
+        <span className="relative flex size-2">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--color-hot)] opacity-70" />
+          <span className="relative inline-flex size-2 rounded-full bg-[var(--color-hot)]" />
+        </span>
+      </Link>
+    );
+  }
+
+  return (
+    <span
+      className="ilha hidden shrink-0 items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white md:inline-flex"
+      title={
+        conectado
+          ? "Conversas novas aparecem sozinhas"
+          : "Reconectando — as telas voltam a se atualizar sozinhas em instantes"
+      }
+    >
+      <span className="relative flex size-2">
+        {conectado && (
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--color-accent)] opacity-60" />
+        )}
         <span
           className={cn(
-            "size-2 rounded-full",
-            conectado ? "animate-pulse bg-[var(--color-accent)]" : "bg-[var(--color-warm)]",
+            "relative inline-flex size-2 rounded-full",
+            conectado ? "bg-[var(--color-accent)]" : "bg-[var(--color-warm)]",
           )}
         />
+      </span>
+      <span className={conectado ? "text-[var(--color-accent)]" : "text-[var(--color-warm)]"}>
         {conectado ? "Ao vivo" : "Reconectando"}
       </span>
     </span>

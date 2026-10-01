@@ -172,7 +172,7 @@ export function Calendario({
       <aside className="scroll-thin hidden w-64 shrink-0 flex-col gap-5 overflow-y-auto lg:flex">
         <button
           onClick={() => setCriar({ data: chaveDia(ref), hora: "09:00" })}
-          className="inline-flex w-fit items-center gap-3 rounded-2xl bg-[var(--color-surface)] py-3.5 pl-4 pr-6 text-sm font-semibold shadow-[var(--shadow-card)] transition-colors hover:bg-[var(--color-surface-2)]"
+          className="inline-flex w-fit items-center gap-3 rounded-2xl bg-[var(--color-surface)] py-3.5 pl-4 pr-6 text-sm font-semibold shadow-[var(--shadow-card)] backdrop-blur-2xl transition-colors hover:bg-[var(--color-surface-2)]"
         >
           <Plus className="size-6 text-[var(--color-accent)]" strokeWidth={2.5} />
           Criar
@@ -231,7 +231,7 @@ export function Calendario({
       </aside>
 
       {/* ── Área principal ── */}
-      <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[28px] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[28px]">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
           <button
             onClick={() => ir(visao, agora ?? new Date())}
@@ -750,9 +750,9 @@ function Modal({ onFechar, children }: { onFechar: () => void; children: React.R
     return () => window.removeEventListener("keydown", esc);
   }, [onFechar]);
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4 backdrop-blur-[2px]" onClick={onFechar}>
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/45 p-4 backdrop-blur-sm" onClick={onFechar}>
       <div
-        className="w-full max-w-md rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
+        className="glass-forte w-full max-w-md rounded-[28px] p-5"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -947,7 +947,7 @@ function CriarAtividade({
             <div className="relative w-full">
               <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar lead pelo nome…" className={campo} />
               {sugestoes.length > 0 && (
-                <ul className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-xl border bg-[var(--color-surface)] shadow-xl">
+                <ul className="glass-forte absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-2xl">
                   {sugestoes.map((l) => (
                     <li key={l.id}>
                       <button type="button" onClick={() => setLead(l)} className="block w-full truncate px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-2)]">

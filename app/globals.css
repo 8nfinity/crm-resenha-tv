@@ -1,22 +1,27 @@
 @import "tailwindcss";
 
-/* Identidade Biomech: fundo verde-quase-preto de painel de laboratório, verde
-   neon como cor de ação e de dado, amarelo como segundo acento (o "canto" dos
-   cards e os destaques). Os cards têm contorno verde fino em vez de sombra —
-   no escuro, sombra não aparece; o contorno é o que desenha a forma.
+/* Identidade Biomech em vidro líquido.
 
-   "ink" é a cor de estado ATIVO (pílula selecionada, botão principal) e
-   "on-ink" o texto por cima dela. No tema claro antigo era preto sobre branco;
-   aqui é verde neon com texto escuro — os componentes não precisam saber. */
+   A base continua a mesma: verde-quase-preto de laboratório, verde neon como
+   cor de ação e de dado, amarelo como segundo acento (o canto dos cards).
+   O que muda é o material: as superfícies são VIDRO — translúcidas, com o
+   fundo desfocado por trás e uma borda que pega luz — sobre uma "aurora" de
+   verdes que se move devagar. É ela que dá ao vidro algo para refratar.
+
+   "ink" é a cor de estado ATIVO (botão principal, item selecionado) e
+   "on-ink" o texto por cima dela. */
 @theme {
-  --color-bg: #050f0a;
-  --color-surface: #0a1a12;
-  --color-surface-2: #10261a;
-  --color-panel: #030a06;
-  --color-border: #1c3d2b;
+  --color-bg: #030b07;
+  /* Superfícies translúcidas: quem está atrás aparece desfocado. */
+  --color-surface: rgb(12 30 21 / 0.55);
+  --color-surface-2: rgb(255 255 255 / 0.055);
+  /* Cor sólida para o que o navegador desenha sozinho (listas de <select>). */
+  --color-solido: #0b1d14;
+  --color-panel: rgb(3 10 6 / 0.6);
+  --color-border: rgb(255 255 255 / 0.09);
   --color-line: #2fe38c;
-  --color-text: #eafcf1;
-  --color-muted: #8db5a0;
+  --color-text: #f1fdf5;
+  --color-muted: #94b8a5;
   --color-accent: #2fe38c;
   --color-accent-strong: #2fe38c;
   --color-yellow: #f2d417;
@@ -30,32 +35,137 @@
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Arial, sans-serif;
 
-  --shadow-card: 0 0 0 1px rgb(47 227 140 / 0.35),
-    0 18px 40px -24px rgb(0 0 0 / 0.9);
+  /* Sombra de vidro: luz no alto da borda, contorno verde quase invisível e
+     uma sombra longa e macia, como objeto flutuando sobre o fundo. */
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(47 227 140 / 0.12),
+    0 24px 60px -28px rgb(0 0 0 / 0.85);
 }
 
-/* Superfície padrão: contorno verde e o triângulo amarelo no canto inferior
-   direito, a assinatura visual dos cards da Biomech. */
+/* ─── Vidro ──────────────────────────────────────────────────────────────── */
+
+/* Vidro padrão: cards, colunas, barra do topo. Quem usa precisa estar
+   posicionado (relative/absolute/fixed) por causa da borda de luz (::before). */
+@utility glass {
+  background-color: rgb(12 30 21 / 0.42);
+  background-image: linear-gradient(
+    150deg,
+    rgb(255 255 255 / 0.08) 0%,
+    rgb(255 255 255 / 0.02) 40%,
+    rgb(47 227 140 / 0.04) 100%
+  );
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+  box-shadow: var(--shadow-card);
+  &::before {
+    /* Borda que pega luz: um degradê só no contorno (a máscara recorta o
+       miolo). Mais clara no alto, como luz vindo de cima — o efeito "líquido". */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      170deg,
+      rgb(255 255 255 / 0.32),
+      rgb(255 255 255 / 0.05) 35%,
+      rgb(255 255 255 / 0.02) 65%,
+      rgb(47 227 140 / 0.22)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+/* Vidro mais denso: menus, janelas e o painel do lead, que ficam POR CIMA do
+   conteúdo e precisam ser lidos sem o que está atrás atrapalhar. */
+@utility glass-forte {
+  background-color: rgb(7 20 13 / 0.82);
+  background-image: linear-gradient(150deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.01) 45%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 40px 90px -30px rgb(0 0 0 / 0.9);
+}
+
+/* "Ilha" preta, no espírito da Dynamic Island: estados ao vivo (conexão,
+   WhatsApp) num lugar só, discreto até precisar chamar atenção. */
+@utility ilha {
+  background-color: rgb(0 0 0 / 0.82);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.07),
+    0 12px 30px -12px rgb(0 0 0 / 0.9);
+}
+
+/* Bolha de vidro do item selecionado (barra do topo, abas): a "lente" que
+   fica sobre o item, como na referência de vidro líquido. */
+@utility bolha {
+  background-color: color-mix(in srgb, var(--color-accent) 20%, rgb(255 255 255 / 0.06));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 -1px 0 rgb(0 0 0 / 0.2),
+    inset 0 0 0 1px rgb(255 255 255 / 0.12),
+    0 8px 24px -10px rgb(47 227 140 / 0.65);
+}
+
+/* Superfície padrão: vidro + o triângulo amarelo no canto inferior direito,
+   a assinatura visual dos cards da Biomech. */
 @utility card {
   position: relative;
   border-radius: 28px;
-  background-color: var(--color-surface);
+  background-color: rgb(12 30 21 / 0.42);
+  background-image: linear-gradient(
+    150deg,
+    rgb(255 255 255 / 0.08) 0%,
+    rgb(255 255 255 / 0.02) 40%,
+    rgb(47 227 140 / 0.04) 100%
+  );
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
   box-shadow: var(--shadow-card);
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      170deg,
+      rgb(255 255 255 / 0.32),
+      rgb(255 255 255 / 0.05) 35%,
+      rgb(255 255 255 / 0.02) 65%,
+      rgb(47 227 140 / 0.22)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
   &::after {
     content: "";
     position: absolute;
     right: -1px;
     bottom: -1px;
-    width: 34px;
-    height: 34px;
-    background: var(--color-yellow);
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(135deg, #ffe55c, var(--color-yellow));
     clip-path: polygon(100% 0, 100% 100%, 0 100%);
     border-bottom-right-radius: 28px;
     pointer-events: none;
   }
 }
 
-/* Botão redondo com ícone, o "↗" que leva ao detalhe. */
+/* Botão redondo de vidro com ícone, o "↗" que leva ao detalhe. */
 @utility icon-btn {
   display: inline-grid;
   place-items: center;
@@ -63,13 +173,18 @@
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 999px;
-  border: 1px solid var(--color-border);
   color: var(--color-text);
-  transition: background-color 150ms, color 150ms, border-color 150ms;
+  background-color: rgb(255 255 255 / 0.06);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  transition: background-color 200ms, color 200ms, transform 200ms;
   &:hover {
     background-color: var(--color-ink);
-    border-color: var(--color-ink);
     color: var(--color-on-ink);
+    transform: translateY(-1px);
   }
 }
 
@@ -77,7 +192,7 @@
 @utility display {
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 * {
@@ -91,31 +206,67 @@ body {
 
 body {
   background-color: var(--color-bg);
-  /* Brilho verde no alto e uma grade fina, lembrando o painel de dados do
-     material da Biomech. Tudo em CSS: nenhuma imagem para baixar. */
-  background-image:
-    radial-gradient(1200px 520px at 85% -10%, rgb(47 227 140 / 0.14), transparent 70%),
-    radial-gradient(900px 480px at -10% 110%, rgb(47 227 140 / 0.08), transparent 70%),
-    linear-gradient(rgb(47 227 140 / 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(47 227 140 / 0.035) 1px, transparent 1px);
-  background-size: auto, auto, 44px 44px, 44px 44px;
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   color-scheme: dark;
 }
 
+/* ─── Aurora: o fundo que o vidro refrata ─────────────────────────────────── */
+
+/* Manchas de luz verde (e um toque do amarelo da marca) muito desfocadas,
+   derivando devagar. Fica atrás de tudo e não intercepta clique. */
+.aurora {
+  position: fixed;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(32% 30% at 78% 14%, rgb(47 227 140 / 0.30), transparent 70%),
+    radial-gradient(38% 34% at 22% 72%, rgb(16 118 78 / 0.38), transparent 72%),
+    radial-gradient(26% 24% at 58% 52%, rgb(47 200 180 / 0.12), transparent 70%),
+    radial-gradient(22% 20% at 12% 18%, rgb(242 212 23 / 0.08), transparent 70%),
+    radial-gradient(30% 28% at 92% 88%, rgb(47 227 140 / 0.14), transparent 70%);
+  filter: blur(40px) saturate(120%);
+  animation: aurora-deriva 38s ease-in-out infinite alternate;
+}
+/* Grão bem leve por cima: tira o aspecto "plástico" do degradê. */
+.aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+@keyframes aurora-deriva {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(-3%, 2%, 0) rotate(4deg) scale(1.05);
+  }
+  100% {
+    transform: translate3d(2%, -3%, 0) rotate(-3deg) scale(1.02);
+  }
+}
+/* Quem pede menos movimento no sistema operacional ganha a aurora parada. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora {
+    animation: none;
+  }
+}
+
 /* O kanban rola na horizontal; a barra padrão do Windows é grossa e feia. */
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: #24523a transparent;
+  scrollbar-color: rgb(255 255 255 / 0.14) transparent;
 }
 .scroll-thin::-webkit-scrollbar {
   height: 10px;
   width: 10px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  background: #24523a;
+  background: rgb(255 255 255 / 0.14);
   border-radius: 999px;
 }
 .scroll-thin::-webkit-scrollbar-track {
@@ -240,6 +391,6 @@ body {
 
 /* Os <select> nativos abrem uma lista do sistema; sem isso ela vem branca. */
 option {
-  background-color: var(--color-surface);
+  background-color: var(--color-solido);
   color: var(--color-text);
 }

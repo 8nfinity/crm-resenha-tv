@@ -34,8 +34,23 @@ function config() {
 
   if (!baseUrl || !apiKey) {
     throw new Error(
-      "EVOLUTION_API_URL e EVOLUTION_API_KEY precisam estar definidas no .env",
+      "EVOLUTION_API_URL e EVOLUTION_API_KEY precisam estar definidas nas variáveis do CRM.",
     );
+  }
+
+  // Endereço que não é URL (ex.: o texto de exemplo esquecido no lugar do
+  // endereço real) virava um "Failed to parse URL" que não diz nada a ninguém.
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error(
+      `A variável EVOLUTION_API_URL não é um endereço válido ("${baseUrl.slice(0, 60)}"). ` +
+        "Coloque o endereço público da Evolution, ex.: https://evolution-api-production.up.railway.app",
+    );
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("A variável EVOLUTION_API_URL precisa começar com https:// (ou http://).");
   }
   return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey };
 }

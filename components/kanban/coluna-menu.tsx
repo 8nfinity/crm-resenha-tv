@@ -90,7 +90,7 @@ export function ColunaMenu({
       </button>
 
       {aberto && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-2xl">
+        <div className="glass-forte absolute right-0 top-full z-30 mt-1 w-64 rounded-3xl p-2">
           {modo === "menu" && (
             <>
               <Opcao icone={Pencil} onClick={() => setModo("renomear")}>Renomear</Opcao>
@@ -274,7 +274,7 @@ export function NovaColuna() {
   return (
     <form
       onSubmit={criar}
-      className="h-fit w-64 shrink-0 rounded-[28px] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]"
+      className="glass relative h-fit w-64 shrink-0 rounded-[28px] p-4"
     >
       <p className="text-[11px] font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Nova coluna</p>
       <input

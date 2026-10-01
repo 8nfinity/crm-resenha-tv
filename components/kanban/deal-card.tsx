@@ -48,9 +48,9 @@ export function DealCardView({
       {...(overlay ? {} : listeners)}
       onClick={() => onOpen?.(deal.id)}
       className={cn(
-        "group cursor-grab rounded-[20px] border border-transparent bg-[var(--color-surface-2)] p-3.5 text-left transition-colors hover:border-[var(--color-ink)] active:cursor-grabbing",
+        "group cursor-grab rounded-[20px] border border-transparent bg-[var(--color-surface-2)] p-3.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.07)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-accent)]/50 hover:bg-white/[0.08] hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_12px_28px_-14px_rgb(47_227_140/0.45)] active:cursor-grabbing",
         isDragging && "dragging",
-        overlay && "rotate-2 cursor-grabbing bg-[var(--color-surface)] shadow-2xl",
+        overlay && "glass-forte rotate-2 cursor-grabbing",
       )}
     >
       <div className="flex items-start gap-2.5">

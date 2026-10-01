@@ -27,6 +27,8 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" className={montserrat.variable}>
       <body className="flex h-screen flex-col overflow-hidden">
+        {/* Luz de fundo que o vidro das superfícies refrata. */}
+        <div className="aurora" aria-hidden />
         <TopNav usuario={usuario} />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <SessaoProvider papel={usuario?.role ?? null}>{children}</SessaoProvider>

@@ -112,7 +112,7 @@ export function BoardFilters({
           value={filtros.busca}
           onChange={(e) => set({ busca: e.target.value })}
           placeholder="Buscar por nome, telefone ou mensagem…"
-          className="w-72 rounded-full bg-[var(--color-surface)] py-2 pl-9 pr-4 text-sm shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--color-muted)] focus:ring-2 focus:ring-[var(--color-ink)]"
+          className="w-72 rounded-full bg-[var(--color-surface)] py-2 pl-9 pr-4 text-sm shadow-[var(--shadow-card)] backdrop-blur-2xl outline-none placeholder:text-[var(--color-muted)] focus:ring-2 focus:ring-[var(--color-ink)]"
         />
       </div>
 
@@ -199,8 +199,8 @@ function Seletor({
       className={cn(
         "rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--color-ink)]",
         ativo
-          ? "bg-[var(--color-ink)] text-[var(--color-on-ink)]"
-          : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-[var(--shadow-card)]",
+          ? "bolha font-semibold text-white"
+          : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-[var(--shadow-card)] backdrop-blur-2xl",
       )}
     >
       {opcoes.map((o) => (

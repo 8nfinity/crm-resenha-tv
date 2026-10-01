@@ -140,9 +140,9 @@ export function DealPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30 p-0 backdrop-blur-[2px] sm:p-3" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 p-0 backdrop-blur-sm sm:p-3" onClick={onClose}>
       <aside
-        className="flex h-full w-full max-w-md flex-col overflow-hidden bg-[var(--color-surface)] shadow-2xl sm:rounded-[28px]"
+        className="glass-forte flex h-full w-full max-w-md flex-col overflow-hidden sm:rounded-[32px]"
         onClick={(e) => e.stopPropagation()}
       >
         {!deal ? (

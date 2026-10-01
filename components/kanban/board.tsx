@@ -245,7 +245,7 @@ function Column({
   const totalValue = deals.reduce((sum, d) => sum + (d.value ?? 0), 0);
 
   return (
-    <div className="flex w-76 shrink-0 flex-col rounded-[28px] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-card)]">
+    <div className="glass relative flex w-76 shrink-0 flex-col rounded-[28px] p-2">
       <div className="flex items-center gap-2 px-3 pb-3 pt-3">
         <span
           className="size-2.5 shrink-0 rounded-full"
