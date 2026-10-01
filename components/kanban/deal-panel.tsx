@@ -28,7 +28,6 @@ type DealDetail = {
   customValues: Record<string, string | number | null>;
   notes: { id: string; body: string; createdAt: string }[];
   activities: AtividadeDoLead[];
-  ownerName: string | null;
   labelEvents: EventoEtiqueta[];
 };
 
@@ -88,7 +87,6 @@ export function DealPanel({
       notes: bruto.notes ?? [],
       activities: bruto.activities ?? [],
       labelEvents: bruto.labelEvents ?? [],
-      ownerName: bruto.ownerName ?? null,
       scoreFactors: bruto.scoreFactors ?? [],
     });
   }
@@ -205,12 +203,6 @@ export function DealPanel({
                 >
                   {deal.stage.name}
                 </span>
-                {deal.ownerName && (
-                  <span className="ml-1.5 mt-1 inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] px-2 py-0.5 text-[11px] text-[var(--color-accent)]">
-                    <UserRound className="size-3" />
-                    {deal.ownerName}
-                  </span>
-                )}
               </div>
 
               <div className="flex items-center gap-1">
@@ -459,11 +451,49 @@ export function DealPanel({
   );
 }
 
-/** Uma linha do histórico de etiquetas: qual etiqueta, se entrou ou saiu e o que o CRM fez. */
+/**
+ * Uma linha do histórico de etiquetas: qual etiqueta, se entrou ou saiu e o
+ * que o CRM fez. Etiqueta de atendente vira a frase "Maria atendeu o lead",
+ * com a passagem de quem atendeu antes logo abaixo.
+ */
 function EventoDeEtiqueta({ evento }: { evento: EventoEtiqueta }) {
   const saiu = evento.action === "remove";
-  const vendedor = evento.kind === "vendedor";
+  // "vendedor" é o nome antigo do mesmo tipo.
+  const atendente = evento.kind === "atendente" || evento.kind === "vendedor";
   const cor = evento.labelColor ?? "var(--color-muted)";
+
+  if (atendente && !saiu) {
+    return (
+      <div className="flex gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_7%,transparent)] px-3 py-2 text-sm">
+        <UserRound className="mt-0.5 size-3.5 shrink-0 text-[var(--color-accent)]" />
+        <div className="min-w-0 flex-1">
+          <p>
+            <span className="font-semibold text-[var(--color-accent)]">{evento.labelName}</span> atendeu o lead
+          </p>
+          {evento.detail && <p className="text-xs text-[var(--color-muted)]">{evento.detail}</p>}
+          <p className="mt-0.5 text-[10px] text-[var(--color-muted)]">{dataHora(evento.createdAt)}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EventoComum evento={evento} saiu={saiu} atendente={atendente} cor={cor} />
+  );
+}
+
+function EventoComum({
+  evento,
+  saiu,
+  atendente,
+  cor,
+}: {
+  evento: EventoEtiqueta;
+  saiu: boolean;
+  atendente: boolean;
+  cor: string;
+}) {
+  const vendedor = atendente;
   return (
     <div className="flex gap-2.5 rounded-xl border border-dashed px-3 py-2 text-sm">
       {vendedor ? (
@@ -473,7 +503,9 @@ function EventoDeEtiqueta({ evento }: { evento: EventoEtiqueta }) {
       )}
       <div className="min-w-0 flex-1">
         <p>
-          <span className="text-[var(--color-muted)]">{saiu ? "Etiqueta retirada: " : "Etiqueta aplicada: "}</span>
+          <span className="text-[var(--color-muted)]">
+            {saiu ? (vendedor ? "Etiqueta de atendente retirada: " : "Etiqueta retirada: ") : "Etiqueta aplicada: "}
+          </span>
           <span className={cn("font-medium", saiu && "line-through opacity-70")}>{evento.labelName}</span>
         </p>
         {evento.detail && (

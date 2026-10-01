@@ -50,3 +50,12 @@ test("reconhece o evento de etiquetagem nas duas grafias", () => {
   assert.equal(normalizarEvento("labels.association"), "labels.association");
   assert.equal(normalizarEvento("LABELS_EDIT"), "labels.edit");
 });
+
+test("atendente: o histórico conta quem atendeu e a passagem entre atendentes", async () => {
+  const { textoDoAtendimento, nomeDoAtendente } = await import("../lib/labels");
+  assert.equal(textoDoAtendimento(null, "João"), null, "primeiro atendimento: só 'João atendeu o lead'");
+  assert.equal(textoDoAtendimento("João", "Maria"), "Atendimento passou de João para Maria");
+  assert.equal(textoDoAtendimento("Maria", "Maria"), "Maria continuou o atendimento");
+  assert.equal(nomeDoAtendente({ name: "  João " }), "João");
+  assert.equal(nomeDoAtendente({ name: "" }), "Atendente");
+});

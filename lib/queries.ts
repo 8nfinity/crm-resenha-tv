@@ -104,7 +104,6 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
         lastInteractionAt: true,
         enteredStageAt: true,
         customValues: true,
-        ownerName: true,
         contact: {
           select: {
             id: true,
@@ -161,7 +160,6 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
       lastInboundAt: deal.lastInboundAt?.toISOString() ?? null,
       lastInteractionAt: deal.lastInteractionAt?.toISOString() ?? null,
       enteredStageAt: deal.enteredStageAt.toISOString(),
-      vendedor: deal.ownerName,
       daysInStage: daysSince(deal.enteredStageAt),
       lastMessagePreview: previews.get(deal.contactId) ?? null,
       openActivities: openMap.get(deal.id) ?? 0,
@@ -223,7 +221,6 @@ export async function getDealDetail(dealId: string) {
         },
       },
       stage: true,
-      ownerUser: { select: { id: true, name: true } },
       notes: { orderBy: { createdAt: "desc" } },
       activities: {
         orderBy: { createdAt: "desc" },

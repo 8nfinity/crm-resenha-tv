@@ -66,11 +66,9 @@ model WhatsAppLabel {
   /// Etiqueta de "ignorar": o contato etiquetado some do CRM e as mensagens
   /// dele deixam de entrar. Tirar a etiqueta traz o contato de volta.
   ignoreContact Boolean @default(false)
-  /// Etiqueta de VENDEDOR: quem recebe a etiqueta passa a ser lead dele.
+  /// Etiqueta de ATENDENTE ("João", "Maria"): só registra no histórico do
+  /// lead quem atendeu. Não atribui o lead a ninguém.
   isSeller      Boolean @default(false)
-  /// Usuário do CRM que é esse vendedor (para os avisos por e-mail).
-  /// Opcional: sem ele, o nome do vendedor é o nome da etiqueta.
-  sellerUserId  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -79,7 +77,6 @@ model WhatsAppLabel {
   /// SetNull, não Cascade: apagar um estágio desfaz o mapeamento, mas não pode
   /// apagar a etiqueta — ela existe no celular independente do CRM.
   stage   Stage?          @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  sellerUser User?        @relation("EtiquetaVendedor", fields: [sellerUserId], references: [id], onDelete: SetNull)
 
   @@unique([accountId, labelId])
   @@index([accountId])
@@ -194,18 +191,12 @@ model Deal {
   /// A definição de cada campo está em CustomField.
   customValues Json?
 
-  /// Vendedor responsável (definido pela etiqueta de vendedor). O nome fica
-  /// gravado à parte: vendedor sem login no CRM também aparece.
-  ownerName   String?
-  ownerUserId String?
-
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
   contact     Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
   stage       Stage             @relation(fields: [stageId], references: [id])
-  ownerUser   User?             @relation("VendedorDoLead", fields: [ownerUserId], references: [id], onDelete: SetNull)
   transitions StageTransition[]
   activities  Activity[]
   notes       Note[]
@@ -369,8 +360,6 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sellerLabels  WhatsAppLabel[] @relation("EtiquetaVendedor")
-  ownedDeals    Deal[]          @relation("VendedorDoLead")
   activities    Activity[]      @relation("CriadorDaAtividade")
   playbookFiles PlaybookFile[]
 }

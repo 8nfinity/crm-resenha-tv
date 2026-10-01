@@ -11,11 +11,11 @@ import { urlPublica } from "@/lib/url-publica";
  *  - LEMBRETE: X minutos antes de cada atividade marcada (AVISO_MINUTOS_ANTES,
  *    padrão 30). Sai uma vez só por atividade — remarcar libera de novo.
  *  - RESUMO DO DIA: às AVISO_HORA_RESUMO (padrão 7h), o que vence hoje e o
- *    que está atrasado. Vendedor recebe o dele; administradores, o do time.
+ *    que está atrasado. Vendedor recebe o que ele marcou; administradores, o
+ *    do time.
  *
- * Quem recebe o lembrete: o vendedor do lead (etiqueta de vendedor ligada a
- * um login) → quem marcou a atividade → os administradores. Quem desligou os
- * e-mails em "Minha conta" não recebe nada.
+ * Quem recebe o lembrete: quem marcou a atividade → os administradores. Quem
+ * desligou os e-mails em "Minha conta" não recebe nada.
  */
 
 export type Pessoa = {
@@ -41,21 +41,18 @@ export function horaDoResumo(): number {
 /**
  * Para quem vai o lembrete de uma atividade.
  *
- * O responsável é o vendedor do lead. Se ele existe mas desligou os e-mails,
- * a escolha dele vale — não cai para os administradores. Só sem vendedor com
- * login o aviso vai para quem marcou e, sem esse, para os administradores.
+ * O responsável é quem marcou. Se essa pessoa desligou os e-mails, a escolha
+ * dela vale — o aviso não cai para os administradores. Atividade sem autor
+ * ativo (marcada pelo Claude, ou de alguém que saiu) vai para os administradores.
  */
 export function escolherDestinatarios({
-  dono,
   criador,
   admins,
 }: {
-  dono: Pessoa | null;
   criador: Pessoa | null;
   admins: Pessoa[];
 }): Pessoa[] {
   const recebe = (p: Pessoa) => p.active && p.emailNotifications && p.email.includes("@");
-  if (dono?.active) return recebe(dono) ? [dono] : [];
   if (criador?.active) return recebe(criador) ? [criador] : [];
   return admins.filter(recebe);
 }
@@ -113,8 +110,6 @@ const INCLUI_ATIVIDADE = {
     select: {
       id: true,
       title: true,
-      ownerName: true,
-      ownerUser: { select: SELECIONA_PESSOA },
       contact: { select: { savedName: true, pushName: true, phone: true, waJid: true } },
     },
   },
@@ -130,8 +125,6 @@ type AtividadeComLead = {
   deal: {
     id: string;
     title: string | null;
-    ownerName: string | null;
-    ownerUser: Pessoa | null;
     contact: { savedName: string | null; pushName: string | null; phone: string | null; waJid: string };
   };
 };
@@ -178,7 +171,7 @@ export async function enviarLembretes(agora = new Date()): Promise<number> {
     const porPessoa = new Map<string, { pessoa: Pessoa; itens: AtividadeComLead[] }>();
     const semNinguem: string[] = [];
     for (const a of atividades) {
-      const destinos = escolherDestinatarios({ dono: a.deal.ownerUser, criador: a.createdBy, admins });
+      const destinos = escolherDestinatarios({ criador: a.createdBy, admins });
       if (destinos.length === 0) semNinguem.push(a.id);
       for (const p of destinos) {
         const grupo = porPessoa.get(p.id) ?? { pessoa: p, itens: [] };
@@ -221,7 +214,7 @@ function emailDeLembrete(pessoa: Pessoa, itens: AtividadeComLead[]) {
       : `Lembrete: ${itens.length} atividades chegando`;
 
   const linhas = itens.map((a) => ({
-    html: `<tr><td style="padding:10px 0;border-bottom:1px solid #1d3a2b"><strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<br><span style="color:#f2d417">${escaparHtml(quando(a.dueAt!))}</span>${a.deal.ownerName ? ` <span style="color:#7f9a8c">· vendedor ${escaparHtml(a.deal.ownerName)}</span>` : ""}</td></tr>`,
+    html: `<tr><td style="padding:10px 0;border-bottom:1px solid #1d3a2b"><strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<br><span style="color:#f2d417">${escaparHtml(quando(a.dueAt!))}</span></td></tr>`,
     texto: `- ${descricao(a)} · ${nomeDoLead(a)} — ${quando(a.dueAt!)}`,
   }));
 
@@ -285,9 +278,7 @@ export async function enviarResumoDiario({ agora = new Date(), forcar = false } 
       const minhas = time
         ? atividades
         : atividades.filter(
-            (a) =>
-              a.deal.ownerUser?.id === pessoa.id ||
-              (!a.deal.ownerUser && a.createdById === pessoa.id),
+            (a) => a.createdById === pessoa.id,
           );
       if (minhas.length === 0) continue;
 
@@ -312,7 +303,7 @@ function emailDeResumo(pessoa: Pessoa, deHoje: AtividadeComLead[], atrasadas: At
     const resto = itens.length - mostrar.length;
     const linha = (a: AtividadeComLead) => {
       const momento = comDia ? quando(a.dueAt!) : horaCurta(a.dueAt!);
-      const vendedor = time && a.deal.ownerName ? ` · ${a.deal.ownerName}` : "";
+      const vendedor = time && a.createdBy ? ` · marcada por ${a.createdBy.name}` : "";
       return {
         html: `<tr><td style="padding:8px 0;border-bottom:1px solid #1d3a2b"><span style="color:${cor};font-weight:700">${escaparHtml(momento)}</span> · <strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<span style="color:#7f9a8c">${escaparHtml(vendedor)}</span></td></tr>`,
         texto: `- ${momento} · ${descricao(a)} · ${nomeDoLead(a)}${vendedor}`,

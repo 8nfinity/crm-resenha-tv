@@ -133,8 +133,8 @@ export function AvisosEmailAdmin() {
       )}
 
       <p className="text-xs text-[var(--color-muted)]">
-        Quem recebe o lembrete: o vendedor do lead (etiqueta de vendedor ligada a um login) → quem marcou a
-        atividade → os administradores. O resumo do dia vai para cada vendedor com as atividades dele, e para os
+        Quem recebe o lembrete: quem marcou a atividade (sem autor, os administradores). O resumo do dia vai para
+        cada vendedor com as atividades que ele marcou, e para os
         administradores com as do time. Cada pessoa liga ou desliga em “Minha conta”.
       </p>
 

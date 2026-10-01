@@ -65,30 +65,54 @@ export async function sincronizarEtiquetas(accountId: string) {
 
 export type ResultadoEtiqueta =
   | { acao: "movido"; dealId: string; estagio: string }
-  | { acao: "vendedor"; dealId: string; vendedor: string }
+  | { acao: "atendente"; atendente: string }
   | { acao: "ignorado"; motivo: string };
 
-type EtiquetaComVendedor = Awaited<ReturnType<typeof buscarEtiqueta>>;
+type Etiqueta = NonNullable<Awaited<ReturnType<typeof buscarEtiqueta>>>;
 
 function buscarEtiqueta(accountId: string, labelId: string) {
-  return prisma.whatsAppLabel.findUnique({
-    where: { accountId_labelId: { accountId, labelId } },
-    include: { sellerUser: { select: { id: true, name: true, active: true } } },
-  });
+  return prisma.whatsAppLabel.findUnique({ where: { accountId_labelId: { accountId, labelId } } });
 }
 
-/** Nome do vendedor de uma etiqueta: o usuário ligado a ela ou, sem ele, o nome da etiqueta. */
-export function nomeDoVendedor(etiqueta: { name: string; sellerUser?: { name: string } | null }): string {
-  return etiqueta.sellerUser?.name ?? etiqueta.name;
-}
+/**
+ * Tipos de etiqueta no histórico. "vendedor" é o nome antigo de "atendente"
+ * (linhas gravadas antes da mudança) — as duas valem como atendimento.
+ */
+export const TIPOS_ATENDENTE = ["atendente", "vendedor"];
 
 /** O que a etiqueta faz, na palavra que vai para o histórico. */
-function tipoDa(etiqueta: NonNullable<EtiquetaComVendedor> | null): string {
+function tipoDa(etiqueta: Etiqueta | null): string {
   if (!etiqueta) return "nenhum";
   if (etiqueta.ignoreContact) return "ignorar";
-  if (etiqueta.isSeller) return "vendedor";
+  if (etiqueta.isSeller) return "atendente";
   if (etiqueta.stageId) return "estagio";
   return "nenhum";
+}
+
+/** Quem atendeu, pela etiqueta: o próprio nome dela ("João"). */
+export function nomeDoAtendente(etiqueta: { name: string }): string {
+  return etiqueta.name.trim() || "Atendente";
+}
+
+/**
+ * Complemento da linha "Maria atendeu o lead" no histórico: diz se o
+ * atendimento veio de outra pessoa. Primeiro atendimento não precisa de
+ * complemento.
+ */
+export function textoDoAtendimento(anterior: string | null, atual: string): string | null {
+  if (!anterior) return null;
+  if (anterior === atual) return `${atual} continuou o atendimento`;
+  return `Atendimento passou de ${anterior} para ${atual}`;
+}
+
+/** Último atendente registrado no histórico do contato. */
+async function atendenteAnterior(contactId: string): Promise<string | null> {
+  const ultimo = await prisma.labelEvent.findFirst({
+    where: { contactId, kind: { in: TIPOS_ATENDENTE }, action: "add" },
+    orderBy: { createdAt: "desc" },
+    select: { labelName: true },
+  });
+  return ultimo?.labelName ?? null;
 }
 
 /**
@@ -99,7 +123,7 @@ function tipoDa(etiqueta: NonNullable<EtiquetaComVendedor> | null): string {
 async function registrar(
   contactId: string,
   labelId: string,
-  etiqueta: NonNullable<EtiquetaComVendedor> | null,
+  etiqueta: Etiqueta | null,
   acao: "add" | "remove",
   detalhe: string | null,
 ) {
@@ -117,33 +141,12 @@ async function registrar(
 }
 
 /**
- * Coloca o lead com o vendedor da etiqueta. Cria o lead se a conversa ainda
- * não estava no funil (etiquetar com um vendedor é dizer "este é cliente").
- */
-async function atribuirVendedor(contactId: string, etiqueta: NonNullable<EtiquetaComVendedor>) {
-  const deal = await createDealForContact(contactId);
-  const vendedor = nomeDoVendedor(etiqueta);
-  const anterior = deal.ownerName;
-  await prisma.deal.update({
-    where: { id: deal.id },
-    data: { ownerName: vendedor, ownerUserId: etiqueta.sellerUser?.active ? etiqueta.sellerUser.id : null },
-  });
-  const detalhe =
-    anterior && anterior !== vendedor
-      ? `Passou do vendedor ${anterior} para ${vendedor}`
-      : anterior === vendedor
-        ? `Continua com o vendedor ${vendedor}`
-        : `Passou para o vendedor ${vendedor}`;
-  return { dealId: deal.id, vendedor, detalhe };
-}
-
-/**
  * Processa uma etiquetagem vinda do celular.
  *
  * Toda etiqueta vai para o histórico do contato. Além disso, conforme o que
- * ela faz no CRM: ignora o contato, define o vendedor do lead ou move o lead
- * de estágio. Se a conversa ainda não é um lead, ela vira um — etiquetar é
- * justamente o gesto de dizer "esta pessoa interessa".
+ * ela faz no CRM: ignora o contato, registra quem atendeu ou move o lead de
+ * estágio. Etiqueta de estágio traz a conversa para o funil se ela ainda não
+ * é um lead — etiquetar é justamente o gesto de dizer "esta pessoa interessa".
  */
 export async function aplicarEtiqueta(
   accountId: string,
@@ -180,10 +183,13 @@ export async function aplicarEtiqueta(
     return { acao: "ignorado", motivo: "contato está ignorado" };
   }
 
+  // Etiqueta de atendente: só registra quem atendeu. Não atribui o lead a
+  // ninguém nem mexe no funil.
   if (etiqueta?.isSeller) {
-    const r = await atribuirVendedor(contato.id, etiqueta);
-    await registrar(contato.id, labelId, etiqueta, "add", r.detalhe);
-    return { acao: "vendedor", dealId: r.dealId, vendedor: r.vendedor };
+    const atendente = nomeDoAtendente(etiqueta);
+    const anterior = await atendenteAnterior(contato.id);
+    await registrar(contato.id, labelId, etiqueta, "add", textoDoAtendimento(anterior, atendente));
+    return { acao: "atendente", atendente };
   }
 
   const estagio = etiqueta?.stageId ? await prisma.stage.findUnique({ where: { id: etiqueta.stageId } }) : null;
@@ -215,9 +221,6 @@ export async function aplicarEtiqueta(
  * onde ele deveria voltar, e adivinhar errado bagunça o histórico de conversão.
  *
  * Etiqueta de IGNORAR: traz o contato de volta ao CRM.
- *
- * Etiqueta de VENDEDOR: se o lead estava com esse vendedor, fica sem
- * vendedor até outra etiqueta de vendedor ser aplicada.
  */
 export async function removerEtiqueta(
   accountId: string,
@@ -239,32 +242,29 @@ export async function removerEtiqueta(
     return { acao: "ignorado", motivo: "contato voltou a aparecer" };
   }
 
-  if (etiqueta?.isSeller) {
-    const vendedor = nomeDoVendedor(etiqueta);
-    const deal = await prisma.deal.findUnique({ where: { contactId: contato.id } });
-    let detalhe: string | null = null;
-    if (deal?.ownerName === vendedor) {
-      await prisma.deal.update({ where: { id: deal.id }, data: { ownerName: null, ownerUserId: null } });
-      detalhe = `Saiu do vendedor ${vendedor} (ficou sem vendedor)`;
-    }
-    await registrar(contato.id, labelId, etiqueta, "remove", detalhe);
-    return { acao: "ignorado", motivo: "etiqueta de vendedor retirada" };
-  }
-
   await registrar(contato.id, labelId, etiqueta, "remove", null);
   return { acao: "ignorado", motivo: "remoção de etiqueta não move o lead" };
 }
 
 /**
- * Ao marcar uma etiqueta como "de vendedor", aplica nos leads que JÁ estavam
- * com ela no celular. Devolve quantos leads ficaram com o vendedor.
+ * Ao marcar uma etiqueta como "de atendente", o histórico passa a valer para
+ * ela também no passado:
+ *  - etiquetagens antigas com essa etiqueta viram "Fulano atendeu";
+ *  - conversas que já estão com ela no celular, mas sem registro no
+ *    histórico, ganham a linha agora.
+ * Devolve quantos contatos ganharam registro novo.
  */
-export async function atribuirVendedorQuemJaTemAEtiqueta(accountId: string, labelId: string): Promise<number> {
+export async function registrarAtendenteDeQuemJaTemAEtiqueta(accountId: string, labelId: string): Promise<number> {
   const [conta, etiqueta] = await Promise.all([
     prisma.whatsAppAccount.findUnique({ where: { id: accountId } }),
     buscarEtiqueta(accountId, labelId),
   ]);
   if (!conta || !etiqueta?.isSeller) return 0;
+
+  await prisma.labelEvent.updateMany({
+    where: { labelId, contact: { accountId }, kind: { notIn: TIPOS_ATENDENTE } },
+    data: { kind: "atendente" },
+  });
 
   let chats;
   try {
@@ -279,8 +279,24 @@ export async function atribuirVendedorQuemJaTemAEtiqueta(accountId: string, labe
     if (!isPersonJid(jid) || !etiquetasDoChat(chat).includes(labelId)) continue;
     const contato = await upsertContact({ accountId, waJid: jid });
     if (contato.ignoredAt) continue;
-    const r = await atribuirVendedor(contato.id, etiqueta);
-    await registrar(contato.id, labelId, etiqueta, "add", `${r.detalhe} (etiqueta já estava no celular)`);
+
+    // Já registrado (a etiqueta foi aplicada com o CRM ligado): não repete.
+    const ultimo = await prisma.labelEvent.findFirst({
+      where: { contactId: contato.id, labelId },
+      orderBy: { createdAt: "desc" },
+      select: { action: true },
+    });
+    if (ultimo?.action === "add") continue;
+
+    const anterior = await atendenteAnterior(contato.id);
+    const texto = textoDoAtendimento(anterior, nomeDoAtendente(etiqueta));
+    await registrar(
+      contato.id,
+      labelId,
+      etiqueta,
+      "add",
+      texto ? `${texto} (etiqueta já estava no celular)` : "Etiqueta já estava no celular",
+    );
     total++;
   }
   return total;

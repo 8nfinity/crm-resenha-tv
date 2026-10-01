@@ -18,33 +18,23 @@ const pessoa = (id: string, extra: Partial<Pessoa> = {}): Pessoa => ({
   ...extra,
 });
 
-test("lembrete vai para o vendedor do lead quando ele tem login", () => {
-  const r = escolherDestinatarios({ dono: pessoa("ana"), criador: pessoa("bia"), admins: [pessoa("chefe")] });
-  assert.deepEqual(r.map((p) => p.id), ["ana"]);
+test("lembrete vai para quem marcou a atividade", () => {
+  const r = escolherDestinatarios({ criador: pessoa("bia"), admins: [pessoa("chefe")] });
+  assert.deepEqual(r.map((p) => p.id), ["bia"]);
 });
 
-test("vendedor que desligou os e-mails não recebe — e o aviso não cai nos administradores", () => {
-  const r = escolherDestinatarios({
-    dono: pessoa("ana", { emailNotifications: false }),
-    criador: pessoa("bia"),
-    admins: [pessoa("chefe")],
-  });
+test("quem desligou os e-mails não recebe — e o aviso não cai nos administradores", () => {
+  const r = escolherDestinatarios({ criador: pessoa("bia", { emailNotifications: false }), admins: [pessoa("chefe")] });
   assert.deepEqual(r, []);
 });
 
-test("sem vendedor com login, vai para quem marcou a atividade", () => {
-  const r = escolherDestinatarios({ dono: null, criador: pessoa("bia"), admins: [pessoa("chefe")] });
-  assert.deepEqual(r.map((p) => p.id), ["bia"]);
+test("autor desativado conta como sem autor", () => {
+  const r = escolherDestinatarios({ criador: pessoa("bia", { active: false }), admins: [pessoa("chefe")] });
+  assert.deepEqual(r.map((p) => p.id), ["chefe"]);
 });
 
-test("vendedor desativado conta como sem vendedor", () => {
-  const r = escolherDestinatarios({ dono: pessoa("ana", { active: false }), criador: pessoa("bia"), admins: [] });
-  assert.deepEqual(r.map((p) => p.id), ["bia"]);
-});
-
-test("sem vendedor nem autor, vai para os administradores que querem receber", () => {
+test("sem autor, vai para os administradores que querem receber", () => {
   const r = escolherDestinatarios({
-    dono: null,
     criador: null,
     admins: [pessoa("chefe"), pessoa("socio", { emailNotifications: false }), pessoa("ex", { active: false })],
   });

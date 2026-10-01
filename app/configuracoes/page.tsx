@@ -123,7 +123,7 @@ export default async function ConfiguracoesPage() {
             </h2>
             <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
               Etiquete uma conversa no celular e o lead anda no funil sozinho,
-              fica com um vendedor (opção “Vendedor”) ou, com “Ignorar contato”,
+              registra quem atendeu (opção “Atendente”) ou, com “Ignorar contato”,
               some do CRM (família, fornecedor, equipe). Toda etiqueta fica no
               histórico do lead, na aba Notas. O sentido é único: mover o card aqui não aplica etiqueta lá.
             </p>

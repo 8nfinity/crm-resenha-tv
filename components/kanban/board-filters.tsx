@@ -18,8 +18,6 @@ export type Filtros = {
   temperatura: "todas" | "quente" | "morno" | "frio";
   parados: number | null;
   contaId: string | null;
-  /** Nome do vendedor, ou SEM_VENDEDOR para os leads que ainda não têm. */
-  vendedor: string | null;
   campos: Record<string, string>;
 };
 
@@ -28,11 +26,8 @@ export const FILTROS_VAZIOS: Filtros = {
   temperatura: "todas",
   parados: null,
   contaId: null,
-  vendedor: null,
   campos: {},
 };
-
-export const SEM_VENDEDOR = "__sem__";
 
 export function filtrosAtivos(f: Filtros): number {
   return (
@@ -40,7 +35,6 @@ export function filtrosAtivos(f: Filtros): number {
     (f.temperatura !== "todas" ? 1 : 0) +
     (f.parados !== null ? 1 : 0) +
     (f.contaId ? 1 : 0) +
-    (f.vendedor ? 1 : 0) +
     Object.values(f.campos).filter(Boolean).length
   );
 }
@@ -65,7 +59,6 @@ export function aplicarFiltros(deals: DealCard[], f: Filtros): DealCard[] {
         d.title,
         d.contact.name,
         d.lastMessagePreview ?? "",
-        d.vendedor ?? "",
       ].map((s) => s.toLowerCase());
 
       const casaTexto = alvos.some((a) => a.includes(termo));
@@ -79,7 +72,6 @@ export function aplicarFiltros(deals: DealCard[], f: Filtros): DealCard[] {
     if (!naFaixa(d.score, f.temperatura)) return false;
     if (f.parados !== null && d.daysInStage < f.parados) return false;
     if (f.contaId && d.account.id !== f.contaId) return false;
-    if (f.vendedor === SEM_VENDEDOR ? d.vendedor : f.vendedor && d.vendedor !== f.vendedor) return false;
 
     for (const [campoId, valor] of Object.entries(f.campos)) {
       if (!valor) continue;
@@ -95,7 +87,6 @@ export function BoardFilters({
   onChange,
   campos,
   contas,
-  vendedores,
   total,
   visiveis,
 }: {
@@ -103,8 +94,6 @@ export function BoardFilters({
   onChange: (f: Filtros) => void;
   campos: Campo[];
   contas: { id: string; label: string; color: string }[];
-  /** Vendedores que aparecem nos leads do funil. */
-  vendedores: string[];
   total: number;
   visiveis: number;
 }) {
@@ -156,18 +145,6 @@ export function BoardFilters({
           opcoes={[
             { valor: "", rotulo: "Todos os números" },
             ...contas.map((c) => ({ valor: c.id, rotulo: c.label })),
-          ]}
-        />
-      )}
-
-      {vendedores.length > 0 && (
-        <Seletor
-          valor={filtros.vendedor ?? ""}
-          onChange={(v) => set({ vendedor: v || null })}
-          opcoes={[
-            { valor: "", rotulo: "Todos os vendedores" },
-            ...vendedores.map((v) => ({ valor: v, rotulo: v })),
-            { valor: SEM_VENDEDOR, rotulo: "Sem vendedor" },
           ]}
         />
       )}

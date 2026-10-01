@@ -206,13 +206,13 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
   } else if (tipo === "add") {
     const r = await aplicarEtiqueta(accountId, chatId, labelId);
     if (r.acao === "movido") console.log(`Etiqueta moveu lead para "${r.estagio}"`);
-    if (r.acao === "vendedor") console.log(`Lead ficou com o vendedor "${r.vendedor}"`);
+    if (r.acao === "atendente") console.log(`Atendimento registrado: "${r.atendente}"`);
   } else {
     return;
   }
 
-  // Toda etiqueta muda o histórico do lead (e às vezes o estágio ou o
-  // vendedor): as telas abertas se atualizam.
+  // Toda etiqueta muda o histórico do lead (e às vezes o estágio): as telas
+  // abertas se atualizam.
   avisarMudanca({ dealIds: [], motivo: "etiqueta" });
 }
 

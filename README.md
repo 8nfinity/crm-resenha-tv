@@ -222,16 +222,15 @@ não sugere em nada a causa real.
 Se uma rota nova responder 404 mesmo existindo, apague `.next` e rode de novo: o
 cache de tipos do Next corrompe quando rotas são criadas ou removidas.
 
-## Etiquetas de vendedor e histórico de etiquetas
+## Etiquetas de atendente e histórico de etiquetas
 
-Em Configurações → Etiquetas, escolha **“👤 Vendedor”** para uma etiqueta do
-WhatsApp Business (ex.: uma etiqueta chamada “Rodrigo”). Quem receber essa
-etiqueta no celular passa a ser lead desse vendedor: o nome aparece no card,
-no painel do lead e no filtro “vendedor” do funil. Trocar a etiqueta por a de
-outro vendedor registra a passagem (“Passou do vendedor Rodrigo para Henrique”).
+Em Configurações → Etiquetas, escolha **“👤 Atendente”** para as etiquetas com
+o nome de quem atende (ex.: “João”, “Maria”). Ela não atribui o lead a ninguém:
+só registra no histórico quem atendeu. Etiquetar a conversa com “João” e depois
+com “Maria” deixa no histórico do lead:
 
-Opcionalmente, ligue a etiqueta a um login do CRM — é para quem vão os
-lembretes por e-mail das atividades desses leads.
+- João atendeu o lead
+- Maria atendeu o lead — *Atendimento passou de João para Maria*
 
 Toda etiqueta aplicada ou retirada (de qualquer tipo) fica no histórico do
 lead, na aba **Notas**, junto das anotações, com data e hora.
@@ -241,8 +240,8 @@ lead, na aba **Notas**, junto das anotações, com data e hora.
 Com `RESEND_API_KEY` e `EMAIL_REMETENTE` definidas (veja `.env.example`):
 
 - **Lembrete** `AVISO_MINUTOS_ANTES` minutos antes de cada atividade marcada
-  (padrão 30). Vai para o vendedor do lead → quem marcou a atividade → os
-  administradores, nessa ordem.
+  (padrão 30). Vai para quem marcou a atividade (sem autor, para os
+  administradores).
 - **Resumo do dia** às `AVISO_HORA_RESUMO` h (padrão 7): o que vence hoje e o
   que está atrasado. Vendedor recebe o dele; administradores, o do time.
 

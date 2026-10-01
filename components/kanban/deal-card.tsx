@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, MessageSquare, CheckSquare, UserRound } from "lucide-react";
+import { Clock, MessageSquare, CheckSquare } from "lucide-react";
 import type { DealCard as DealCardType } from "@/lib/types";
 import { cn, formatCurrency, initials, relativeDays } from "@/lib/utils";
 
@@ -109,13 +109,6 @@ export function DealCardView({
           <Clock className="size-3" />
           {deal.daysInStage}d parado
         </span>
-
-        {deal.vendedor && (
-          <span className="inline-flex max-w-[9rem] items-center gap-1 truncate text-[var(--color-accent)]" title={`Vendedor: ${deal.vendedor}`}>
-            <UserRound className="size-3 shrink-0" />
-            <span className="truncate">{deal.vendedor}</span>
-          </span>
-        )}
 
         {deal.openActivities > 0 && (
           <span className="inline-flex items-center gap-1">
