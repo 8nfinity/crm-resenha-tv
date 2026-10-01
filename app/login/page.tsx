@@ -14,8 +14,9 @@ export default async function LoginPage({
 }) {
   const { de } = await searchParams;
   // Só caminhos internos: um "de=https://outro-site" viraria um redirecionamento
-  // para fora do CRM logo depois do login.
-  const destino = de && de.startsWith("/") && !de.startsWith("//") ? de : "/hoje";
+  // para fora do CRM logo depois do login. A barra invertida também: o
+  // navegador lê "/\outro-site" como "//outro-site".
+  const destino = de && /^\/(?![\/\\])[^\\\s]*$/.test(de) ? de : "/hoje";
 
   const configurado = authConfigurado();
   const semUsuarios = configurado ? (await prisma.user.count()) === 0 : false;

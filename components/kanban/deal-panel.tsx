@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Send, Trash2 } from "lucide-react";
 import { AtividadesLead, type AtividadeDoLead } from "@/components/atividades-lead";
 import { dataHora } from "@/lib/atividades";
+import { useEhAdmin } from "@/components/sessao";
 import type { ScoreFactor } from "@/lib/scoring";
 import type { Campo } from "@/lib/custom-fields";
 import { cn, initials } from "@/lib/utils";
@@ -39,6 +40,7 @@ export function DealPanel({
   onRemoved?: (id: string) => void;
 }) {
   const [deal, setDeal] = useState<DealDetail | null>(null);
+  const admin = useEhAdmin();
   const [tab, setTab] = useState<"conversa" | "notas" | "atividades">("conversa");
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -218,20 +220,23 @@ export function DealPanel({
                     </span>
                   </button>
 
-                  <button
-                    onClick={() => void remover(true)}
-                    disabled={removendo}
-                    className="rounded-full border px-3 py-2 text-left text-sm hover:border-[var(--color-hot)] disabled:opacity-50"
-                  >
-                    <span className="font-medium text-[var(--color-hot)]">
-                      Apagar tudo
-                    </span>
-                    <span className="block text-xs text-[var(--color-muted)]">
-                      Apaga contato, conversas e histórico. As métricas passadas
-                      mudam, porque as passagens dele pelo funil deixam de existir.
-                      Se ele te mandar mensagem de novo, volta como lead novo.
-                    </span>
-                  </button>
+                  {/* Irreversível: só administradores. */}
+                  {admin && (
+                    <button
+                      onClick={() => void remover(true)}
+                      disabled={removendo}
+                      className="rounded-full border px-3 py-2 text-left text-sm hover:border-[var(--color-hot)] disabled:opacity-50"
+                    >
+                      <span className="font-medium text-[var(--color-hot)]">
+                        Apagar tudo
+                      </span>
+                      <span className="block text-xs text-[var(--color-muted)]">
+                        Apaga contato, conversas e histórico. As métricas passadas
+                        mudam, porque as passagens dele pelo funil deixam de existir.
+                        Se ele te mandar mensagem de novo, volta como lead novo.
+                      </span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => setConfirmando(false)}

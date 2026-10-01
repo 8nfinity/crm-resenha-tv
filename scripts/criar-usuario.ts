@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createInterface } from "node:readline";
 import { prisma } from "../lib/db";
 import { gerarHash, senhaFraca } from "../lib/auth/senha";
+import { NOME_PAPEL, type Papel } from "../lib/auth/papeis";
 
 /**
  * Cria (ou redefine a senha de) um usuário pelo terminal:
@@ -34,8 +35,8 @@ async function main() {
   console.log("\nCriar acesso ao CRM Biomech\n");
   const name = await perguntar("Nome: ");
   const email = (await perguntar("E-mail: ")).toLowerCase();
-  const papel = (await perguntar("Administrador? (S/n): ")).toLowerCase();
-  const role = papel === "n" ? "VENDEDOR" : "ADMIN";
+  const escolha = (await perguntar("Papel — [m]aster, [a]dministrador ou [v]endedor (m): ")).toLowerCase();
+  const role: Papel = escolha.startsWith("v") ? "VENDEDOR" : escolha.startsWith("a") ? "ADMIN" : "MASTER";
 
   if (name.length < 2 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     throw new Error("Nome ou e-mail inválido.");
@@ -53,10 +54,10 @@ async function main() {
       where: { email },
       data: { name, role, passwordHash, active: true, sessionVersion: { increment: 1 } },
     });
-    console.log(`\nAcesso de ${email} atualizado (senha nova, ${role === "ADMIN" ? "administrador" : "vendedor"}).`);
+    console.log(`\nAcesso de ${email} atualizado (senha nova, ${NOME_PAPEL[role]}).`);
   } else {
     await prisma.user.create({ data: { name, email, role, passwordHash } });
-    console.log(`\nAcesso criado: ${email} (${role === "ADMIN" ? "administrador" : "vendedor"}).`);
+    console.log(`\nAcesso criado: ${email} (${NOME_PAPEL[role]}).`);
   }
 }
 

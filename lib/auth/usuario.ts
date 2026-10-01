@@ -1,12 +1,13 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { COOKIE_SESSAO, lerToken } from "@/lib/auth/sessao";
+import { ehAdministrador, type Papel } from "@/lib/auth/papeis";
 
 export type Usuario = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "VENDEDOR";
+  role: Papel;
 };
 
 /**
@@ -53,11 +54,11 @@ export async function usuarioAtual(): Promise<Usuario | null> {
   return usuarioDoToken(jar.get(COOKIE_SESSAO)?.value);
 }
 
-/** Para rotas da API que só o administrador pode usar. */
+/** Para rotas da API de configuração: master e administradores. */
 export async function exigirAdmin(): Promise<Usuario | Response> {
   const usuario = await usuarioAtual();
   if (!usuario) return Response.json({ error: "Faça login." }, { status: 401 });
-  if (usuario.role !== "ADMIN") {
+  if (!ehAdministrador(usuario.role)) {
     return Response.json({ error: "Só administradores podem fazer isso." }, { status: 403 });
   }
   return usuario;

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { conferirSenha, gerarHash, senhaFraca } from "@/lib/auth/senha";
 import { COOKIE_SESSAO, criarToken, opcoesCookie } from "@/lib/auth/sessao";
 import { esquecerUsuario, usuarioAtual } from "@/lib/auth/usuario";
+import { estaHospedado } from "@/lib/url-publica";
 
 export const runtime = "nodejs";
 
@@ -37,7 +38,10 @@ export async function PATCH(request: Request) {
   });
   esquecerUsuario(usuario.id);
 
-  const https = new URL(request.url).protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
+  const https =
+    estaHospedado() ||
+    new URL(request.url).protocol === "https:" ||
+    request.headers.get("x-forwarded-proto") === "https";
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIE_SESSAO, criarToken(atualizado.id, atualizado.sessionVersion), opcoesCookie(https));
   return res;

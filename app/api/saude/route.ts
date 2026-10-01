@@ -21,9 +21,9 @@ export async function GET() {
     ]);
     return NextResponse.json({ ok: true, bancoMs: Date.now() - inicio });
   } catch (error) {
-    return NextResponse.json(
-      { ok: false, erro: `banco inacessível: ${(error as Error).message}` },
-      { status: 503 },
-    );
+    // O detalhe vai para o log da hospedagem, não para a resposta: esta rota
+    // é pública, e a mensagem do driver pode trazer endereço e usuário do banco.
+    console.error("Saúde: banco inacessível —", (error as Error).message);
+    return NextResponse.json({ ok: false, erro: "banco inacessível" }, { status: 503 });
   }
 }

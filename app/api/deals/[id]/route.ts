@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getDealDetail } from "@/lib/queries";
+import { exigirAdmin } from "@/lib/auth/usuario";
 
 export async function GET(
   _request: Request,
@@ -48,6 +49,11 @@ export async function DELETE(
   }
 
   if (permanente) {
+    // Segunda barreira (a primeira é o proxy): apagar de vez é irreversível
+    // e reescreve as métricas — só master e administradores.
+    const admin = await exigirAdmin();
+    if (admin instanceof Response) return admin;
+
     // O cascade do schema leva junto deal, mensagens, notas, atividades e
     // transições — não sobra órfão.
     await prisma.contact.delete({ where: { id: deal.contactId } });

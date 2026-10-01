@@ -6,6 +6,7 @@ import { CustomFieldEditor } from "@/components/custom-field-editor";
 import { prisma } from "@/lib/db";
 import { urlDoWebhook, urlPublica } from "@/lib/url-publica";
 import { usuarioAtual } from "@/lib/auth/usuario";
+import { ehAdministrador } from "@/lib/auth/papeis";
 import { GerenciarUsuarios, MinhaConta } from "@/components/usuarios";
 import { PageHeader } from "@/components/ui";
 
@@ -26,7 +27,7 @@ export default async function ConfiguracoesPage() {
   });
 
   const usuario = await usuarioAtual();
-  const admin = usuario?.role === "ADMIN";
+  const admin = ehAdministrador(usuario?.role);
 
   // O endereço do conector carrega o segredo que dá acesso a todos os leads:
   // só o administrador vê. Vendedor não recebe nem o valor na página.
@@ -40,7 +41,7 @@ export default async function ConfiguracoesPage() {
       <div className="scroll-thin flex-1 overflow-y-auto pb-10">
       <PageHeader
         title="Configurações"
-        subtitle={admin ? "Acessos, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta, etiquetas, campos e estágios."}
+        subtitle={admin ? "Acessos, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta de acesso ao CRM."}
       />
       <div className="px-4 sm:px-8">
         <div className="grid max-w-6xl grid-cols-1 gap-5 lg:grid-cols-2">
@@ -61,7 +62,7 @@ export default async function ConfiguracoesPage() {
                 Cada pessoa do time com o próprio acesso. Administradores gerenciam os
                 acessos e veem as seções técnicas; vendedores usam o CRM normalmente.
               </p>
-              <GerenciarUsuarios meuId={usuario.id} />
+              <GerenciarUsuarios meuId={usuario.id} meuPapel={usuario.role} />
             </section>
           )}
 
@@ -105,7 +106,6 @@ export default async function ConfiguracoesPage() {
             </p>
             <CopyField value={webhookUrl} className="mt-3" />
           </section>
-          </>)}
 
           <section className="card p-6">
             <h2 className="text-base font-semibold">
@@ -136,6 +136,7 @@ export default async function ConfiguracoesPage() {
             </p>
             <StageEditor />
           </section>
+          </>)}
         </div>
       </div>
       </div>

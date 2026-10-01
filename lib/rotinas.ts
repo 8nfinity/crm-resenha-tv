@@ -55,7 +55,8 @@ async function criarAdministradorInicial() {
       data: {
         email,
         name: process.env.ADMIN_NOME?.trim() || "Administrador",
-        role: "ADMIN",
+        // O primeiro acesso é o dono do CRM.
+        role: "MASTER",
         passwordHash: await gerarHash(senha),
       },
     });

@@ -8,6 +8,7 @@ import { ArrowDown, ArrowUp, BookOpen, Pencil, Plus, Search, Trash2 } from "luci
 import { dataHora } from "@/lib/atividades";
 import { MODELO_PLAYBOOK } from "@/lib/playbook-modelo";
 import { PageHeader } from "@/components/ui";
+import { useEhAdmin } from "@/components/sessao";
 import { cn } from "@/lib/utils";
 
 type Secao = { id: string; title: string; body: string; updatedAt: string };
@@ -30,6 +31,8 @@ async function chamar(url: string, method: string, corpo?: unknown) {
  */
 export function Playbook({ secoes }: { secoes: Secao[] }) {
   const router = useRouter();
+  // Vendedor lê; criar, editar, reordenar e excluir é de administrador.
+  const admin = useEhAdmin();
   const [atualId, setAtualId] = useState<string | null>(secoes[0]?.id ?? null);
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(false);
@@ -123,14 +126,16 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
         title={"Playbook\ncomercial"}
         subtitle="O material de consulta do time: avaliações, roteiros, objeções e processos."
       >
-        <button
-          onClick={() => void novaSecao()}
-          disabled={criando}
-          className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-4 py-2 text-sm font-semibold text-[var(--color-on-ink)] disabled:opacity-50"
-        >
-          <Plus className="size-4" />
-          Nova seção
-        </button>
+        {admin && (
+          <button
+            onClick={() => void novaSecao()}
+            disabled={criando}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-4 py-2 text-sm font-semibold text-[var(--color-on-ink)] disabled:opacity-50"
+          >
+            <Plus className="size-4" />
+            Nova seção
+          </button>
+        )}
       </PageHeader>
 
       {secoes.length === 0 ? (
@@ -138,18 +143,26 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
           <section className="card mx-auto max-w-xl p-10 text-center">
             <BookOpen className="mx-auto size-10 text-[var(--color-accent)]" />
             <h2 className="mt-4 text-lg font-bold">O playbook está vazio</h2>
-            <p className="mt-2 text-sm text-[var(--color-muted)]">
-              Comece do zero com “Nova seção”, ou use o modelo: ele já traz a tabela das
-              Avaliações 0 a 3 com os valores do Rodrigo e do Henrique, e tópicos de roteiro,
-              objeções e follow-up para vocês completarem.
-            </p>
-            <button
-              onClick={() => void usarModelo()}
-              disabled={criando}
-              className="mt-6 rounded-full bg-[var(--color-ink)] px-5 py-2.5 text-sm font-semibold text-[var(--color-on-ink)] disabled:opacity-50"
-            >
-              {criando ? "Criando…" : "Começar com o modelo"}
-            </button>
+            {admin ? (
+              <>
+                <p className="mt-2 text-sm text-[var(--color-muted)]">
+                  Comece do zero com “Nova seção”, ou use o modelo: ele já traz a tabela das
+                  Avaliações 0 a 3 com os valores do Rodrigo e do Henrique, e tópicos de roteiro,
+                  objeções e follow-up para vocês completarem.
+                </p>
+                <button
+                  onClick={() => void usarModelo()}
+                  disabled={criando}
+                  className="mt-6 rounded-full bg-[var(--color-ink)] px-5 py-2.5 text-sm font-semibold text-[var(--color-on-ink)] disabled:opacity-50"
+                >
+                  {criando ? "Criando…" : "Começar com o modelo"}
+                </button>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-[var(--color-muted)]">
+                O material comercial aparece aqui assim que um administrador publicar.
+              </p>
+            )}
           </section>
         </div>
       ) : (
@@ -180,7 +193,7 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
                       <span className="mr-2 tabular-nums opacity-60">{indice + 1}.</span>
                       {s.title}
                     </button>
-                    {!termo && (
+                    {!termo && admin && (
                       <span className="hidden shrink-0 gap-0.5 group-hover:flex">
                         <button onClick={() => void mover(s.id, "cima")} disabled={indice === 0} aria-label="Subir" className="rounded p-0.5 opacity-70 hover:opacity-100 disabled:opacity-20">
                           <ArrowUp className="size-3.5" />
@@ -254,7 +267,7 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
                       <h2 className="text-2xl font-black uppercase tracking-tight">{atual.title}</h2>
                       <p className="mt-1 text-xs text-[var(--color-muted)]">Atualizado em {dataHora(atual.updatedAt)}</p>
                     </div>
-                    <div className="flex gap-2">
+                    {admin && <div className="flex gap-2">
                       <button
                         onClick={() => comecarEdicao(atual)}
                         className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
@@ -269,7 +282,7 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
                       >
                         <Trash2 className="size-3.5" />
                       </button>
-                    </div>
+                    </div>}
                   </div>
 
                   {confirmarExclusao && (

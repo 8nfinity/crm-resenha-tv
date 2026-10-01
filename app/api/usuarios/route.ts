@@ -3,13 +3,14 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { gerarHash, senhaFraca } from "@/lib/auth/senha";
 import { exigirAdmin } from "@/lib/auth/usuario";
+import { papeisQuePodeAtribuir } from "@/lib/auth/papeis";
 
 export const runtime = "nodejs";
 
-/** Lista de usuários — só o administrador vê. */
+/** Lista de usuários — master e administradores veem. */
 export async function GET() {
-  const admin = await exigirAdmin();
-  if (admin instanceof Response) return admin;
+  const ator = await exigirAdmin();
+  if (ator instanceof Response) return ator;
 
   const usuarios = await prisma.user.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
@@ -22,19 +23,26 @@ const criarSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().toLowerCase().email().max(200),
   senha: z.string().max(200),
-  role: z.enum(["ADMIN", "VENDEDOR"]).default("VENDEDOR"),
+  role: z.enum(["MASTER", "ADMIN", "VENDEDOR"]).default("VENDEDOR"),
 });
 
-/** Cria um acesso. A senha inicial é passada por quem criou; a pessoa troca depois. */
+/**
+ * Cria um acesso. O papel precisa estar entre os que o criador pode dar:
+ * administrador só cria vendedor; master cria qualquer um.
+ */
 export async function POST(request: Request) {
-  const admin = await exigirAdmin();
-  if (admin instanceof Response) return admin;
+  const ator = await exigirAdmin();
+  if (ator instanceof Response) return ator;
 
   const parsed = criarSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Preencha nome, um e-mail válido e a senha." }, { status: 400 });
   }
   const { name, email, senha, role } = parsed.data;
+
+  if (!papeisQuePodeAtribuir(ator.role).includes(role)) {
+    return NextResponse.json({ error: "Você não pode criar acessos com esse papel." }, { status: 403 });
+  }
 
   const fraca = senhaFraca(senha);
   if (fraca) return NextResponse.json({ error: fraca }, { status: 400 });

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 import type { Usuario } from "@/lib/auth/usuario";
+import { ehAdministrador, NOME_PAPEL } from "@/lib/auth/papeis";
 import { cn } from "@/lib/utils";
 import { AoVivo } from "@/components/ao-vivo";
 
@@ -48,7 +49,7 @@ export function TopNav({ usuario }: { usuario: Usuario | null }) {
       </Link>
 
       <nav className="no-scrollbar mx-auto flex min-w-0 items-center gap-1 overflow-x-auto">
-        {NAV.map(({ href, label }) => (
+        {NAV.filter(({ href }) => href !== "/conexao" || ehAdministrador(usuario.role)).map(({ href, label }) => (
           <Link
             key={href}
             href={href}
@@ -115,7 +116,7 @@ function MenuUsuario({ usuario }: { usuario: Usuario }) {
             <p className="truncate text-sm font-semibold">{usuario.name}</p>
             <p className="truncate text-xs text-[var(--color-muted)]">{usuario.email}</p>
             <span className="mt-1.5 inline-block rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-accent)]">
-              {usuario.role === "ADMIN" ? "Administrador" : "Vendedor"}
+              {NOME_PAPEL[usuario.role]}
             </span>
           </div>
           <div className="my-1 border-t" />

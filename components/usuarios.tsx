@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyRound, UserPlus } from "lucide-react";
 import { dataHora } from "@/lib/atividades";
 import { cn } from "@/lib/utils";
+import { NOME_PAPEL, papeisQuePodeAtribuir, podeAlterar, type Papel } from "@/lib/auth/papeis";
 
 type Linha = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "VENDEDOR";
+  role: Papel;
   active: boolean;
   lastLoginAt: string | null;
 };
@@ -77,7 +78,11 @@ export function MinhaConta({ nome, email }: { nome: string; email: string }) {
 
 // ─── Usuários (administrador) ────────────────────────────────────────────────
 
-export function GerenciarUsuarios({ meuId }: { meuId: string }) {
+export function GerenciarUsuarios({ meuId, meuPapel }: { meuId: string; meuPapel: Papel }) {
+  // O formulário e os botões só oferecem o que este papel pode fazer — a API
+  // confere de novo do lado do servidor.
+  const atribuiveis = papeisQuePodeAtribuir(meuPapel);
+  const posso = (u: Linha) => podeAlterar({ id: meuId, papel: meuPapel }, { id: u.id, papel: u.role });
   const [lista, setLista] = useState<Linha[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState({ name: "", email: "", senha: "", role: "VENDEDOR" as Linha["role"] });
@@ -121,8 +126,11 @@ export function GerenciarUsuarios({ meuId }: { meuId: string }) {
         <input required type="email" value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} placeholder="E-mail" className={campo} />
         <input required type="text" autoComplete="off" value={novo.senha} onChange={(e) => setNovo({ ...novo, senha: e.target.value })} placeholder="Senha inicial (mín. 8)" className={campo} />
         <select value={novo.role} onChange={(e) => setNovo({ ...novo, role: e.target.value as Linha["role"] })} className={campo}>
-          <option value="VENDEDOR">Vendedor</option>
-          <option value="ADMIN">Administrador</option>
+          {atribuiveis.map((p) => (
+            <option key={p} value={p}>
+              {NOME_PAPEL[p]}
+            </option>
+          ))}
         </select>
         <button
           disabled={criando}
@@ -149,30 +157,41 @@ export function GerenciarUsuarios({ meuId }: { meuId: string }) {
                   Desativado
                 </span>
               )}
-              <select
-                value={u.role}
-                onChange={(e) => void alterar(u.id, { role: e.target.value })}
-                className="ml-auto rounded-full bg-[var(--color-surface)] px-3 py-1 text-xs outline-none"
-              >
-                <option value="VENDEDOR">Vendedor</option>
-                <option value="ADMIN">Administrador</option>
-              </select>
+              {posso(u) ? (
+                <select
+                  value={u.role}
+                  onChange={(e) => void alterar(u.id, { role: e.target.value })}
+                  className="ml-auto rounded-full bg-[var(--color-surface)] px-3 py-1 text-xs outline-none"
+                >
+                  {atribuiveis.map((p) => (
+                    <option key={p} value={p}>
+                      {NOME_PAPEL[p]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="ml-auto rounded-full bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-accent)]">
+                  {NOME_PAPEL[u.role]}
+                </span>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
               <span className="text-[var(--color-muted)]">
                 Último acesso: {u.lastLoginAt ? dataHora(u.lastLoginAt) : "nunca"}
               </span>
-              <span className="ml-auto flex gap-2">
-                <button onClick={() => setResetando(resetando === u.id ? null : u.id)} className="rounded-full border px-3 py-1 hover:text-[var(--color-text)]">
-                  Definir senha
-                </button>
-                <button
-                  onClick={() => void alterar(u.id, { active: !u.active })}
-                  className={cn("rounded-full border px-3 py-1", u.active ? "text-[var(--color-hot)]" : "text-[var(--color-accent)]")}
-                >
-                  {u.active ? "Desativar" : "Reativar"}
-                </button>
-              </span>
+              {posso(u) && (
+                <span className="ml-auto flex gap-2">
+                  <button onClick={() => setResetando(resetando === u.id ? null : u.id)} className="rounded-full border px-3 py-1 hover:text-[var(--color-text)]">
+                    Definir senha
+                  </button>
+                  <button
+                    onClick={() => void alterar(u.id, { active: !u.active })}
+                    className={cn("rounded-full border px-3 py-1", u.active ? "text-[var(--color-hot)]" : "text-[var(--color-accent)]")}
+                  >
+                    {u.active ? "Desativar" : "Reativar"}
+                  </button>
+                </span>
+              )}
             </div>
             {resetando === u.id && (
               <form

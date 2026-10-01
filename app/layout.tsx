@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import { TopNav } from "@/components/top-nav";
 import { usuarioAtual } from "@/lib/auth/usuario";
+import { SessaoProvider } from "@/components/sessao";
 import "./globals.css";
 
 // A mesma família geométrica e pesada dos materiais da Biomech: títulos em
@@ -28,7 +29,7 @@ export default async function RootLayout({
       <body className="flex h-screen flex-col overflow-hidden">
         <TopNav usuario={usuario} />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {children}
+          <SessaoProvider papel={usuario?.role ?? null}>{children}</SessaoProvider>
         </main>
       </body>
     </html>

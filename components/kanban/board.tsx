@@ -21,6 +21,7 @@ import type { DealCard, StageColumn } from "@/lib/types";
 import type { Campo } from "@/lib/custom-fields";
 import { DealCardView } from "./deal-card";
 import { ColunaMenu, NovaColuna } from "./coluna-menu";
+import { useEhAdmin } from "@/components/sessao";
 import { DealPanel } from "./deal-panel";
 import {
   BoardFilters,
@@ -39,6 +40,8 @@ export function Board({
   campos: Campo[];
 }) {
   const [deals, setDeals] = useState(initialDeals);
+  // Criar/editar colunas é de administrador; vendedor só move os cards.
+  const admin = useEhAdmin();
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS);
   const [activeId, setActiveId] = useState<string | null>(null);
   const router = useRouter();
@@ -199,7 +202,7 @@ export function Board({
               mostrarConta={varias}
             />
           ))}
-          <NovaColuna />
+          {admin && <NovaColuna />}
         </div>
 
         <DragOverlay>
@@ -237,6 +240,7 @@ function Column({
   mostrarConta: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  const admin = useEhAdmin();
 
   const totalValue = deals.reduce((sum, d) => sum + (d.value ?? 0), 0);
 
@@ -261,7 +265,7 @@ function Column({
               })}
             </span>
           )}
-          <ColunaMenu stage={stage} stages={stages} quantidade={totalNaColuna} />
+          {admin && <ColunaMenu stage={stage} stages={stages} quantidade={totalNaColuna} />}
         </span>
       </div>
 

@@ -18,6 +18,27 @@ import { PrismaClient } from "@/lib/generated/prisma/client";
 
 const CONEXOES = 10;
 
+/**
+ * Criptografia da conexão com o banco.
+ *
+ * Sem isto o `pg` conecta em texto puro: leads, conversas e hashes de senha
+ * atravessariam a internet legíveis entre a hospedagem e o Supabase.
+ *
+ * O certificado do Supabase é assinado pela CA própria deles (não por uma
+ * pública), então conferir o certificado exige o arquivo da CA: baixe em
+ * Supabase → Project Settings → Database → SSL Configuration e cole o
+ * conteúdo (PEM) na variável DATABASE_CA_CERT. Com ela, a conexão é
+ * criptografada E autenticada. Sem ela, é criptografada sem conferir quem
+ * está do outro lado — muito melhor que texto puro, e é o padrão.
+ *
+ * DATABASE_SSL=false desliga (só para um Postgres local sem TLS).
+ */
+function opcoesTls() {
+  if (process.env.DATABASE_SSL === "false") return undefined;
+  const ca = process.env.DATABASE_CA_CERT?.replace(/\\n/g, "\n").trim();
+  return ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false };
+}
+
 function createClient() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -26,6 +47,7 @@ function createClient() {
 
   const adapter = new PrismaPg({
     connectionString,
+    ssl: opcoesTls(),
     max: CONEXOES,
     idleTimeoutMillis: 30 * 60 * 1000,
     connectionTimeoutMillis: 20_000,

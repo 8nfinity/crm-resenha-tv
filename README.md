@@ -252,3 +252,22 @@ gera.
 Se quiser migrar para a API oficial, a mudança fica contida em `lib/evolution/`.
 O que se perde é justamente a importação de contatos e histórico — a API oficial
 não oferece nenhuma das duas.
+
+## Segurança
+
+O CRM fica na internet, então a proteção é em camadas — nenhuma depende de
+uma só barreira:
+
+| Camada | Como |
+|---|---|
+| Login | Tudo exige login (`proxy.ts`). Senhas com scrypt; sessão em cookie assinado (HMAC), `HttpOnly`, `Secure` quando hospedado, 7 dias. Trava de 5 erros por e-mail e 20 por IP. |
+| Papéis | **Master** gerencia todo mundo e ninguém mexe na conta dele; **Administrador** configura o CRM e gerencia vendedores; **Vendedor** trabalha os leads. A regra fica em `lib/auth/papeis.ts` e no `proxy.ts`, e as rotas sensíveis conferem de novo. |
+| Sessões | Desativar alguém, trocar senha ou mudar o papel derruba as sessões abertas daquela conta em até 30 s. |
+| CSRF | Cookie `SameSite=Lax` + recusa de qualquer alteração vinda de outra origem. |
+| Navegador | CSP (só scripts do próprio CRM), anti-iframe, HSTS, `nosniff`, sem `X-Powered-By`. |
+| Banco | Conexão criptografada (TLS). Com `DATABASE_CA_CERT`, também autenticada. |
+| Integrações | Webhook com segredo no header (comparação em tempo constante); conector do Claude com segmento secreto + faixa de IP da Anthropic. |
+
+Primeiro acesso: `npm run usuario:criar` no computador, ou as variáveis
+`ADMIN_EMAIL` / `ADMIN_NOME` / `ADMIN_SENHA` na hospedagem (só valem com o banco
+sem nenhum usuário — apague a senha depois).
