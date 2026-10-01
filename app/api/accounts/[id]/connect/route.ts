@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { evolution } from "@/lib/evolution/client";
+import { urlDoWebhook } from "@/lib/url-publica";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,7 @@ export async function POST(
     let webhookConfigurado = false;
 
     if (secret) {
-      const url = new URL("/api/webhooks/evolution", request.url);
+      const url = new URL(urlDoWebhook(request));
       const crmLocal = ehLocal(url.hostname);
       const evolutionLocal = ehLocal(
         new URL(process.env.EVOLUTION_API_URL ?? "http://localhost").hostname,

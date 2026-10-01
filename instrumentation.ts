@@ -16,7 +16,15 @@ export async function register() {
   // O proxy (middleware) roda no runtime edge, que não tem `pg`.
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Fuso de Brasília. Servidores de hospedagem rodam em UTC: sem isto, "hoje
+  // desde 00:00", a agenda e o calendário virariam o dia às 21h. Definido
+  // antes de qualquer data ser criada; a variável TZ da hospedagem, se
+  // existir, tem precedência.
+  process.env.TZ ||= "America/Sao_Paulo";
+
   const { aquecerBanco } = await import("@/lib/db");
+  const { iniciarRotinasDoServidor } = await import("@/lib/rotinas");
+  iniciarRotinasDoServidor();
 
   const aquecer = async () => {
     await aquecerBanco();

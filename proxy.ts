@@ -21,10 +21,11 @@ export const config = {
 /**
  * IP de origem da requisição.
  *
- * Na Vercel, `x-real-ip` e o primeiro item de `x-forwarded-for` são escritos
- * pela própria plataforma e não podem ser forjados pelo cliente. Fora da Vercel,
- * atrás de um proxy que não sobrescreva esses headers, esta leitura passaria a
- * ser falsificável — é por isso que o deploy previsto é na Vercel.
+ * Confia no `x-real-ip` (e, na falta dele, no primeiro item de
+ * `x-forwarded-for`), que o proxy da hospedagem escreve — na Railway e na
+ * Vercel é a borda deles que define esses headers. Atrás de um proxy que NÃO
+ * os sobrescreva, esta leitura seria falsificável pelo cliente; por isso a
+ * trava de IP é a segunda camada, e o segmento secreto da URL é a primeira.
  */
 function clientIp(request: NextRequest): string | null {
   const real = request.headers.get("x-real-ip");

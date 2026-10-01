@@ -56,29 +56,82 @@ npm run db:seed         # cria os estágios do funil
 npm run dev             # http://localhost:3000
 ```
 
-### 2. Evolution API na VPS
+### 2. Evolution API
 
-Passo a passo completo em [infra/README.md](infra/README.md). Resumo: VPS com
-Docker, um subdomínio apontando para ela, `docker compose up -d`.
+Na Railway, junto com o CRM: veja o passo 3a abaixo. Alternativa em VPS
+própria: [infra/README.md](infra/README.md) (Docker, um subdomínio,
+`docker compose up -d`).
 
 A `AUTHENTICATION_API_KEY` do `infra/.env` precisa ser **idêntica** à
 `EVOLUTION_API_KEY` do `.env` do CRM.
 
-### 3. Deploy na Vercel
+### 3. Deploy na Railway
 
 Precisa vir antes de conectar o WhatsApp: o webhook e o conector do Claude
 exigem uma URL pública, que localhost não tem.
 
-```bash
-npx vercel
-```
+Um **projeto** na Railway com **dois serviços**: a Evolution API e o CRM. Os
+dois ficam de pé 24 h — é isso que permite o "Ao vivo" (as telas atualizam
+sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
 
-Variáveis de ambiente a configurar na Vercel — todas as do `.env`, mais:
+> **Região:** escolha **US West** nos dois serviços (Settings → Region). O banco
+> do Supabase está em Oregon; com o servidor do lado, cada consulta leva poucos
+> milissegundos em vez dos ~200 ms de quando o CRM roda no Brasil.
 
-| Variável | Valor |
-|---|---|
-| `MCP_DISABLE_IP_CHECK` | **`false`** (é o que tranca o endpoint) |
-| `CRON_SECRET` | `openssl rand -hex 32` |
+#### 3a. Serviço da Evolution API
+
+1. **New → Docker Image** → `evoapicloud/evolution-api:v2.3.7` (a mesma versão
+   que roda hoje; confira a tag no Docker Hub).
+2. **Variables** — as mesmas do `.env` da Evolution que roda no seu PC:
+
+   | Variável | Valor |
+   |---|---|
+   | `SERVER_URL` | o domínio público deste serviço (passo 4) |
+   | `AUTHENTICATION_API_KEY` | **idêntica** à `EVOLUTION_API_KEY` do CRM |
+   | `DATABASE_PROVIDER` | `postgresql` |
+   | `DATABASE_CONNECTION_URI` | a mesma de hoje (schema `evolution_api` no Supabase) |
+   | `DATABASE_SAVE_DATA_INSTANCE`, `..._NEW_MESSAGE`, `..._CONTACTS`, `..._CHATS`, `..._LABELS`, `..._HISTORIC` | `true` |
+   | `CACHE_REDIS_ENABLED` / `CACHE_LOCAL_ENABLED` | `false` / `true` |
+
+3. **Volume** montado em `/evolution/instances`: guarda a sessão do WhatsApp.
+   Sem ele, todo redeploy pede QR Code de novo.
+4. **Settings → Networking → Generate Domain** (porta `8080`).
+
+#### 3b. Serviço do CRM
+
+1. **New → GitHub Repo** → `8nfinity/crm-biomech`. O `railway.json` do repositório
+   já diz tudo: build com `npm run build`, migrations (`npm run db:migrate`)
+   antes de cada versão entrar no ar, e verificação de saúde em `/api/saude`
+   (a versão nova só substitui a antiga se alcançar o banco).
+2. **Variables** — todas as do `.env` do CRM:
+
+   | Variável | Valor |
+   |---|---|
+   | `DATABASE_URL`, `DIRECT_URL` | as mesmas de hoje (Supabase) |
+   | `EVOLUTION_API_URL` | `https://<domínio da Evolution do passo 3a>` |
+   | `EVOLUTION_API_KEY` | igual à `AUTHENTICATION_API_KEY` da Evolution |
+   | `EVOLUTION_INSTANCE`, `WEBHOOK_SECRET`, `MCP_SECRET_PATH` | as mesmas de hoje |
+   | `MCP_ALLOWED_CIDRS` | `160.79.104.0/21` |
+   | `MCP_DISABLE_IP_CHECK` | **`false`** (é o que tranca o endpoint do Claude) |
+   | `TZ` | `America/Sao_Paulo` |
+   | `APP_URL` | vazio, ou o domínio próprio se você configurar um |
+
+3. **Settings → Networking → Generate Domain**. O CRM descobre esse endereço
+   sozinho (`RAILWAY_PUBLIC_DOMAIN`) e o usa no webhook e em Configurações.
+
+#### 3c. Virada
+
+- Ao subir, o CRM **reaponta o webhook** de todas as contas para o endereço da
+  Railway (aparece no log: `Webhook de crm_... → https://...`). Se a instância
+  ainda não existir na Evolution nova — o mais provável, porque a sessão do
+  WhatsApp ficou na pasta da Evolution do seu PC —, vá em **Conexão → Gerar QR
+  Code** e escaneie de novo. As conversas e os leads continuam no banco.
+- **Desligue a Evolution e o CRM do PC** (não rode mais o `iniciar.bat`). Duas
+  Evolutions com o mesmo número disputam a mesma sessão.
+
+Opcional: com os dois serviços no mesmo projeto, a Evolution pode chamar o CRM
+pela rede privada — `WEBHOOK_BASE_URL=http://<serviço-do-crm>.railway.internal:<porta>`.
+Comece pelo endereço público, que funciona sem ajuste; troque depois se quiser.
 
 ### 4. Conectar o WhatsApp
 
@@ -118,7 +171,8 @@ Cada fator guarda a frase que o explica, e essa frase vai junto para o Claude �
 por isso ele consegue dizer *"o João está em 82 porque respondeu ontem e já está
 em proposta"* em vez de citar um número que ninguém consegue conferir.
 
-O recálculo acontece a cada mensagem recebida e num cron diário às 9h. O cron é
+O recálculo acontece a cada mensagem recebida e uma vez por dia, às 6h
+(Brasília), agendado pelo próprio servidor (`lib/rotinas.ts`). O diário é
 necessário porque a passagem do tempo sozinha esfria um lead: quem respondeu "há
 6 dias" hoje respondeu "há 7 dias" amanhã.
 

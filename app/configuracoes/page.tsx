@@ -4,6 +4,7 @@ import { CopyField } from "@/components/copy-field";
 import { LabelMapping } from "@/components/label-mapping";
 import { CustomFieldEditor } from "@/components/custom-field-editor";
 import { prisma } from "@/lib/db";
+import { urlDoWebhook, urlPublica } from "@/lib/url-publica";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ export default async function ConfiguracoesPage() {
   const h = await headers();
   const host = h.get("host") ?? "localhost:3000";
   const proto = host.startsWith("localhost") ? "http" : "https";
-  const base = `${proto}://${host}`;
+  // Hospedado, vale o endereço público configurado (o do cabeçalho pode ser
+  // o interno do proxy); local, o da própria requisição.
+  const base = urlPublica(`${proto}://${host}`);
+  const webhookUrl = urlDoWebhook(`${proto}://${host}`);
 
   const contas = await prisma.whatsAppAccount.findMany({
     orderBy: { createdAt: "asc" },
@@ -22,7 +26,7 @@ export default async function ConfiguracoesPage() {
   const secret = process.env.MCP_SECRET_PATH;
   const mcpUrl = secret ? `${base}/api/mcp/${secret}` : null;
   const ipCheckOff = process.env.MCP_DISABLE_IP_CHECK === "true";
-  const emProducao = !host.startsWith("localhost");
+  const emProducao = !new URL(base).hostname.startsWith("localhost");
 
   return (
     <>
@@ -52,7 +56,7 @@ export default async function ConfiguracoesPage() {
               <p className="mt-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_15%,transparent)] px-3 py-2 text-xs">
                 <strong>Atenção:</strong> MCP_DISABLE_IP_CHECK está ligado em
                 produção. Qualquer pessoa com essa URL lê todos os seus leads.
-                Mude para &quot;false&quot; nas variáveis de ambiente da Vercel.
+                Mude para &quot;false&quot; nas variáveis de ambiente da hospedagem (Railway).
               </p>
             )}
 
@@ -70,7 +74,7 @@ export default async function ConfiguracoesPage() {
               Configurado automaticamente ao gerar o QR Code. Esta é a URL, caso
               precise apontar na mão pelo painel da Evolution.
             </p>
-            <CopyField value={`${base}/api/webhooks/evolution`} className="mt-3" />
+            <CopyField value={webhookUrl} className="mt-3" />
           </section>
 
           <section className="card p-6">
