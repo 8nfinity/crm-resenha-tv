@@ -10,6 +10,7 @@ import { ehAdministrador } from "@/lib/auth/papeis";
 import { GerenciarUsuarios, MinhaConta } from "@/components/usuarios";
 import { PageHeader } from "@/components/ui";
 import { AvisosEmailAdmin, PreferenciaAvisos } from "@/components/avisos-email";
+import { NotificacoesAparelho } from "@/components/notificacoes";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ export default async function ConfiguracoesPage() {
                 Trocar a senha desconecta os outros aparelhos onde você estava logado.
               </p>
               <MinhaConta nome={usuario.name} email={usuario.email} />
+              <NotificacoesAparelho />
               <PreferenciaAvisos />
             </section>
           )}
@@ -72,7 +74,8 @@ export default async function ConfiguracoesPage() {
           <section className="card p-6">
             <h2 className="text-base font-semibold">Avisos por e-mail</h2>
             <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
-              Lembretes das atividades marcadas e um resumo do dia, direto no e-mail de cada um.
+              Opcional: os lembretes já chegam como notificação nos aparelhos de quem ativou (em Minha
+              conta). Configure o e-mail só se quiser receber também por lá.
             </p>
             <AvisosEmailAdmin />
           </section>

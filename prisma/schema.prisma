@@ -316,6 +316,10 @@ model SystemState {
   lastImportSummary Json?
   /// Dia (AAAA-MM-DD, Brasília) do último resumo diário por e-mail.
   lastDigestOn      String?
+  /// Chaves das notificações no aparelho (Web Push / VAPID). Geradas pelo
+  /// próprio CRM na primeira vez: ninguém precisa configurar nada.
+  vapidPublicKey    String?
+  vapidPrivateKey   String?
   updatedAt         DateTime  @updatedAt
 }
 
@@ -362,6 +366,26 @@ model User {
 
   activities    Activity[]      @relation("CriadorDaAtividade")
   playbookFiles PlaybookFile[]
+  pushSubscriptions PushSubscription[]
+}
+
+/// Um aparelho (navegador de computador ou celular) que ativou as
+/// notificações. Cada pessoa pode ter vários. O endpoint é o endereço do
+/// serviço de notificação do navegador (Google, Mozilla, Apple).
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  /// Que aparelho é ("Chrome no Windows"), para a pessoa reconhecer.
+  device     String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 /// Uma etiqueta aplicada ou retirada de uma conversa — o histórico que aparece

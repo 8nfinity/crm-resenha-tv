@@ -34,13 +34,14 @@ export function iniciarRotinasDoServidor() {
     setInterval(() => void varrerTudo().catch(() => {}), INTERVALO_VARREDURA_MS).unref();
   }
 
-  if (emailConfigurado()) {
-    // Avisos de atividades: confere a cada minuto se há lembrete a mandar e
-    // se chegou a hora do resumo do dia.
-    setInterval(() => void conferirAvisos(), INTERVALO_AVISOS_MS).unref();
-    setTimeout(() => void conferirAvisos(), 30_000).unref();
-  } else {
-    console.log("Avisos por e-mail desligados: defina BREVO_API_KEY (ou RESEND_API_KEY) e EMAIL_REMETENTE para ligar.");
+  // Avisos de atividades (notificação no aparelho e, se configurado, e-mail):
+  // confere a cada minuto se há lembrete a mandar e se chegou a hora do
+  // resumo do dia. Sem ninguém com aparelho ativado nem e-mail, a conferência
+  // para logo na primeira consulta.
+  setInterval(() => void conferirAvisos(), INTERVALO_AVISOS_MS).unref();
+  setTimeout(() => void conferirAvisos(), 30_000).unref();
+  if (!emailConfigurado()) {
+    console.log("E-mail não configurado: os avisos chegam só como notificação nos aparelhos ativados.");
   }
 
   if (estaHospedado()) {
@@ -60,7 +61,7 @@ const INTERVALO_AVISOS_MS = 60_000;
 async function conferirAvisos() {
   try {
     const lembretes = await enviarLembretes();
-    if (lembretes) console.log(`Avisos: ${lembretes} lembrete(s) por e-mail enviados`);
+    if (lembretes) console.log(`Avisos: ${lembretes} lembrete(s) enviados`);
     const resumos = await enviarResumoDiario();
     if (resumos) console.log(`Avisos: resumo do dia enviado para ${resumos} pessoa(s)`);
   } catch (error) {

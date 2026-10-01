@@ -35,7 +35,9 @@ export function PreferenciaAvisos() {
     if (!res?.ok) setLigado(!novo);
   }
 
-  if (ligado === null) return null;
+  // Sem e-mail configurado, a chave não faz nada: os avisos chegam pelas
+  // notificações do aparelho. Esconder evita a dúvida.
+  if (ligado === null || !configurado) return null;
 
   return (
     <div className="mt-4 flex items-start gap-3 rounded-2xl bg-[var(--color-surface-2)] p-3">
@@ -48,7 +50,6 @@ export function PreferenciaAvisos() {
         <p className="text-sm font-medium">Avisos de atividades por e-mail</p>
         <p className="text-xs text-[var(--color-muted)]">
           Lembrete antes de cada atividade e o resumo do dia de manhã.
-          {!configurado && " (O envio de e-mails ainda não foi configurado pelo administrador.)"}
         </p>
       </div>
       <button

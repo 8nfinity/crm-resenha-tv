@@ -235,7 +235,22 @@ com “Maria” deixa no histórico do lead:
 Toda etiqueta aplicada ou retirada (de qualquer tipo) fica no histórico do
 lead, na aba **Notas**, junto das anotações, com data e hora.
 
-## Avisos de atividades por e-mail
+## Notificações no aparelho (lembretes)
+
+Cada pessoa abre o CRM no computador e no celular e clica em **Ativar
+notificações** (na tela Hoje ou em Configurações → Minha conta). A partir daí:
+
+- **Lembrete** `AVISO_MINUTOS_ANTES` minutos antes de cada atividade (padrão
+  30), para quem marcou (sem autor, para os administradores) — com o número do
+  follow-up: “2º follow-up: Ligar às 14:30”.
+- **Resumo do dia** às `AVISO_HORA_RESUMO` h (padrão 7).
+
+Não precisa configurar nada: as chaves de envio (VAPID) são geradas pelo
+próprio CRM e guardadas no banco. Funciona no Chrome, Edge e Firefox (computador
+e Android). No iPhone, só com o CRM adicionado à Tela de Início (Safari →
+Compartilhar → Adicionar à Tela de Início), iOS 16.4 ou mais novo.
+
+## Avisos por e-mail (opcional)
 
 Com `BREVO_API_KEY` (sem domínio próprio: o remetente pode ser seu Gmail) ou
 `RESEND_API_KEY` (com domínio próprio), mais `EMAIL_REMETENTE` (veja

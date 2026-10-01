@@ -47,6 +47,11 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Navegadores pedem /favicon.ico por conta própria: entrega a marca.
+  async rewrites() {
+    return [{ source: "/favicon.ico", destination: "/brand/marca.png" }];
+  },
+
   async headers() {
     const seguranca = [
       // Ninguém embute o CRM num iframe (proteção contra clickjacking).
@@ -61,7 +66,17 @@ const nextConfig: NextConfig = {
       { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
       ...(producao ? [{ key: "Content-Security-Policy", value: csp }] : []),
     ];
-    return [{ source: "/:path*", headers: seguranca }];
+    return [
+      { source: "/:path*", headers: seguranca },
+      // Service worker das notificações: sempre a versão mais nova (sem cache).
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+    ];
   },
 };
 

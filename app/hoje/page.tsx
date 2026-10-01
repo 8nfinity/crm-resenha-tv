@@ -1,6 +1,7 @@
 import { agendaDeHoje } from "@/lib/today";
 import { TodayList } from "@/components/today-list";
 import { Kpi, PageHeader } from "@/components/ui";
+import { ConviteNotificacoes } from "@/components/notificacoes";
 
 // A agenda muda a cada mensagem recebida; cache aqui mostraria dado velho.
 export const dynamic = "force-dynamic";
@@ -31,6 +32,8 @@ export default async function HojePage() {
           </span>
         }
       />
+
+      <ConviteNotificacoes />
 
       <div className="flex flex-1 flex-col gap-6 px-4 sm:px-8">
         <div className="grid grid-cols-2 gap-x-8 gap-y-6 lg:grid-cols-4">

@@ -23,7 +23,7 @@ import { ehAdministrador } from "@/lib/auth/papeis";
 export const config = {
   // Tudo, menos arquivos estáticos (JS/CSS do Next, imagens, fontes, logo):
   // sem isso a própria tela de login viria sem estilo.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|fonts/|pdfjs/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|fonts/|pdfjs/|sw\\.js|manifest\\.webmanifest).*)"],
 };
 
 /** Abertas sem login: cada uma tem a própria trava (ou é a tela de entrar). */

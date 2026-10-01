@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { TopNav } from "@/components/top-nav";
 import { usuarioAtual } from "@/lib/auth/usuario";
@@ -15,7 +15,14 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "CRM Biomech",
   description: "Funil de vendas do Instituto Biomech, conectado ao WhatsApp",
-  icons: { icon: "/brand/marca.png", apple: "/brand/marca.png" },
+  icons: { icon: "/brand/marca.png", apple: "/brand/apple-180.png" },
+  // Instalado na Tela de Início do iPhone, abre como aplicativo (sem a barra
+  // do Safari) — e é assim que o iPhone recebe as notificações.
+  appleWebApp: { capable: true, title: "CRM Biomech", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b1d14",
 };
 
 export default async function RootLayout({

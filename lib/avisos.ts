@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/db";
 import { contactName } from "@/lib/queries";
-import { rotuloTipo } from "@/lib/atividades";
+import { ordinalFollowUp, rotuloTipoNumerado } from "@/lib/atividades";
 import { emailConfigurado, enviarEmail, escaparHtml, moldura } from "@/lib/email";
+import { enviarPush, temAparelhos } from "@/lib/push";
+import { numerosDeFollowUp } from "@/lib/follow-ups";
 import { urlPublica } from "@/lib/url-publica";
 
 /**
- * Avisos de atividades por e-mail.
+ * Avisos de atividades: notificação no aparelho (celular/computador) e e-mail.
  *
  * Dois tipos:
  *  - LEMBRETE: X minutos antes de cada atividade marcada (AVISO_MINUTOS_ANTES,
@@ -14,8 +16,11 @@ import { urlPublica } from "@/lib/url-publica";
  *    que está atrasado. Vendedor recebe o que ele marcou; administradores, o
  *    do time.
  *
- * Quem recebe o lembrete: quem marcou a atividade → os administradores. Quem
- * desligou os e-mails em "Minha conta" não recebe nada.
+ * Quem recebe o lembrete: quem marcou a atividade → os administradores.
+ *  - Notificação: em todo aparelho que a pessoa ativou (ativar já é a escolha
+ *    de receber).
+ *  - E-mail: se o envio de e-mail estiver configurado e a pessoa não tiver
+ *    desligado em "Minha conta".
  */
 
 export type Pessoa = {
@@ -39,7 +44,16 @@ export function horaDoResumo(): number {
 }
 
 /**
- * Para quem vai o lembrete de uma atividade.
+ * Responsáveis por uma atividade: quem marcou ou, sem autor ativo (marcada
+ * pelo Claude, ou de alguém que saiu), os administradores.
+ */
+export function responsaveisDaAtividade({ criador, admins }: { criador: Pessoa | null; admins: Pessoa[] }): Pessoa[] {
+  if (criador?.active) return [criador];
+  return admins.filter((p) => p.active);
+}
+
+/**
+ * Para quem vai o lembrete POR E-MAIL de uma atividade.
  *
  * O responsável é quem marcou. Se essa pessoa desligou os e-mails, a escolha
  * dela vale — o aviso não cai para os administradores. Atividade sem autor
@@ -122,6 +136,8 @@ type AtividadeComLead = {
   dueAt: Date | null;
   createdById: string | null;
   createdBy: Pessoa | null;
+  /** Número do follow-up no lead (1º, 2º…), preenchido depois da busca. */
+  numero?: number;
   deal: {
     id: string;
     title: string | null;
@@ -134,7 +150,20 @@ function nomeDoLead(a: AtividadeComLead): string {
 }
 
 function descricao(a: AtividadeComLead): string {
-  return a.title?.trim() || rotuloTipo(a.type);
+  const titulo = a.title?.trim();
+  if (titulo) return a.numero ? `${ordinalFollowUp(a.numero)}: ${titulo}` : titulo;
+  return rotuloTipoNumerado(a.type, a.numero);
+}
+
+/** Preenche o número de cada follow-up (1º, 2º…) contando todos os do lead. */
+async function numerar(atividades: AtividadeComLead[]) {
+  const numeros = await numerosDeFollowUp(atividades.filter((a) => a.type === "FOLLOW_UP").map((a) => a.deal.id));
+  for (const a of atividades) a.numero = numeros.get(a.id);
+}
+
+/** Há por onde avisar? E-mail configurado ou alguém com aparelho ativado. */
+async function haCanal(): Promise<{ email: boolean; push: boolean }> {
+  return { email: emailConfigurado(), push: await temAparelhos() };
 }
 
 /** Atividades só de leads visíveis: arquivados e contatos ignorados não avisam. */
@@ -151,9 +180,14 @@ async function administradores(): Promise<Pessoa[]> {
 
 let lembrando = false;
 
-/** Manda os lembretes que venceram a janela. Devolve quantos e-mails saíram. */
+/**
+ * Manda os lembretes que venceram a janela: notificação nos aparelhos e
+ * e-mail. Devolve quantos avisos saíram (aparelhos + e-mails).
+ */
 export async function enviarLembretes(agora = new Date()): Promise<number> {
-  if (!emailConfigurado() || lembrando) return 0;
+  if (lembrando) return 0;
+  const canal = await haCanal();
+  if (!canal.email && !canal.push) return 0;
   lembrando = true;
   try {
     const { de, ate } = janelaDoLembrete(agora, minutosAntes());
@@ -166,13 +200,37 @@ export async function enviarLembretes(agora = new Date()): Promise<number> {
     if (atividades.length === 0) return 0;
 
     const admins = await administradores();
+    await numerar(atividades);
 
-    // Um e-mail por pessoa, com todas as atividades dela na janela.
+    const avisadas = new Set<string>();
+    let enviados = 0;
+
+    // Notificação: uma por atividade, em cada aparelho dos responsáveis.
+    const semAparelho = new Set<string>();
+    if (canal.push) {
+      for (const a of atividades) {
+        const pessoas = responsaveisDaAtividade({ criador: a.createdBy, admins });
+        const n = await enviarPush(
+          pessoas.map((p) => p.id),
+          {
+            titulo: `${descricao(a)} às ${horaCurta(a.dueAt!)}`,
+            corpo: `Com ${nomeDoLead(a)} · daqui a pouco`,
+            url: "/hoje",
+            tag: `atividade-${a.id}`,
+          },
+        );
+        enviados += n;
+        if (n > 0) avisadas.add(a.id);
+        else semAparelho.add(a.id);
+      }
+    }
+
+    // E-mail: um por pessoa, com todas as atividades dela na janela.
     const porPessoa = new Map<string, { pessoa: Pessoa; itens: AtividadeComLead[] }>();
-    const semNinguem: string[] = [];
     for (const a of atividades) {
-      const destinos = escolherDestinatarios({ criador: a.createdBy, admins });
-      if (destinos.length === 0) semNinguem.push(a.id);
+      const destinos = canal.email ? escolherDestinatarios({ criador: a.createdBy, admins }) : [];
+      // Ninguém para avisar por canal nenhum: marca para não procurar de novo.
+      if (destinos.length === 0 && (!canal.push || semAparelho.has(a.id))) avisadas.add(a.id);
       for (const p of destinos) {
         const grupo = porPessoa.get(p.id) ?? { pessoa: p, itens: [] };
         grupo.itens.push(a);
@@ -180,16 +238,14 @@ export async function enviarLembretes(agora = new Date()): Promise<number> {
       }
     }
 
-    const avisadas = new Set<string>(semNinguem);
-    let enviados = 0;
     for (const { pessoa, itens } of porPessoa.values()) {
       const r = await enviarEmail(emailDeLembrete(pessoa, itens));
       if (r.ok) {
         enviados++;
         for (const a of itens) avisadas.add(a.id);
       } else {
-        // Fica sem marcar: tenta de novo no próximo minuto, enquanto a
-        // atividade estiver na janela.
+        // Sem marcar (se a notificação também não chegou): tenta de novo no
+        // próximo minuto, enquanto a atividade estiver na janela.
         console.warn(`Lembrete para ${pessoa.email} não saiu: ${r.erro}`);
       }
     }
@@ -240,7 +296,9 @@ let resumindo = false;
  * Devolve quantos e-mails saíram.
  */
 export async function enviarResumoDiario({ agora = new Date(), forcar = false } = {}): Promise<number> {
-  if (!emailConfigurado() || resumindo) return 0;
+  if (resumindo) return 0;
+  const canal = await haCanal();
+  if (!canal.email && !canal.push) return 0;
   resumindo = true;
   try {
     const hoje = diaEmBrasilia(agora);
@@ -267,10 +325,11 @@ export async function enviarResumoDiario({ agora = new Date(), forcar = false } 
         take: 1000,
       }) as unknown as Promise<AtividadeComLead[]>,
       prisma.user.findMany({
-        where: { active: true, emailNotifications: true },
+        where: { active: true },
         select: { ...SELECIONA_PESSOA, role: true },
       }),
     ]);
+    await numerar(atividades);
 
     let enviados = 0;
     for (const pessoa of pessoas) {
@@ -284,14 +343,35 @@ export async function enviarResumoDiario({ agora = new Date(), forcar = false } 
 
       const atrasadas = minhas.filter((a) => a.dueAt! < agora);
       const deHoje = minhas.filter((a) => !atrasadas.includes(a));
-      const r = await enviarEmail(emailDeResumo(pessoa, deHoje, atrasadas, time));
-      if (r.ok) enviados++;
-      else console.warn(`Resumo para ${pessoa.email} não saiu: ${r.erro}`);
+
+      if (canal.push) {
+        enviados += await enviarPush([pessoa.id], {
+          titulo: time ? "Seu dia no CRM (time)" : "Seu dia no CRM",
+          corpo: resumoCurto(deHoje.length, atrasadas.length),
+          url: "/hoje",
+          tag: `resumo-${hoje}`,
+        });
+      }
+      if (canal.email && pessoa.emailNotifications) {
+        const r = await enviarEmail(emailDeResumo(pessoa, deHoje, atrasadas, time));
+        if (r.ok) enviados++;
+        else console.warn(`Resumo para ${pessoa.email} não saiu: ${r.erro}`);
+      }
     }
     return enviados;
   } finally {
     resumindo = false;
   }
+}
+
+/** "3 para hoje e 1 atrasada" */
+export function resumoCurto(hoje: number, atrasadas: number): string {
+  return [
+    hoje ? `${hoje} para hoje` : null,
+    atrasadas ? `${atrasadas} atrasada${atrasadas === 1 ? "" : "s"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" e ");
 }
 
 const MAX_ITENS = 40;
@@ -321,12 +401,7 @@ function emailDeResumo(pessoa: Pessoa, deHoje: AtividadeComLead[], atrasadas: At
   const atrasos = bloco("Atrasadas", "#ff7a59", atrasadas, true);
   const url = `${urlPublica()}/hoje`;
   const quem = time ? "do time" : "suas";
-  const resumo = [
-    deHoje.length ? `${deHoje.length} para hoje` : null,
-    atrasadas.length ? `${atrasadas.length} atrasada${atrasadas.length === 1 ? "" : "s"}` : null,
-  ]
-    .filter(Boolean)
-    .join(" e ");
+  const resumo = resumoCurto(deHoje.length, atrasadas.length);
 
   return {
     para: pessoa.email,
