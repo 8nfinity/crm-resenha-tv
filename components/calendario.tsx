@@ -262,7 +262,7 @@ export function Calendario({
                   onClick={() => ir(v, ref)}
                   className={cn(
                     "rounded-full px-3 py-1 text-sm transition-colors",
-                    v === visao ? "bg-[var(--color-ink)] font-semibold text-[var(--color-on-ink)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
+                    v === visao ? "bolha font-semibold text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
                   )}
                 >
                   {NOMES_VISAO[v]}
