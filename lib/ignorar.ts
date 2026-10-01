@@ -65,6 +65,51 @@ export function etiquetasDoChat(chat: EvolutionChat): string[] {
 }
 
 /**
+ * Conversas que estão com a etiqueta agora.
+ *
+ * A fonte principal é o histórico do próprio CRM: toda etiquetagem que chega
+ * do celular vira uma linha, mesmo de etiqueta sem efeito — quem tem um
+ * "Adicionado a" como última linha daquela etiqueta está com ela. A Evolution
+ * 2.3 não diz isso na lista de conversas (o `findChats` dela não traz as
+ * etiquetas); versões que trazem completam a lista.
+ */
+export async function quemEstaComAEtiqueta(
+  accountId: string,
+  instanceName: string,
+  labelId: string,
+  /** Conversas já buscadas na Evolution — para várias etiquetas, busca uma vez só. */
+  conversas?: EvolutionChat[],
+): Promise<string[]> {
+  const eventos = await prisma.labelEvent.findMany({
+    where: { labelId, contact: { accountId } },
+    orderBy: { createdAt: "desc" },
+    select: { contactId: true, action: true, contact: { select: { waJid: true, lid: true } } },
+  });
+
+  const vistos = new Set<string>();
+  const jids = new Set<string>();
+  const conhecidos = new Set<string>();
+  for (const e of eventos) {
+    if (vistos.has(e.contactId)) continue;
+    vistos.add(e.contactId);
+    conhecidos.add(e.contact.waJid);
+    if (e.contact.lid) conhecidos.add(e.contact.lid);
+    if (e.action === "add") jids.add(e.contact.waJid);
+  }
+
+  const chats = conversas ?? (await evolution.findChats(instanceName).catch(() => [] as EvolutionChat[]));
+  // (Evolution fora do ar: fica só o histórico.)
+  for (const chat of chats) {
+    const jid = chat.remoteJid ?? chat.id ?? "";
+    // Quem já está no histórico vale pelo histórico (inclusive se a última
+    // linha for uma remoção).
+    if (!isPersonJid(jid) || conhecidos.has(jid) || !etiquetasDoChat(chat).includes(labelId)) continue;
+    jids.add(jid);
+  }
+  return [...jids];
+}
+
+/**
  * Ao marcar uma etiqueta como "ignorar", aplica nos contatos que JÁ estavam
  * com ela no celular — sem isso, só quem fosse etiquetado dali em diante
  * sumiria. Devolve quantos contatos foram ignorados.
@@ -73,17 +118,10 @@ export async function ignorarQuemJaTemAEtiqueta(accountId: string, labelId: stri
   const conta = await prisma.whatsAppAccount.findUnique({ where: { id: accountId } });
   if (!conta) return 0;
 
-  let chats: EvolutionChat[];
-  try {
-    chats = await evolution.findChats(conta.instanceName);
-  } catch {
-    return 0; // Evolution fora do ar: vale a partir da próxima etiquetagem.
-  }
-
   let total = 0;
-  for (const chat of chats) {
-    const jid = chat.remoteJid ?? chat.id ?? "";
-    if (!isPersonJid(jid) || !etiquetasDoChat(chat).includes(labelId)) continue;
+  for (const jid of await quemEstaComAEtiqueta(accountId, conta.instanceName, labelId)) {
+    const antes = await acharContato(accountId, jid);
+    if (antes?.ignoredAt) continue; // já estava ignorado
     if (await ignorarContato(accountId, jid)) total++;
   }
   return total;

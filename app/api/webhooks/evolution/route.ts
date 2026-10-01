@@ -4,8 +4,9 @@ import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
 import { ingestLiveMessage, upsertContact } from "@/lib/ingest";
 import { isPersonJid } from "@/lib/evolution/parse";
-import { aplicarEtiqueta, removerEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
+import { aplicarEtiqueta, registrarEdicaoDeEtiqueta, removerEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
 import { avisarMudanca } from "@/lib/eventos";
+import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
 import type { EvolutionMessage } from "@/lib/evolution/types";
 
 export const runtime = "nodejs";
@@ -80,24 +81,29 @@ export async function POST(request: Request) {
         await handleContacts(conta.id, payload.data);
         break;
       case "connection.update":
-        await handleConnection(payload.instance, payload.data);
+        await handleConnection(conta.id, payload.instance, payload.data);
         break;
       case "labels.association":
         await handleLabelAssociation(conta.id, payload.data);
         break;
       case "labels.edit":
-        // Uma etiqueta foi criada ou renomeada no celular. Ressincronizar
-        // mantém a tela de mapeamento em dia sem você precisar pedir.
-        await sincronizarEtiquetas(conta.id).catch(() => {});
+        await handleLabelEdit(conta.id, payload.data);
         break;
       default:
         // Eventos que não assinamos chegam mesmo assim em algumas versões.
         break;
     }
   } catch (error) {
-    // Erro aqui nunca devolve 500: a Evolution reenfileira o evento e insiste,
-    // e um bug nosso viraria uma tempestade de retentativas.
     console.error(`Erro processando webhook ${payload.event}`, error);
+    // Etiqueta não tem varredura de segurança como as mensagens: o evento
+    // perdido é um lead que não andou no funil. Pede para a Evolution mandar
+    // de novo (ela tenta algumas vezes, com intervalo crescente) — e
+    // aplicarEtiqueta reconhece o reenvio. Os outros eventos nunca devolvem
+    // erro: a varredura recupera as mensagens, e um bug nosso viraria uma
+    // tempestade de retentativas.
+    if (event.startsWith("labels.")) {
+      return NextResponse.json({ error: "falhou, mande de novo" }, { status: 503 });
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -216,9 +222,40 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
   avisarMudanca({ dealIds: [], motivo: "etiqueta" });
 }
 
-async function handleConnection(instanceName: string, data: unknown) {
+/**
+ * Uma etiqueta ou lista foi criada, renomeada ou apagada no celular.
+ *
+ * O payload da Evolution: { id, name, color, deleted, predefinedId } — a
+ * etiqueta como o WhatsApp mandou, com o nome ainda com acento.
+ */
+async function handleLabelEdit(accountId: string, data: unknown) {
+  for (const item of asArray<Record<string, unknown>>(data)) {
+    const labelId = item.id ?? item.labelId;
+    if (labelId == null || labelId === "") {
+      // Formato que não conhecemos: relê a lista inteira, como antes.
+      await sincronizarEtiquetas(accountId);
+      continue;
+    }
+    await registrarEdicaoDeEtiqueta(accountId, {
+      labelId: String(labelId),
+      name: typeof item.name === "string" ? item.name : null,
+      color: item.color != null ? String(item.color) : null,
+      deleted: item.deleted === true,
+    });
+  }
+  avisarMudanca({ dealIds: [], motivo: "etiqueta" });
+}
+
+async function handleConnection(accountId: string, instanceName: string, data: unknown) {
   const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
   const state = obj.state ? String(obj.state) : "unknown";
+
+  // Linha do tempo: cada "open" é uma (re)conexão — inclusive a de quando a
+  // Evolution reinicia. É depois dela que o CRM confere se a chave das
+  // etiquetas sobreviveu.
+  if (state === "open" || state === "close") {
+    await registrarEventoDeConexao(accountId, state).catch(() => {});
+  }
 
   // Ao conectar, a Evolution manda o número pareado. É a única chance de
   // saber qual número é esta conta.

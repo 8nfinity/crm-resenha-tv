@@ -41,10 +41,37 @@ model WhatsAppAccount {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  contacts Contact[]
-  labels   WhatsAppLabel[]
+  /// Saúde da chave que abre as etiquetas e listas (os "dados da conta" do
+  /// WhatsApp). A Evolution guarda essa chave em ARQUIVO, em
+  /// /evolution/instances — se ela reinicia sem volume ali, a conexão continua
+  /// de pé (o login fica no banco), mas nenhuma etiqueta chega mais.
+  /// "ok", "chave_perdida", "sem_chave", "fora_do_ar" ou "erro".
+  labelKeyStatus    String?
+  labelKeyCheckedAt DateTime?
+  /// Frase pronta para a tela, quando não está "ok".
+  labelKeyDetail    String?
+
+  contacts         Contact[]
+  labels           WhatsAppLabel[]
+  connectionEvents ConnectionEvent[]
 
   @@index([status])
+}
+
+/// Linha do tempo da conexão: quando o WhatsApp abriu ou caiu e o resultado
+/// das verificações da chave das etiquetas. É o que mostra se a Evolution
+/// reiniciou e voltou sem os arquivos da sessão.
+model ConnectionEvent {
+  id        String   @id @default(cuid())
+  accountId String
+  /// "open", "close", "chave_ok", "chave_perdida", "sem_chave", "fora_do_ar", "erro"
+  kind      String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  account WhatsAppAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
 }
 
 /// Uma etiqueta do WhatsApp Business, espelhada do aparelho.
@@ -69,6 +96,10 @@ model WhatsAppLabel {
   /// Etiqueta de ATENDENTE ("João", "Maria"): só registra no histórico do
   /// lead quem atendeu. Não atribui o lead a ninguém.
   isSeller      Boolean @default(false)
+  /// Tirada do CRM à mão ("não existe mais no celular"): a Evolution às vezes
+  /// continua listando uma etiqueta apagada. Fica escondida até voltar a ser
+  /// usada no celular.
+  removedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

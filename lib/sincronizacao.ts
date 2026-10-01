@@ -6,6 +6,7 @@ import type { EvolutionChat } from "@/lib/evolution/types";
 import { ingestMessages, upsertContact } from "@/lib/ingest";
 import { mesclarContatos } from "@/lib/mesclar-contatos";
 import { avisarMudanca } from "@/lib/eventos";
+import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
 
 /**
  * Varredura de segurança: busca na Evolution o que o webhook não entregou.
@@ -92,6 +93,9 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
   resultado.status = status;
   if (status !== conta.status && status !== "unknown") {
     await prisma.whatsAppAccount.update({ where: { id: conta.id }, data: { status } });
+    if (status === "open" || status === "close") {
+      await registrarEventoDeConexao(conta.id, status).catch(() => {});
+    }
     avisarMudanca({ dealIds: [], motivo: "conexao" });
   }
   if (status !== "open") return resultado;

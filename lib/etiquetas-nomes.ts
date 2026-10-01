@@ -30,3 +30,23 @@ export function ehFiltroAutomatico(nome: string): boolean {
 export function corrigirNomeEtiqueta(nome: string): string {
   return normalizar(nome) === "no lidas" ? "Não lidas" : nome;
 }
+
+/**
+ * O nome como a Evolution guarda: ela apaga tudo que não é ASCII — acento e
+ * emoji somem ("Negociação" vira "Negociao", "Não lidas" vira "No lidas").
+ */
+export function nomeComoAEvolutionGuarda(nome: string): string {
+  return nome.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Nome a guardar quando a lista da Evolution traz `vindo`.
+ *
+ * O evento do celular traz o nome inteiro, com acento; a lista da Evolution
+ * traz a versão sem. Se o nome que o CRM já tem vira exatamente `vindo` ao
+ * perder os acentos, é a mesma etiqueta: fica o nome certo que já temos.
+ */
+export function nomeParaGuardar(atual: string | null | undefined, vindo: string): string {
+  if (atual && nomeComoAEvolutionGuarda(atual) === nomeComoAEvolutionGuarda(vindo)) return atual;
+  return corrigirNomeEtiqueta(vindo.trim());
+}

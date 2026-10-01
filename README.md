@@ -93,8 +93,24 @@ sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
    | `DATABASE_SAVE_DATA_INSTANCE`, `..._NEW_MESSAGE`, `..._CONTACTS`, `..._CHATS`, `..._LABELS`, `..._HISTORIC` | `true` |
    | `CACHE_REDIS_ENABLED` / `CACHE_LOCAL_ENABLED` | `false` / `true` |
 
-3. **Volume** montado em `/evolution/instances`: guarda a sessão do WhatsApp.
-   Sem ele, todo redeploy pede QR Code de novo.
+3. **Volume** montado em `/evolution/instances` — **obrigatório para as
+   etiquetas e listas**. Na 2.3 a Evolution guarda o login no banco, mas as
+   chaves da sessão (entre elas a que abre as etiquetas e listas) ficam em
+   arquivos nessa pasta. Sem volume, todo reinício da Evolution (redeploy,
+   troca de variável, queda) apaga esses arquivos: o número **continua
+   conectado** e as mensagens continuam chegando, mas nenhuma etiqueta, lista
+   ou exclusão chega mais — até parear de novo. É o que dá a impressão de que
+   "as etiquetas param sozinhas de tempos em tempos".
+
+   Para conferir: no painel do projeto na Railway, o volume aparece preso ao
+   serviço da **Evolution** (não ao do CRM); nas configurações dele, o
+   *Mount path* precisa ser exatamente `/evolution/instances`. Depois de criar ou corrigir o
+   volume, conecte o número de novo (a chave só volta no pareamento).
+
+   O CRM confere essa chave sozinho depois de cada reconexão e a cada 6 h, e
+   mostra o resultado em **Configurações → Etiquetas e listas** (com a linha
+   do tempo da conexão: uma reconexão seguida de "chave perdida" é a Evolution
+   reiniciando sem volume).
 4. **Settings → Networking → Generate Domain** (porta `8080`).
 
 #### 3b. Serviço do CRM

@@ -71,3 +71,66 @@ test("listas automáticas do WhatsApp ficam de fora; listas criadas e Favoritos 
   assert.equal(corrigirNomeEtiqueta("No lidas"), "Não lidas");
   assert.equal(corrigirNomeEtiqueta("Follow up"), "Follow up");
 });
+
+test("nome com acento: a lista da Evolution (sem acento) não estraga o nome certo", async () => {
+  const { nomeComoAEvolutionGuarda, nomeParaGuardar } = await import("../lib/etiquetas-nomes");
+  // A Evolution apaga tudo que não é ASCII.
+  assert.equal(nomeComoAEvolutionGuarda("Negociação"), "Negociao");
+  assert.equal(nomeComoAEvolutionGuarda("🔥 Quente"), "Quente");
+
+  // O evento do celular trouxe o nome certo; a lista traz sem acento: fica o certo.
+  assert.equal(nomeParaGuardar("Negociação", "Negociao"), "Negociação");
+  assert.equal(nomeParaGuardar("🔥 Quente", "Quente"), "🔥 Quente");
+  assert.equal(nomeParaGuardar("Não lidas", "No lidas"), "Não lidas");
+  // Renomeada no celular: vale o nome novo.
+  assert.equal(nomeParaGuardar("Negociação", "Fechamento"), "Fechamento");
+  // Nome provisório ("Etiqueta 12", de antes de o nome chegar) é trocado.
+  assert.equal(nomeParaGuardar("Etiqueta 12", "Follow up"), "Follow up");
+  assert.equal(nomeParaGuardar(null, "No lidas"), "Não lidas");
+});
+
+test("conferência da chave das etiquetas: quando perguntar de novo", async () => {
+  const { precisaVerificar } = await import("../lib/saude-etiquetas");
+  const agora = new Date("2026-10-01T12:00:00Z");
+  const minAtras = (m: number) => new Date(agora.getTime() - m * 60_000);
+  const conta = (estado: string | null, ha: number | null) => ({
+    labelKeyStatus: estado,
+    labelKeyCheckedAt: ha === null ? null : minAtras(ha),
+  });
+
+  assert.equal(precisaVerificar(conta(null, null), null, agora), true, "nunca conferida");
+  assert.equal(precisaVerificar(conta("ok", 60), null, agora), false, "OK há 1 h: espera a rotina");
+  assert.equal(precisaVerificar(conta("ok", 7 * 60), null, agora), true, "rotina de 6 h");
+
+  // Reconectou depois da última conferência: é quando a chave pode ter sumido.
+  assert.equal(precisaVerificar(conta("ok", 60), minAtras(5), agora), true, "reconexão");
+  assert.equal(precisaVerificar(conta("ok", 60), minAtras(0.5), agora), false, "reconexão de agora: espera assentar");
+  assert.equal(precisaVerificar(conta("ok", 10), minAtras(5), agora), false, "não confere mais que a cada 30 min");
+  assert.equal(precisaVerificar(conta("ok", 60), minAtras(90), agora), false, "reconexão anterior à conferência");
+
+  // Estados passageiros tentam de novo logo; chave perdida só volta com novo pareamento.
+  assert.equal(precisaVerificar(conta("sem_chave", 11), null, agora), true);
+  assert.equal(precisaVerificar(conta("fora_do_ar", 11), null, agora), true);
+  assert.equal(precisaVerificar(conta("chave_perdida", 11), null, agora), false);
+});
+
+test("leitura forçada: cada resposta da Evolution vira o diagnóstico certo", async () => {
+  const { classificarFalha } = await import("../lib/saude-etiquetas");
+  const corpo = (msg: string) => JSON.stringify({ status: 400, error: "Bad Request", response: { message: [msg] } });
+
+  // Login no banco, chave em arquivo que sumiu: reinício sem volume.
+  const perdida = classificarFalha(
+    "Evolution API respondeu 400 em /label/handleLabel/crm",
+    400,
+    corpo('Unable to remove label to chat Error: myAppStateKey ("AAAAAJn5") not present'),
+  );
+  assert.equal(perdida.estado, "chave_perdida");
+  assert.match(perdida.texto, /\/evolution\/instances/);
+
+  assert.equal(classificarFalha("x", 400, corpo("Error: App state key not present!")).estado, "sem_chave");
+  // Sem resposta (ou página de erro da hospedagem no lugar da Evolution).
+  assert.equal(classificarFalha("Não consegui alcançar a Evolution", 503, "").estado, "fora_do_ar");
+  assert.equal(classificarFalha("erro 502 da hospedagem", 502, "<html>").estado, "fora_do_ar");
+  // Erro da própria Evolution, com resposta dela: outro problema.
+  assert.equal(classificarFalha("Evolution API respondeu 500", 500, '{"status":500}').estado, "erro");
+});

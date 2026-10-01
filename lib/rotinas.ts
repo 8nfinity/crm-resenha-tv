@@ -5,6 +5,7 @@ import { estaHospedado, urlDoWebhook } from "@/lib/url-publica";
 import { varrerTudo } from "@/lib/sincronizacao";
 import { emailConfigurado } from "@/lib/email";
 import { enviarLembretes, enviarResumoDiario } from "@/lib/avisos";
+import { conferirChavesDasEtiquetas } from "@/lib/labels";
 
 /**
  * Rotinas que o próprio servidor executa — sem depender de cron externo.
@@ -32,6 +33,12 @@ export function iniciarRotinasDoServidor() {
     // chegou enquanto o CRM estava fora do ar), depois a cada minuto.
     setTimeout(() => void varrerTudo().catch(() => {}), 20_000).unref();
     setInterval(() => void varrerTudo().catch(() => {}), INTERVALO_VARREDURA_MS).unref();
+
+    // Chave das etiquetas: a Evolution pode reiniciar e voltar sem ela (sem
+    // volume em /evolution/instances). A rotina só pergunta quando é hora —
+    // depois de cada reconexão e de tempos em tempos (lib/saude-etiquetas.ts).
+    setTimeout(() => void conferirChavesDasEtiquetas().catch(() => {}), 90_000).unref();
+    setInterval(() => void conferirChavesDasEtiquetas().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
   }
 
   // Avisos de atividades (notificação no aparelho e, se configurado, e-mail):
@@ -57,6 +64,7 @@ export function iniciarRotinasDoServidor() {
 const INTERVALO_VARREDURA_MS = 60_000;
 const INTERVALO_WEBHOOK_MS = 10 * 60_000;
 const INTERVALO_AVISOS_MS = 60_000;
+const INTERVALO_ETIQUETAS_MS = 5 * 60_000;
 
 async function conferirAvisos() {
   try {

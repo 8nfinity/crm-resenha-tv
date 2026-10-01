@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Loader2, ArrowRight, Tag } from "lucide-react";
+import { RefreshCw, Loader2, ArrowRight, Tag, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
 import { corrigirNomeEtiqueta, ehFiltroAutomatico } from "@/lib/etiquetas-nomes";
+import { descreverEvento } from "@/lib/saude-etiquetas";
 
 type Estagio = { id: string; name: string; color: string };
 
@@ -25,6 +26,64 @@ const ATENDENTE = "__atendente__";
 
 type Conta = { id: string; label: string | null; status: string };
 
+/** Resultado da última conferência da chave das etiquetas (null: nunca conferida). */
+type Saude = { estado: string | null; detalhe: string | null; verificadoEm: string | null };
+type EventoConexao = { kind: string; detail: string | null; createdAt: string };
+
+function horario(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * Se a chave que abre as etiquetas está lá. Sem ela a conexão parece normal
+ * (mensagens chegam), mas nenhuma etiqueta, lista ou exclusão chega ao CRM —
+ * é o que a Evolution sofre ao reiniciar sem volume.
+ */
+function SaudeDasEtiquetas({ saude, eventos }: { saude: Saude | undefined; eventos: EventoConexao[] }) {
+  if (!saude?.estado) return null;
+  const ok = saude.estado === "ok";
+  const grave = saude.estado === "chave_perdida";
+
+  return (
+    <div className="mb-3 flex flex-col gap-1.5">
+      {ok ? (
+        <p className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-muted)]">
+          <ShieldCheck className="size-3.5 text-[var(--color-accent)]" />
+          Chave das etiquetas OK{saude.verificadoEm ? ` · conferida em ${horario(saude.verificadoEm)}` : ""}
+        </p>
+      ) : (
+        <div
+          className={`flex gap-2 rounded-2xl px-3 py-2 text-xs ${
+            grave
+              ? "bg-[color-mix(in_srgb,var(--color-hot)_14%,transparent)]"
+              : "bg-[color-mix(in_srgb,var(--color-warm)_14%,transparent)]"
+          }`}
+        >
+          <ShieldAlert className={`mt-0.5 size-3.5 shrink-0 ${grave ? "text-[var(--color-hot)]" : "text-[var(--color-warm)]"}`} />
+          <p>
+            {saude.detalhe ?? "A última conferência das etiquetas falhou."}
+            {saude.verificadoEm && (
+              <span className="text-[var(--color-muted)]"> (conferido em {horario(saude.verificadoEm)})</span>
+            )}
+          </p>
+        </div>
+      )}
+      {eventos.length > 0 && (
+        <details className="text-[11px] text-[var(--color-muted)]">
+          <summary className="cursor-pointer select-none">Linha do tempo da conexão</summary>
+          <ul className="mt-1.5 flex flex-col gap-0.5 pl-1">
+            {eventos.map((e, i) => (
+              <li key={i}>
+                <span className="tabular-nums">{horario(e.createdAt)}</span> — {descreverEvento(e.kind)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 /**
  * Mapeamento etiqueta do WhatsApp Business → estágio do funil.
  *
@@ -41,6 +100,7 @@ export function LabelMapping({
 }) {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [porConta, setPorConta] = useState<Record<string, Etiqueta[]>>({});
+  const [saudePorConta, setSaudePorConta] = useState<Record<string, { saude: Saude; eventos: EventoConexao[] }>>({});
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregado, setCarregado] = useState(false);
@@ -60,7 +120,14 @@ export function LabelMapping({
             continue;
           }
           if (data.erroSync) setErro(data.erroSync);
+          if (data.movidos) {
+            setAviso(
+              `${data.movidos} ${data.movidos === 1 ? "lead que já estava" : "leads que já estavam"} com uma etiqueta ligada a estágio ` +
+                `e não ${data.movidos === 1 ? "tinha andado foi movido" : "tinham andado foram movidos"} no funil.`,
+            );
+          }
           setPorConta((p) => ({ ...p, [conta.id]: data.etiquetas }));
+          setSaudePorConta((p) => ({ ...p, [conta.id]: { saude: data.saude, eventos: data.eventos ?? [] } }));
         } catch {
           setErro("Não consegui falar com o servidor.");
         }
@@ -105,6 +172,17 @@ export function LabelMapping({
       void carregar(false, contaId);
       return;
     }
+    if (stageId) {
+      const { movidos } = (await res.json()) as { movidos?: number };
+      const estagio = estagios.find((s) => s.id === stageId)?.name ?? "o estágio";
+      setAviso(
+        movidos
+          ? `${movidos} ${movidos === 1 ? "lead que já estava" : "leads que já estavam"} com essa etiqueta ${movidos === 1 ? "foi" : "foram"} para ${estagio}. ` +
+              "Quem já tinha passado desse estágio no funil ficou onde estava."
+          : `Pronto: quem receber essa etiqueta no celular vai para ${estagio}.`,
+      );
+      return;
+    }
     if (vendedor) {
       const { registrados } = (await res.json()) as { registrados?: number };
       setAviso(
@@ -126,9 +204,29 @@ export function LabelMapping({
     }
   }
 
+  /**
+   * Etiqueta fantasma: apagada no celular, mas a Evolution continua listando
+   * (ela estava sem a chave quando você apagou). Some da tela; se for usada de
+   * novo no celular, volta sozinha.
+   */
+  async function tirar(contaId: string, etiqueta: Etiqueta) {
+    const nome = corrigirNomeEtiqueta(etiqueta.name);
+    if (!confirm(`“${nome}” não existe mais no seu WhatsApp? Ela sai desta lista e deixa de mover leads.`)) return;
+    setAviso(null);
+    setPorConta((p) => ({ ...p, [contaId]: (p[contaId] ?? []).filter((e) => e.labelId !== etiqueta.labelId) }));
+    const res = await fetch(`/api/accounts/${contaId}/labels?labelId=${encodeURIComponent(etiqueta.labelId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      setErro("Não consegui tirar a etiqueta.");
+      void carregar(false, contaId);
+    }
+  }
+
   async function sincronizar(contaId: string) {
     setSincronizando(contaId);
     setErro(null);
+    setAviso(null);
     await carregar(true, contaId);
     setSincronizando(null);
   }
@@ -178,6 +276,11 @@ export function LabelMapping({
               </button>
             </div>
 
+            <SaudeDasEtiquetas
+              saude={saudePorConta[conta.id]?.saude}
+              eventos={saudePorConta[conta.id]?.eventos ?? []}
+            />
+
             {etiquetas.length === 0 ? (
               <p className="text-xs text-[var(--color-muted)]">
                 {conectado
@@ -222,6 +325,14 @@ export function LabelMapping({
                       </select>
 
                     </div>
+                    <button
+                      onClick={() => void tirar(conta.id, etiqueta)}
+                      title="Não existe mais no celular — tirar do CRM"
+                      aria-label={`Tirar ${corrigirNomeEtiqueta(etiqueta.name)} do CRM`}
+                      className="shrink-0 rounded-full p-1 text-[var(--color-muted)] hover:text-[var(--color-hot)]"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
                   </li>
                 ))}
               </ul>
