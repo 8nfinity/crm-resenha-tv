@@ -92,12 +92,23 @@ export async function forcarLeituraDasEtiquetas(accountId: string): Promise<{ ok
     return { ok: true };
   } catch (error) {
     const detalhe = `${(error as Error).message} ${(error as { body?: string }).body ?? ""}`;
+    if (/myAppStateKey .*not present/i.test(detalhe)) {
+      // A conexão sabe QUAL chave abre os dados da conta, mas o arquivo dela
+      // sumiu: a Evolution reiniciou sem volume em /evolution/instances.
+      return {
+        ok: false,
+        erro:
+          "A Evolution perdeu a chave que abre as etiquetas (ela reiniciou e os arquivos da sessão não foram " +
+          "guardados). Confira se o serviço da Evolution na Railway tem um volume em /evolution/instances e " +
+          "conecte o número de novo — a chave volta no pareamento.",
+      };
+    }
     if (/app state key not present/i.test(detalhe)) {
       return {
         ok: false,
         erro:
-          "O WhatsApp não liberou as etiquetas para esta conexão: ele não enviou a chave dos dados da conta " +
-          "(etiquetas e agenda). Não é algo do CRM — é preciso parear o número de novo como aplicativo de computador.",
+          "O WhatsApp ainda não enviou a chave das etiquetas para esta conexão. Espere alguns minutos depois de " +
+          "conectar e tente de novo; se continuar, conecte o número de novo.",
       };
     }
     return { ok: false, erro: `A leitura forçada das etiquetas falhou: ${detalhe.trim().slice(0, 300)}` };
