@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { sincronizarEtiquetas } from "@/lib/labels";
+import { ignorarQuemJaTemAEtiqueta } from "@/lib/ignorar";
 
 export const runtime = "nodejs";
 
@@ -58,9 +59,14 @@ const patchSchema = z.object({
   labelId: z.string().min(1),
   /** Null desfaz o mapeamento: a etiqueta continua existindo, sem efeito. */
   stageId: z.string().nullable(),
+  /** true: etiqueta de "ignorar contato" (o stageId é descartado). */
+  ignorar: z.boolean().optional(),
 });
 
-/** PATCH — liga (ou desliga) uma etiqueta a um estágio do funil. */
+/**
+ * PATCH — define o que a etiqueta faz: mover para um estágio, nada, ou
+ * ignorar o contato. Ao virar "ignorar", já aplica em quem está com ela.
+ */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -71,7 +77,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
   }
 
-  const { labelId, stageId } = parsed.data;
+  const { labelId, ignorar = false } = parsed.data;
+  const stageId = ignorar ? null : parsed.data.stageId;
 
   if (stageId) {
     const existe = await prisma.stage.findUnique({ where: { id: stageId } });
@@ -82,9 +89,12 @@ export async function PATCH(
 
   const etiqueta = await prisma.whatsAppLabel.update({
     where: { accountId_labelId: { accountId: id, labelId } },
-    data: { stageId },
+    data: { stageId, ignoreContact: ignorar },
     include: { stage: { select: { id: true, name: true, color: true } } },
   });
 
-  return NextResponse.json(etiqueta);
+  // Quem JÁ estava com a etiqueta no celular também some do CRM agora.
+  const ignorados = ignorar ? await ignorarQuemJaTemAEtiqueta(id, labelId) : 0;
+
+  return NextResponse.json({ ...etiqueta, ignorados });
 }

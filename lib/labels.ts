@@ -3,6 +3,7 @@ import { createDealForContact, moveDealToStage, recalculateScore } from "@/lib/d
 import { evolution } from "@/lib/evolution/client";
 import { isPersonJid } from "@/lib/evolution/parse";
 import { upsertContact } from "@/lib/ingest";
+import { estaIgnorado, ignorarContato, voltarAMostrar } from "@/lib/ignorar";
 
 /**
  * Etiquetas do WhatsApp Business → estágios do funil.
@@ -96,8 +97,20 @@ export async function aplicarEtiqueta(
     return { acao: "ignorado", motivo: "etiqueta ainda não mapeada" };
   }
 
+  // Etiqueta de "ignorar": o contato some do CRM (e não volta enquanto
+  // estiver com ela). Vale mais que qualquer mapeamento de estágio.
+  if (etiqueta.ignoreContact) {
+    await ignorarContato(accountId, chatId);
+    return { acao: "ignorado", motivo: "contato marcado para ignorar" };
+  }
+
   if (!etiqueta.stageId) {
     return { acao: "ignorado", motivo: "etiqueta sem estágio mapeado" };
+  }
+
+  // Contato ignorado não volta para o funil por causa de outra etiqueta.
+  if (await estaIgnorado(accountId, chatId)) {
+    return { acao: "ignorado", motivo: "contato está ignorado" };
   }
 
   const estagio = await prisma.stage.findUnique({ where: { id: etiqueta.stageId } });
@@ -124,11 +137,29 @@ export async function aplicarEtiqueta(
 /**
  * Remoção de etiqueta.
  *
- * Não faz nada, e isso é uma decisão, não um esquecimento: tirar a etiqueta
- * "Reunião marcada" não diz para onde o lead deveria voltar. Desfazer para o
- * estágio anterior seria adivinhação, e adivinhar errado bagunça o histórico
- * de conversão — que é justamente o dado que não dá para reconstruir depois.
+ * Etiqueta de ESTÁGIO: não faz nada, e isso é uma decisão, não um
+ * esquecimento — tirar "Reunião marcada" não diz para onde o lead deveria
+ * voltar, e adivinhar errado bagunça o histórico de conversão.
+ *
+ * Etiqueta de IGNORAR: aí o sentido é claro. Tirar a etiqueta traz o contato
+ * de volta ao CRM, do jeito que estava.
  */
-export async function removerEtiqueta(): Promise<ResultadoEtiqueta> {
-  return { acao: "ignorado", motivo: "remoção de etiqueta não move o lead" };
+export async function removerEtiqueta(
+  accountId: string,
+  chatId: string,
+  labelId: string,
+): Promise<ResultadoEtiqueta> {
+  const etiqueta = await prisma.whatsAppLabel.findUnique({
+    where: { accountId_labelId: { accountId, labelId } },
+  });
+  if (!etiqueta?.ignoreContact) {
+    return { acao: "ignorado", motivo: "remoção de etiqueta não move o lead" };
+  }
+
+  const contato = await prisma.contact.findUnique({
+    where: { accountId_waJid: { accountId, waJid: chatId } },
+    select: { id: true },
+  });
+  if (contato) await voltarAMostrar(contato.id);
+  return { acao: "ignorado", motivo: "contato voltou a aparecer" };
 }

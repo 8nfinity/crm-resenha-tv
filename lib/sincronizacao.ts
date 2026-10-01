@@ -110,6 +110,7 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
       const pushName =
         mensagens.find((m) => m.key?.fromMe === false)?.pushName ?? chat.pushName ?? null;
       const contato = await upsertContact({ accountId: conta.id, waJid: jid, pushName });
+      if (contato.ignoredAt) continue; // número marcado para ignorar
 
       const novas = await ingestMessages(contato.id, mensagens);
       if (novas === 0) continue;

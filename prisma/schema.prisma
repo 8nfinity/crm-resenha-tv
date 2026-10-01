@@ -63,6 +63,9 @@ model WhatsAppLabel {
   name      String
   color     String?
   stageId   String?
+  /// Etiqueta de "ignorar": o contato etiquetado some do CRM e as mensagens
+  /// dele deixam de entrar. Tirar a etiqueta traz o contato de volta.
+  ignoreContact Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -92,6 +95,9 @@ model Contact {
   profilePicUrl String?
   isGroup       Boolean   @default(false)
   isBusiness    Boolean   @default(false)
+  /// Quando foi marcado para ignorar (etiqueta ou à mão). Nulo = visível.
+  /// Ignorado não aparece em lugar nenhum e as mensagens dele não entram.
+  ignoredAt     DateTime?
   importedAt    DateTime  @default(now())
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

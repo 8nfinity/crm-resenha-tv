@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { StageEditor } from "@/components/stage-editor";
 import { CopyField } from "@/components/copy-field";
-import { LabelMapping } from "@/components/label-mapping";
+import { EtiquetasEIgnorados } from "@/components/contatos-ignorados";
 import { CustomFieldEditor } from "@/components/custom-field-editor";
 import { prisma } from "@/lib/db";
 import { urlDoWebhook, urlPublica } from "@/lib/url-publica";
@@ -112,11 +112,11 @@ export default async function ConfiguracoesPage() {
               Etiquetas do WhatsApp Business
             </h2>
             <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
-              Etiquete uma conversa no celular e o lead anda no funil sozinho.
-              O sentido é único: mover o card aqui não aplica etiqueta lá —
-              isso evita que as duas pontas fiquem se corrigindo em loop.
+              Etiquete uma conversa no celular e o lead anda no funil sozinho —
+              ou, com a opção “Ignorar contato”, some do CRM (família, fornecedor,
+              equipe). O sentido é único: mover o card aqui não aplica etiqueta lá.
             </p>
-            <LabelMapping contas={contas} />
+            <EtiquetasEIgnorados contas={contas} />
           </section>
 
           <section className="card p-6">

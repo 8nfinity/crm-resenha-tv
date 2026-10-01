@@ -74,14 +74,18 @@ export async function funnelMetrics(dias: number): Promise<FunnelMetrics> {
 
     prisma.$queryRaw<{ toStageId: string; total: bigint }[]>`
       SELECT "toStageId", COUNT(DISTINCT "dealId") AS total
-      FROM "StageTransition"
-      WHERE "at" >= ${desde}
+      FROM "StageTransition" t
+      WHERE t."at" >= ${desde}
+        AND NOT EXISTS (
+          SELECT 1 FROM "Deal" d JOIN "Contact" c ON c."id" = d."contactId"
+          WHERE d."id" = t."dealId" AND c."ignoredAt" IS NOT NULL
+        )
       GROUP BY "toStageId"
     `,
 
     prisma.stageTransition.groupBy({
       by: ["fromStageId"],
-      where: { at: { gte: desde }, hoursInFrom: { not: null } },
+      where: { at: { gte: desde }, hoursInFrom: { not: null }, deal: { contact: { ignoredAt: null } } },
       _avg: { hoursInFrom: true },
     }),
 
@@ -179,6 +183,9 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   OTHER: "Outras",
 };
 
+/** Atividades de contatos ignorados ficam de fora de todas as contas. */
+const visivel = { deal: { contact: { ignoredAt: null } } };
+
 export async function activityReport(dias: number): Promise<ActivityReport> {
   const desde = diasAtras(dias);
   const agora = new Date();
@@ -186,18 +193,18 @@ export async function activityReport(dias: number): Promise<ActivityReport> {
   const [feitas, abertas, atrasadas, total, reunioes] = await Promise.all([
     prisma.activity.groupBy({
       by: ["type"],
-      where: { doneAt: { gte: desde } },
+      where: { doneAt: { gte: desde }, ...visivel },
       _count: { _all: true },
     }),
     prisma.activity.groupBy({
       by: ["type"],
-      where: { doneAt: null },
+      where: { doneAt: null, ...visivel },
       _count: { _all: true },
     }),
-    prisma.activity.count({ where: { doneAt: null, dueAt: { lt: agora } } }),
-    prisma.activity.count({ where: { createdAt: { gte: desde } } }),
+    prisma.activity.count({ where: { doneAt: null, dueAt: { lt: agora }, ...visivel } }),
+    prisma.activity.count({ where: { createdAt: { gte: desde }, ...visivel } }),
     prisma.activity.findMany({
-      where: { type: "MEETING", doneAt: { gte: desde } },
+      where: { type: "MEETING", doneAt: { gte: desde }, ...visivel },
       select: { dealId: true },
       distinct: ["dealId"],
     }),
@@ -266,7 +273,7 @@ export async function tempoDeResposta(dias: number): Promise<RelatorioTempoRespo
                LAG(m."timestamp") OVER janela AS anterior_em
         FROM "Message" m
         JOIN "Contact" c ON c."id" = m."contactId"
-        WHERE c."isGroup" = false
+        WHERE c."isGroup" = false AND c."ignoredAt" IS NULL
         WINDOW janela AS (PARTITION BY m."contactId" ORDER BY m."timestamp", m."id")
       )
       SELECT v."accountId", v."timestamp" AS perguntou,
@@ -354,7 +361,7 @@ export async function followUpsFeitos(): Promise<FollowUpsFeitos> {
       FROM "Activity" a
       JOIN "Deal" d ON d."id" = a."dealId"
       JOIN "Contact" c ON c."id" = d."contactId"
-      WHERE a."type" = 'FOLLOW_UP' AND a."doneAt" >= ${inicios[3]}
+      WHERE a."type" = 'FOLLOW_UP' AND a."doneAt" >= ${inicios[3]} AND c."ignoredAt" IS NULL
       GROUP BY c."accountId"
     `,
     prisma.activity.count({

@@ -48,6 +48,8 @@ function exigeAdministrador(request: NextRequest): boolean {
   if (sob(c, "/conexao") || sob(c, "/api/accounts")) return true;
   // Usuários (a rota também confere a hierarquia por conta própria).
   if (sob(c, "/api/usuarios")) return true;
+  // Contatos ignorados: quem fica de fora do CRM é decisão de administrador.
+  if (sob(c, "/api/contatos-ignorados")) return true;
   // Estrutura: colunas do funil, campos próprios, conteúdo do playbook.
   if (!leitura && (sob(c, "/api/stages") || sob(c, "/api/custom-fields") || sob(c, "/api/playbook"))) return true;
   // Apagar um lead de vez reescreve as métricas; arquivar continua liberado.

@@ -103,6 +103,10 @@ export async function ingestLiveMessage(
     pushName: parsed.fromMe ? null : (raw.pushName ?? null),
   });
 
+  // Contato ignorado (etiqueta de ignorar ou à mão): a mensagem não entra e
+  // ele não volta para o funil.
+  if (contact.ignoredAt) return null;
+
   const inserted = await ingestMessages(contact.id, [raw]);
   if (inserted === 0) return null; // já tínhamos essa mensagem
 

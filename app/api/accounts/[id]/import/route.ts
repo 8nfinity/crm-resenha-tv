@@ -7,6 +7,7 @@ import { isPersonJid, jidToPhone } from "@/lib/evolution/parse";
 import { createDealForContact, recalculateScore } from "@/lib/deals";
 import { ingestMessages, upsertContact } from "@/lib/ingest";
 import { avisarMudanca } from "@/lib/eventos";
+import { etiquetasDoChat } from "@/lib/ignorar";
 import type { EvolutionContact } from "@/lib/evolution/types";
 
 export const runtime = "nodejs";
@@ -64,14 +65,29 @@ export async function GET(
   }
 
   try {
-    const [chats, contacts, existentes] = await Promise.all([
+    const [chats, contacts, existentes, ignorados, etiquetasIgnorar] = await Promise.all([
       evolution.findChats(conta.instanceName),
       evolution.findContacts(conta.instanceName),
       prisma.contact.findMany({
         where: { accountId: conta.id, deals: { some: {} }, messages: { some: {} } },
         select: { waJid: true },
       }),
+      prisma.contact.findMany({
+        where: { accountId: conta.id, ignoredAt: { not: null } },
+        select: { waJid: true },
+      }),
+      prisma.whatsAppLabel.findMany({
+        where: { accountId: conta.id, ignoreContact: true },
+        select: { labelId: true },
+      }),
     ]);
+
+    // Fora da lista: quem foi marcado para ignorar e quem está com uma
+    // etiqueta de "ignorar" no celular.
+    const jidsIgnorados = new Set(ignorados.map((c) => c.waJid));
+    const idsIgnorar = new Set(etiquetasIgnorar.map((e) => e.labelId));
+    const ignorar = (chat: (typeof chats)[number], jid: string) =>
+      jidsIgnorados.has(jid) || etiquetasDoChat(chat).some((id) => idsIgnorar.has(id));
 
     // "Já importado" significa ter virado lead nesta conta COM a conversa
     // dentro — não basta existir na agenda, nem ter um card vazio. O segundo
@@ -81,6 +97,7 @@ export async function GET(
     const { nomePorJid, fotoPorJid } = indexarContatos(contacts);
 
     const itens = chats
+      .filter((chat) => !ignorar(chat, chat.remoteJid ?? chat.id ?? ""))
       .map((chat) => {
         const jid = chat.remoteJid ?? chat.id ?? "";
 
@@ -187,6 +204,9 @@ export async function POST(
         evolution.findMessages(instanceName, waJid, MENSAGENS_POR_CONVERSA),
       ]);
       let contato = contatoInicial;
+      if (contato.ignoredAt) {
+        return { waJid, nome: contactName(contato), mensagensNovas: 0, erro: "contato ignorado" };
+      }
 
       const mensagensNovas = await ingestMessages(contato.id, mensagens);
 

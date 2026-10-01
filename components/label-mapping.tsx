@@ -12,7 +12,12 @@ type Etiqueta = {
   color: string | null;
   stageId: string | null;
   stage: Estagio | null;
+  /** Etiqueta de "ignorar": o contato etiquetado some do CRM. */
+  ignoreContact: boolean;
 };
+
+/** Valor do <select> para a opção de ignorar (não é id de estágio). */
+const IGNORAR = "__ignorar__";
 
 type Conta = { id: string; label: string | null; status: string };
 
@@ -22,12 +27,20 @@ type Conta = { id: string; label: string | null; status: string };
  * O sentido é único: etiquetar no celular move o card. Mover o card no CRM
  * não aplica etiqueta nenhuma — evita o eco entre os dois lados.
  */
-export function LabelMapping({ contas }: { contas: Conta[] }) {
+export function LabelMapping({
+  contas,
+  onMudouIgnorados,
+}: {
+  contas: Conta[];
+  /** Avisa a lista de contatos ignorados para recarregar. */
+  onMudouIgnorados?: () => void;
+}) {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [porConta, setPorConta] = useState<Record<string, Etiqueta[]>>({});
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregado, setCarregado] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const carregar = useCallback(
     async (sincronizar = false, contaId?: string) => {
@@ -61,14 +74,17 @@ export function LabelMapping({ contas }: { contas: Conta[] }) {
     void carregar(false);
   }, [carregar]);
 
-  async function mapear(contaId: string, labelId: string, stageId: string | null) {
+  async function mapear(contaId: string, labelId: string, valor: string) {
+    const ignorar = valor === IGNORAR;
+    const stageId = ignorar || !valor ? null : valor;
+    setAviso(null);
     // Otimista: o select responde na hora. Esperar o servidor daria a sensação
     // de travamento num controle que deveria ser instantâneo.
     setPorConta((p) => ({
       ...p,
       [contaId]: (p[contaId] ?? []).map((e) =>
         e.labelId === labelId
-          ? { ...e, stageId, stage: estagios.find((s) => s.id === stageId) ?? null }
+          ? { ...e, stageId, ignoreContact: ignorar, stage: estagios.find((s) => s.id === stageId) ?? null }
           : e,
       ),
     }));
@@ -76,12 +92,22 @@ export function LabelMapping({ contas }: { contas: Conta[] }) {
     const res = await fetch(`/api/accounts/${contaId}/labels`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ labelId, stageId }),
+      body: JSON.stringify({ labelId, stageId, ignorar }),
     });
 
     if (!res.ok) {
       setErro("Não consegui salvar o mapeamento.");
       void carregar(false, contaId);
+      return;
+    }
+    if (ignorar) {
+      const { ignorados } = (await res.json()) as { ignorados?: number };
+      setAviso(
+        ignorados
+          ? `${ignorados} ${ignorados === 1 ? "contato que já tinha" : "contatos que já tinham"} essa etiqueta ${ignorados === 1 ? "saiu" : "saíram"} do CRM.`
+          : "Pronto: quem receber essa etiqueta no celular sai do CRM.",
+      );
+      onMudouIgnorados?.();
     }
   }
 
@@ -98,6 +124,11 @@ export function LabelMapping({ contas }: { contas: Conta[] }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {aviso && (
+        <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
+          {aviso}
+        </p>
+      )}
       {erro && (
         <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
           {erro}
@@ -109,7 +140,7 @@ export function LabelMapping({ contas }: { contas: Conta[] }) {
         const conectado = conta.status === "open";
 
         return (
-          <div key={conta.id} className="rounded-full border p-3">
+          <div key={conta.id} className="rounded-2xl border p-3">
             <div className="mb-3 flex items-center gap-2">
               <p className="flex-1 text-sm font-medium">
                 {conta.label ?? "Conta"}
@@ -152,13 +183,12 @@ export function LabelMapping({ contas }: { contas: Conta[] }) {
                     <ArrowRight className="size-3.5 shrink-0 text-[var(--color-muted)]" />
 
                     <select
-                      value={etiqueta.stageId ?? ""}
-                      onChange={(e) =>
-                        void mapear(conta.id, etiqueta.labelId, e.target.value || null)
-                      }
-                      className="w-44 shrink-0 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                      value={etiqueta.ignoreContact ? IGNORAR : (etiqueta.stageId ?? "")}
+                      onChange={(e) => void mapear(conta.id, etiqueta.labelId, e.target.value)}
+                      className="w-60 shrink-0 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                     >
                       <option value="">Não move o lead</option>
+                      <option value={IGNORAR}>🚫 Ignorar contato (some do CRM)</option>
                       {estagios.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name}

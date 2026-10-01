@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
 import { ingestLiveMessage, upsertContact } from "@/lib/ingest";
 import { isPersonJid } from "@/lib/evolution/parse";
-import { aplicarEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
+import { aplicarEtiqueta, removerEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
 import { avisarMudanca } from "@/lib/eventos";
 import type { EvolutionMessage } from "@/lib/evolution/types";
 
@@ -199,9 +199,12 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
     return;
   }
 
-  // Remocao nao move o lead: tirar "Reuniao marcada" nao diz para onde ele
-  // deveria voltar, e adivinhar bagunçaria o historico de conversao.
-  if (tipo !== "add") return;
+  // Remoção: só a etiqueta de "ignorar" tem efeito (o contato volta a
+  // aparecer). Tirar uma etiqueta de estágio não move o lead — ver labels.ts.
+  if (tipo !== "add") {
+    if (tipo === "remove") await removerEtiqueta(accountId, chatId, labelId);
+    return;
+  }
 
   const r = await aplicarEtiqueta(accountId, chatId, labelId);
   if (r.acao === "movido") {
