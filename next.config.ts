@@ -31,6 +31,12 @@ const nextConfig: NextConfig = {
   // procura alvos de uma versão específica.
   poweredByHeader: false,
 
+  experimental: {
+    // O proxy guarda o corpo da requisição na memória (padrão: 10 MB). O PDF
+    // do playbook vai até 25 MB; acima disso a própria rota recusa.
+    proxyClientMaxBodySize: "26mb",
+  },
+
   images: {
     // Fotos de perfil vêm dos CDNs do WhatsApp.
     remotePatterns: [
@@ -53,7 +59,21 @@ const nextConfig: NextConfig = {
       { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
       ...(producao ? [{ key: "Content-Security-Policy", value: csp }] : []),
     ];
-    return [{ source: "/:path*", headers: seguranca }];
+    return [
+      { source: "/:path*", headers: seguranca },
+      // O PDF do playbook abre DENTRO do CRM (num iframe da página do
+      // playbook). Só para essa rota, o próprio CRM pode embutir — sites de
+      // fora continuam bloqueados. Esta regra vem depois e sobrescreve a geral.
+      {
+        source: "/api/playbook/arquivos/:id",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          ...(producao
+            ? [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }]
+            : []),
+        ],
+      },
+    ];
   },
 };
 

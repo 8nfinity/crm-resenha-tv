@@ -40,7 +40,8 @@ export async function PATCH(
         ...(feita !== undefined ? { doneAt: feita ? new Date() : null } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),
-        ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null } : {}),
+        // Remarcou: o lembrete por e-mail vale de novo para o horário novo.
+        ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null, reminderSentAt: null } : {}),
       },
     });
     avisarMudanca({ dealIds: [atividade.dealId], motivo: "atividade" });

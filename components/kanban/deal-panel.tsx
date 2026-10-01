@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Send, Trash2 } from "lucide-react";
+import { X, Send, Trash2, Tag, UserRound, StickyNote } from "lucide-react";
 import { AtividadesLead, type AtividadeDoLead } from "@/components/atividades-lead";
 import { dataHora } from "@/lib/atividades";
 import { useEhAdmin } from "@/components/sessao";
@@ -28,7 +28,31 @@ type DealDetail = {
   customValues: Record<string, string | number | null>;
   notes: { id: string; body: string; createdAt: string }[];
   activities: AtividadeDoLead[];
+  ownerName: string | null;
+  labelEvents: EventoEtiqueta[];
 };
+
+type EventoEtiqueta = {
+  id: string;
+  labelName: string;
+  labelColor: string | null;
+  action: "add" | "remove";
+  kind: string;
+  detail: string | null;
+  createdAt: string;
+};
+
+/** Notas e histórico de etiquetas numa linha do tempo só, do mais novo ao mais antigo. */
+type ItemDaLinha =
+  | { tipo: "nota"; id: string; em: string; texto: string }
+  | { tipo: "etiqueta"; id: string; em: string; evento: EventoEtiqueta };
+
+function linhaDoTempo(deal: DealDetail): ItemDaLinha[] {
+  return [
+    ...deal.notes.map((n) => ({ tipo: "nota" as const, id: n.id, em: n.createdAt, texto: n.body })),
+    ...deal.labelEvents.map((e) => ({ tipo: "etiqueta" as const, id: e.id, em: e.createdAt, evento: e })),
+  ].sort((a, b) => b.em.localeCompare(a.em));
+}
 
 export function DealPanel({
   dealId,
@@ -63,6 +87,8 @@ export function DealPanel({
       customValues: bruto.customValues ?? {},
       notes: bruto.notes ?? [],
       activities: bruto.activities ?? [],
+      labelEvents: bruto.labelEvents ?? [],
+      ownerName: bruto.ownerName ?? null,
       scoreFactors: bruto.scoreFactors ?? [],
     });
   }
@@ -179,6 +205,12 @@ export function DealPanel({
                 >
                   {deal.stage.name}
                 </span>
+                {deal.ownerName && (
+                  <span className="ml-1.5 mt-1 inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] px-2 py-0.5 text-[11px] text-[var(--color-accent)]">
+                    <UserRound className="size-3" />
+                    {deal.ownerName}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-1">
@@ -371,20 +403,23 @@ export function DealPanel({
 
               {tab === "notas" && (
                 <div className="flex flex-col gap-2">
-                  {deal.notes.map((n) => (
-                    <div
-                      key={n.id}
-                      className="rounded-xl bg-[var(--color-surface-2)] p-3 text-sm"
-                    >
-                      <p className="whitespace-pre-wrap">{n.body}</p>
-                      <p className="mt-1 text-[10px] text-[var(--color-muted)]">
-                        {dataHora(n.createdAt)}
-                      </p>
-                    </div>
-                  ))}
-                  {deal.notes.length === 0 && (
+                  {linhaDoTempo(deal).map((item) =>
+                    item.tipo === "nota" ? (
+                      <div key={item.id} className="rounded-xl bg-[var(--color-surface-2)] p-3 text-sm">
+                        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                          <StickyNote className="size-3" /> Anotação
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap">{item.texto}</p>
+                        <p className="mt-1 text-[10px] text-[var(--color-muted)]">{dataHora(item.em)}</p>
+                      </div>
+                    ) : (
+                      <EventoDeEtiqueta key={item.id} evento={item.evento} />
+                    ),
+                  )}
+                  {deal.notes.length === 0 && deal.labelEvents.length === 0 && (
                     <p className="text-sm text-[var(--color-muted)]">
-                      Nenhuma anotação ainda.
+                      Nenhuma anotação nem etiqueta ainda. As etiquetas que este
+                      contato receber no WhatsApp aparecem aqui.
                     </p>
                   )}
                 </div>
@@ -420,6 +455,34 @@ export function DealPanel({
           </>
         )}
       </aside>
+    </div>
+  );
+}
+
+/** Uma linha do histórico de etiquetas: qual etiqueta, se entrou ou saiu e o que o CRM fez. */
+function EventoDeEtiqueta({ evento }: { evento: EventoEtiqueta }) {
+  const saiu = evento.action === "remove";
+  const vendedor = evento.kind === "vendedor";
+  const cor = evento.labelColor ?? "var(--color-muted)";
+  return (
+    <div className="flex gap-2.5 rounded-xl border border-dashed px-3 py-2 text-sm">
+      {vendedor ? (
+        <UserRound className="mt-0.5 size-3.5 shrink-0 text-[var(--color-accent)]" />
+      ) : (
+        <Tag className="mt-0.5 size-3.5 shrink-0" style={{ color: cor }} />
+      )}
+      <div className="min-w-0 flex-1">
+        <p>
+          <span className="text-[var(--color-muted)]">{saiu ? "Etiqueta retirada: " : "Etiqueta aplicada: "}</span>
+          <span className={cn("font-medium", saiu && "line-through opacity-70")}>{evento.labelName}</span>
+        </p>
+        {evento.detail && (
+          <p className={cn("text-xs", vendedor ? "font-medium text-[var(--color-accent)]" : "text-[var(--color-muted)]")}>
+            {evento.detail}
+          </p>
+        )}
+        <p className="mt-0.5 text-[10px] text-[var(--color-muted)]">{dataHora(evento.createdAt)}</p>
+      </div>
     </div>
   );
 }

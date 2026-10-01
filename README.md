@@ -222,6 +222,40 @@ não sugere em nada a causa real.
 Se uma rota nova responder 404 mesmo existindo, apague `.next` e rode de novo: o
 cache de tipos do Next corrompe quando rotas são criadas ou removidas.
 
+## Etiquetas de vendedor e histórico de etiquetas
+
+Em Configurações → Etiquetas, escolha **“👤 Vendedor”** para uma etiqueta do
+WhatsApp Business (ex.: uma etiqueta chamada “Rodrigo”). Quem receber essa
+etiqueta no celular passa a ser lead desse vendedor: o nome aparece no card,
+no painel do lead e no filtro “vendedor” do funil. Trocar a etiqueta por a de
+outro vendedor registra a passagem (“Passou do vendedor Rodrigo para Henrique”).
+
+Opcionalmente, ligue a etiqueta a um login do CRM — é para quem vão os
+lembretes por e-mail das atividades desses leads.
+
+Toda etiqueta aplicada ou retirada (de qualquer tipo) fica no histórico do
+lead, na aba **Notas**, junto das anotações, com data e hora.
+
+## Avisos de atividades por e-mail
+
+Com `RESEND_API_KEY` e `EMAIL_REMETENTE` definidas (veja `.env.example`):
+
+- **Lembrete** `AVISO_MINUTOS_ANTES` minutos antes de cada atividade marcada
+  (padrão 30). Vai para o vendedor do lead → quem marcou a atividade → os
+  administradores, nessa ordem.
+- **Resumo do dia** às `AVISO_HORA_RESUMO` h (padrão 7): o que vence hoje e o
+  que está atrasado. Vendedor recebe o dele; administradores, o do time.
+
+Cada pessoa liga ou desliga os e-mails em Configurações → Minha conta. Em
+Configurações → Avisos por e-mail há um botão de teste.
+
+## Playbook em PDF
+
+No Playbook, “Enviar PDF” (administradores) sobe um arquivo de até 25 MB. Ele
+abre dentro do CRM, pode ser baixado, e a busca do playbook acha o texto de
+dentro do PDF. PDF digitalizado (só imagem) abre normalmente, mas não entra na
+busca pelo conteúdo.
+
 ## Comandos
 
 ```bash

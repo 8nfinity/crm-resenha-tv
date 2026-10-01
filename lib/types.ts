@@ -24,6 +24,8 @@ export type DealCard = {
   lastInboundAt: string | null;
   lastInteractionAt: string | null;
   enteredStageAt: string;
+  /** Vendedor do lead, definido pela etiqueta de vendedor no WhatsApp. */
+  vendedor: string | null;
   daysInStage: number;
   lastMessagePreview: string | null;
   openActivities: number;

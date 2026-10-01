@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ActivityType } from "@/lib/generated/prisma/client";
 import { avisarMudanca } from "@/lib/eventos";
+import { usuarioAtual } from "@/lib/auth/usuario";
 
 const bodySchema = z.object({
   type: z.enum(["FOLLOW_UP", "MEETING", "CALL", "PROPOSAL", "OTHER"]),
@@ -31,6 +32,8 @@ export async function POST(
   }
 
   const { type, title, notes, dueAt, doneAt } = parsed.data;
+  // Quem marcou recebe o lembrete por e-mail quando o lead não tem vendedor.
+  const autor = await usuarioAtual();
 
   const activity = await prisma.activity.create({
     data: {
@@ -40,6 +43,7 @@ export async function POST(
       notes,
       dueAt: dueAt ? new Date(dueAt) : null,
       doneAt: doneAt ? new Date(doneAt) : null,
+      createdById: autor?.id ?? null,
     },
   });
 

@@ -14,10 +14,16 @@ type Etiqueta = {
   stage: Estagio | null;
   /** Etiqueta de "ignorar": o contato etiquetado some do CRM. */
   ignoreContact: boolean;
+  /** Etiqueta de vendedor: quem recebe vira lead desse vendedor. */
+  isSeller: boolean;
+  sellerUserId: string | null;
 };
 
-/** Valor do <select> para a opção de ignorar (não é id de estágio). */
+/** Valores do <select> para ações que não são estágio. */
 const IGNORAR = "__ignorar__";
+const VENDEDOR = "__vendedor__";
+
+type UsuarioCrm = { id: string; name: string; active: boolean };
 
 type Conta = { id: string; label: string | null; status: string };
 
@@ -41,6 +47,7 @@ export function LabelMapping({
   const [erro, setErro] = useState<string | null>(null);
   const [carregado, setCarregado] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [usuarios, setUsuarios] = useState<UsuarioCrm[]>([]);
 
   const carregar = useCallback(
     async (sincronizar = false, contaId?: string) => {
@@ -71,12 +78,18 @@ export function LabelMapping({
       .then((r) => r.json())
       .then((s: Estagio[]) => setEstagios(s))
       .catch(() => {});
+    // Para ligar a etiqueta de vendedor a um usuário do CRM (e-mails).
+    void fetch("/api/usuarios")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((u: UsuarioCrm[]) => setUsuarios(u.filter((x) => x.active)))
+      .catch(() => {});
     void carregar(false);
   }, [carregar]);
 
-  async function mapear(contaId: string, labelId: string, valor: string) {
+  async function mapear(contaId: string, labelId: string, valor: string, sellerUserId: string | null = null) {
     const ignorar = valor === IGNORAR;
-    const stageId = ignorar || !valor ? null : valor;
+    const vendedor = valor === VENDEDOR;
+    const stageId = ignorar || vendedor || !valor ? null : valor;
     setAviso(null);
     // Otimista: o select responde na hora. Esperar o servidor daria a sensação
     // de travamento num controle que deveria ser instantâneo.
@@ -84,7 +97,7 @@ export function LabelMapping({
       ...p,
       [contaId]: (p[contaId] ?? []).map((e) =>
         e.labelId === labelId
-          ? { ...e, stageId, ignoreContact: ignorar, stage: estagios.find((s) => s.id === stageId) ?? null }
+          ? { ...e, stageId, ignoreContact: ignorar, isSeller: vendedor, sellerUserId: vendedor ? sellerUserId : null, stage: estagios.find((s) => s.id === stageId) ?? null }
           : e,
       ),
     }));
@@ -92,12 +105,21 @@ export function LabelMapping({
     const res = await fetch(`/api/accounts/${contaId}/labels`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ labelId, stageId, ignorar }),
+      body: JSON.stringify({ labelId, stageId, ignorar, vendedor, sellerUserId }),
     });
 
     if (!res.ok) {
       setErro("Não consegui salvar o mapeamento.");
       void carregar(false, contaId);
+      return;
+    }
+    if (vendedor) {
+      const { atribuidos } = (await res.json()) as { atribuidos?: number };
+      setAviso(
+        atribuidos
+          ? `${atribuidos} ${atribuidos === 1 ? "lead que já tinha" : "leads que já tinham"} essa etiqueta ${atribuidos === 1 ? "ficou" : "ficaram"} com o vendedor.`
+          : "Pronto: quem receber essa etiqueta no celular vira lead desse vendedor.",
+      );
       return;
     }
     if (ignorar) {
@@ -182,19 +204,47 @@ export function LabelMapping({
 
                     <ArrowRight className="size-3.5 shrink-0 text-[var(--color-muted)]" />
 
-                    <select
-                      value={etiqueta.ignoreContact ? IGNORAR : (etiqueta.stageId ?? "")}
-                      onChange={(e) => void mapear(conta.id, etiqueta.labelId, e.target.value)}
-                      className="w-60 shrink-0 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-                    >
-                      <option value="">Não move o lead</option>
-                      <option value={IGNORAR}>🚫 Ignorar contato (some do CRM)</option>
-                      {estagios.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex shrink-0 flex-col gap-1.5">
+                      <select
+                        value={
+                          etiqueta.ignoreContact
+                            ? IGNORAR
+                            : etiqueta.isSeller
+                              ? VENDEDOR
+                              : (etiqueta.stageId ?? "")
+                        }
+                        onChange={(e) => void mapear(conta.id, etiqueta.labelId, e.target.value)}
+                        className="w-60 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                      >
+                        <option value="">Não move o lead</option>
+                        <option value={IGNORAR}>🚫 Ignorar contato (some do CRM)</option>
+                        <option value={VENDEDOR}>👤 Vendedor (lead fica com ele)</option>
+                        {estagios.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Vínculo opcional com um login do CRM: é para quem vão
+                          os e-mails das atividades desses leads. */}
+                      {etiqueta.isSeller && (
+                        <select
+                          value={etiqueta.sellerUserId ?? ""}
+                          onChange={(e) =>
+                            void mapear(conta.id, etiqueta.labelId, VENDEDOR, e.target.value || null)
+                          }
+                          className="w-60 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        >
+                          <option value="">Sem login (usa o nome da etiqueta)</option>
+                          {usuarios.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              Login: {u.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

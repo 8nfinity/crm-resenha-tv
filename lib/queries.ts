@@ -104,6 +104,7 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
         lastInteractionAt: true,
         enteredStageAt: true,
         customValues: true,
+        ownerName: true,
         contact: {
           select: {
             id: true,
@@ -160,6 +161,7 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
       lastInboundAt: deal.lastInboundAt?.toISOString() ?? null,
       lastInteractionAt: deal.lastInteractionAt?.toISOString() ?? null,
       enteredStageAt: deal.enteredStageAt.toISOString(),
+      vendedor: deal.ownerName,
       daysInStage: daysSince(deal.enteredStageAt),
       lastMessagePreview: previews.get(deal.contactId) ?? null,
       openActivities: openMap.get(deal.id) ?? 0,
@@ -216,11 +218,17 @@ export async function getDealDetail(dealId: string) {
       contact: {
         include: {
           messages: { orderBy: { timestamp: "desc" }, take: 100 },
+          // Histórico de etiquetas: entra nas notas do lead, em ordem do mais novo.
+          labelEvents: { orderBy: { createdAt: "desc" }, take: 300 },
         },
       },
       stage: true,
+      ownerUser: { select: { id: true, name: true } },
       notes: { orderBy: { createdAt: "desc" } },
-      activities: { orderBy: { createdAt: "desc" } },
+      activities: {
+        orderBy: { createdAt: "desc" },
+        include: { createdBy: { select: { name: true } } },
+      },
       transitions: {
         orderBy: { at: "desc" },
         include: { fromStage: true, toStage: true },
@@ -232,7 +240,7 @@ export async function getDealDetail(dealId: string) {
 
   const stored = parseScoreFactors(deal.scoreFactors);
   const { contact, ...resto } = deal;
-  const { messages, ...contactSemMensagens } = contact;
+  const { messages, labelEvents, ...contactSemMensagens } = contact;
 
   // As mensagens pertencem ao contato no banco, mas o painel do card trata
   // como se fossem do deal. Achatar aqui mantém a resposta da API igual ao que
@@ -241,6 +249,7 @@ export async function getDealDetail(dealId: string) {
     ...resto,
     contact: contactSemMensagens,
     messages,
+    labelEvents,
     displayName: contactName(contact),
     scoreSummary: stored.summary || describeScore(deal.score),
     scoreFactors: stored.factors,

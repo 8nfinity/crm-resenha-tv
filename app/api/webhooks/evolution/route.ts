@@ -201,16 +201,19 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
 
   // Remoção: só a etiqueta de "ignorar" tem efeito (o contato volta a
   // aparecer). Tirar uma etiqueta de estágio não move o lead — ver labels.ts.
-  if (tipo !== "add") {
-    if (tipo === "remove") await removerEtiqueta(accountId, chatId, labelId);
+  if (tipo === "remove") {
+    await removerEtiqueta(accountId, chatId, labelId);
+  } else if (tipo === "add") {
+    const r = await aplicarEtiqueta(accountId, chatId, labelId);
+    if (r.acao === "movido") console.log(`Etiqueta moveu lead para "${r.estagio}"`);
+    if (r.acao === "vendedor") console.log(`Lead ficou com o vendedor "${r.vendedor}"`);
+  } else {
     return;
   }
 
-  const r = await aplicarEtiqueta(accountId, chatId, labelId);
-  if (r.acao === "movido") {
-    console.log(`Etiqueta moveu lead para "${r.estagio}"`);
-    avisarMudanca({ dealIds: [], motivo: "etiqueta" });
-  }
+  // Toda etiqueta muda o histórico do lead (e às vezes o estágio ou o
+  // vendedor): as telas abertas se atualizam.
+  avisarMudanca({ dealIds: [], motivo: "etiqueta" });
 }
 
 async function handleConnection(instanceName: string, data: unknown) {

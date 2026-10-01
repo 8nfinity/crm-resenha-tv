@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { sincronizarEtiquetas } from "@/lib/labels";
+import { atribuirVendedorQuemJaTemAEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
+import { avisarMudanca } from "@/lib/eventos";
 import { ignorarQuemJaTemAEtiqueta } from "@/lib/ignorar";
 
 export const runtime = "nodejs";
@@ -41,7 +42,10 @@ export async function GET(
 
   const etiquetas = await prisma.whatsAppLabel.findMany({
     where: { accountId: id },
-    include: { stage: { select: { id: true, name: true, color: true } } },
+    include: {
+      stage: { select: { id: true, name: true, color: true } },
+      sellerUser: { select: { id: true, name: true } },
+    },
     orderBy: { name: "asc" },
   });
 
@@ -61,11 +65,16 @@ const patchSchema = z.object({
   stageId: z.string().nullable(),
   /** true: etiqueta de "ignorar contato" (o stageId é descartado). */
   ignorar: z.boolean().optional(),
+  /** true: etiqueta de VENDEDOR — quem recebe vira lead desse vendedor. */
+  vendedor: z.boolean().optional(),
+  /** Usuário do CRM que é o vendedor (opcional; para os avisos por e-mail). */
+  sellerUserId: z.string().nullable().optional(),
 });
 
 /**
- * PATCH — define o que a etiqueta faz: mover para um estágio, nada, ou
- * ignorar o contato. Ao virar "ignorar", já aplica em quem está com ela.
+ * PATCH — define o que a etiqueta faz: mover para um estágio, nada, ignorar o
+ * contato ou definir o vendedor do lead. Ao virar "ignorar" ou "vendedor", já
+ * aplica em quem está com ela no celular.
  */
 export async function PATCH(
   request: Request,
@@ -77,8 +86,14 @@ export async function PATCH(
     return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
   }
 
-  const { labelId, ignorar = false } = parsed.data;
-  const stageId = ignorar ? null : parsed.data.stageId;
+  const { labelId, ignorar = false, vendedor = false } = parsed.data;
+  // Uma etiqueta faz uma coisa só: ignorar, vendedor ou estágio.
+  const stageId = ignorar || vendedor ? null : parsed.data.stageId;
+  const sellerUserId = vendedor ? (parsed.data.sellerUserId ?? null) : null;
+
+  if (sellerUserId && !(await prisma.user.findUnique({ where: { id: sellerUserId } }))) {
+    return NextResponse.json({ error: "Usuário não existe" }, { status: 400 });
+  }
 
   if (stageId) {
     const existe = await prisma.stage.findUnique({ where: { id: stageId } });
@@ -89,12 +104,18 @@ export async function PATCH(
 
   const etiqueta = await prisma.whatsAppLabel.update({
     where: { accountId_labelId: { accountId: id, labelId } },
-    data: { stageId, ignoreContact: ignorar },
-    include: { stage: { select: { id: true, name: true, color: true } } },
+    data: { stageId, ignoreContact: ignorar, isSeller: vendedor, sellerUserId },
+    include: {
+      stage: { select: { id: true, name: true, color: true } },
+      sellerUser: { select: { id: true, name: true } },
+    },
   });
 
-  // Quem JÁ estava com a etiqueta no celular também some do CRM agora.
+  // Quem JÁ estava com a etiqueta no celular: some do CRM (ignorar) ou passa
+  // a ser lead do vendedor.
   const ignorados = ignorar ? await ignorarQuemJaTemAEtiqueta(id, labelId) : 0;
+  const atribuidos = vendedor ? await atribuirVendedorQuemJaTemAEtiqueta(id, labelId) : 0;
+  if (ignorados || atribuidos) avisarMudanca({ dealIds: [], motivo: "etiqueta" });
 
-  return NextResponse.json({ ...etiqueta, ignorados });
+  return NextResponse.json({ ...etiqueta, ignorados, atribuidos });
 }

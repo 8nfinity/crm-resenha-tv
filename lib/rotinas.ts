@@ -3,6 +3,8 @@ import { recalculateAllScores } from "@/lib/deals";
 import { evolution } from "@/lib/evolution/client";
 import { estaHospedado, urlDoWebhook } from "@/lib/url-publica";
 import { varrerTudo } from "@/lib/sincronizacao";
+import { emailConfigurado } from "@/lib/email";
+import { enviarLembretes, enviarResumoDiario } from "@/lib/avisos";
 
 /**
  * Rotinas que o próprio servidor executa — sem depender de cron externo.
@@ -32,6 +34,15 @@ export function iniciarRotinasDoServidor() {
     setInterval(() => void varrerTudo().catch(() => {}), INTERVALO_VARREDURA_MS).unref();
   }
 
+  if (emailConfigurado()) {
+    // Avisos de atividades: confere a cada minuto se há lembrete a mandar e
+    // se chegou a hora do resumo do dia.
+    setInterval(() => void conferirAvisos(), INTERVALO_AVISOS_MS).unref();
+    setTimeout(() => void conferirAvisos(), 30_000).unref();
+  } else {
+    console.log("Avisos por e-mail desligados: defina RESEND_API_KEY e EMAIL_REMETENTE para ligar.");
+  }
+
   if (estaHospedado()) {
     // Espera o servidor terminar de subir antes de falar com a Evolution, e
     // depois confere de tempos em tempos: se a Evolution for reinstalada ou
@@ -44,6 +55,18 @@ export function iniciarRotinasDoServidor() {
 /** A cada minuto: atraso máximo de uma mensagem quando o webhook falhar. */
 const INTERVALO_VARREDURA_MS = 60_000;
 const INTERVALO_WEBHOOK_MS = 10 * 60_000;
+const INTERVALO_AVISOS_MS = 60_000;
+
+async function conferirAvisos() {
+  try {
+    const lembretes = await enviarLembretes();
+    if (lembretes) console.log(`Avisos: ${lembretes} lembrete(s) por e-mail enviados`);
+    const resumos = await enviarResumoDiario();
+    if (resumos) console.log(`Avisos: resumo do dia enviado para ${resumos} pessoa(s)`);
+  } catch (error) {
+    console.warn("Avisos por e-mail falharam:", (error as Error).message);
+  }
+}
 
 /**
  * Primeiro administrador a partir das variáveis ADMIN_EMAIL, ADMIN_NOME e

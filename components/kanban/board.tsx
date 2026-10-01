@@ -66,6 +66,10 @@ export function Board({
   );
 
   const visiveis = useMemo(() => aplicarFiltros(deals, filtros), [deals, filtros]);
+  const vendedores = useMemo(
+    () => [...new Set(deals.map((d) => d.vendedor).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [deals],
+  );
 
   const byStage = useMemo(() => {
     const map = new Map<string, DealCard[]>();
@@ -174,6 +178,7 @@ export function Board({
         onChange={setFiltros}
         campos={campos}
         contas={contas}
+        vendedores={vendedores}
         total={deals.length}
         visiveis={visiveis.length}
       />

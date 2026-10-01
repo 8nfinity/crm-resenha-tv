@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowDown, ArrowUp, BookOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  BookOpen,
+  Download,
+  ExternalLink,
+  FileText,
+  FileUp,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { dataHora } from "@/lib/atividades";
 import { MODELO_PLAYBOOK } from "@/lib/playbook-modelo";
 import { PageHeader } from "@/components/ui";
@@ -12,6 +24,28 @@ import { useEhAdmin } from "@/components/sessao";
 import { cn } from "@/lib/utils";
 
 type Secao = { id: string; title: string; body: string; updatedAt: string };
+
+/** Um PDF do playbook. `text` é o conteúdo extraído, só para a busca. */
+type Pdf = { id: string; name: string; size: number; text: string; createdAt: string; autor: string | null };
+
+const LIMITE_PDF = 25 * 1024 * 1024;
+
+function tamanho(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
+
+function tituloPdf(nome: string): string {
+  return nome.replace(/\.pdf$/i, "").replace(/_+/g, " ").trim() || "Documento";
+}
+
+/** Trecho do PDF em volta do termo buscado, para mostrar ONDE achou. */
+function trecho(texto: string, termo: string): string | null {
+  const i = texto.toLowerCase().indexOf(termo);
+  if (i < 0) return null;
+  const ini = Math.max(0, i - 40);
+  return `${ini > 0 ? "…" : ""}${texto.slice(ini, i + termo.length + 60).replace(/\s+/g, " ")}…`;
+}
 
 async function chamar(url: string, method: string, corpo?: unknown) {
   const res = await fetch(url, {
@@ -29,7 +63,7 @@ async function chamar(url: string, method: string, corpo?: unknown) {
  * ao lado. O que for salvo aparece na hora para quem estiver com a tela
  * aberta (o "Ao vivo" recarrega os dados).
  */
-export function Playbook({ secoes }: { secoes: Secao[] }) {
+export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] }) {
   const router = useRouter();
   // Vendedor lê; criar, editar, reordenar e excluir é de administrador.
   const admin = useEhAdmin();
@@ -40,13 +74,27 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
   const [texto, setTexto] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  // PDF aberto na leitura (no lugar de uma seção). Sem seções, abre o primeiro.
+  const [pdfId, setPdfId] = useState<string | null>(secoes.length === 0 ? (pdfs[0]?.id ?? null) : null);
+  const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+  const [confirmarPdf, setConfirmarPdf] = useState(false);
+  const seletor = useRef<HTMLInputElement>(null);
 
   // Seção apagada (aqui ou em outra tela): cai na primeira que existir.
   useEffect(() => {
     if (!secoes.some((s) => s.id === atualId)) setAtualId(secoes[0]?.id ?? null);
   }, [secoes, atualId]);
 
+  // PDF apagado: volta para as seções (ou para o primeiro PDF, se só houver PDFs).
+  useEffect(() => {
+    if (pdfId && !pdfs.some((p) => p.id === pdfId)) {
+      setPdfId(secoes.length === 0 ? (pdfs[0]?.id ?? null) : null);
+    }
+  }, [pdfs, pdfId, secoes.length]);
+
   const atual = secoes.find((s) => s.id === atualId) ?? null;
+  const pdfAtual = pdfs.find((p) => p.id === pdfId) ?? null;
 
   const termo = busca.trim().toLowerCase();
   const filtradas = useMemo(
@@ -56,9 +104,18 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
         : secoes,
     [secoes, termo],
   );
+  // A busca olha o nome e o texto de dentro do PDF.
+  const pdfsFiltrados = useMemo(
+    () =>
+      termo
+        ? pdfs.filter((p) => p.name.toLowerCase().includes(termo) || p.text.toLowerCase().includes(termo))
+        : pdfs,
+    [pdfs, termo],
+  );
 
   function abrir(id: string) {
     setAtualId(id);
+    setPdfId(null);
     setEditando(false);
     setConfirmarExclusao(false);
   }
@@ -107,6 +164,41 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
     router.refresh();
   }
 
+  function abrirPdf(id: string) {
+    setPdfId(id);
+    setEditando(false);
+    setConfirmarExclusao(false);
+    setConfirmarPdf(false);
+  }
+
+  async function enviarPdf(arquivo: File) {
+    setErroEnvio(null);
+    if (arquivo.size > LIMITE_PDF) {
+      setErroEnvio("O PDF passa de 25 MB. Comprima o arquivo e tente de novo.");
+      return;
+    }
+    setEnviando(true);
+    const form = new FormData();
+    form.append("arquivo", arquivo);
+    const res = await fetch("/api/playbook/arquivos", { method: "POST", body: form }).catch(() => null);
+    const dados = await res?.json().catch(() => null);
+    setEnviando(false);
+    if (!res?.ok) {
+      setErroEnvio(dados?.error ?? "Não consegui enviar o PDF.");
+      return;
+    }
+    setPdfId(dados.id);
+    router.refresh();
+  }
+
+  async function excluirPdf() {
+    if (!pdfAtual) return;
+    await chamar(`/api/playbook/arquivos/${pdfAtual.id}`, "DELETE");
+    setConfirmarPdf(false);
+    setPdfId(null);
+    router.refresh();
+  }
+
   async function mover(id: string, direcao: "cima" | "baixo") {
     await chamar(`/api/playbook/${id}`, "PATCH", { mover: direcao });
     router.refresh();
@@ -127,18 +219,45 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
         subtitle="O material de consulta do time: avaliações, roteiros, objeções e processos."
       >
         {admin && (
-          <button
-            onClick={() => void novaSecao()}
-            disabled={criando}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-4 py-2 text-sm font-semibold text-[var(--color-on-ink)] disabled:opacity-50"
-          >
-            <Plus className="size-4" />
-            Nova seção
-          </button>
+          <>
+            <input
+              ref={seletor}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                e.target.value = "";
+                if (arquivo) void enviarPdf(arquivo);
+              }}
+            />
+            <button
+              onClick={() => seletor.current?.click()}
+              disabled={enviando}
+              className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              <FileUp className="size-4" />
+              {enviando ? "Enviando PDF…" : "Enviar PDF"}
+            </button>
+            <button
+              onClick={() => void novaSecao()}
+              disabled={criando}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-4 py-2 text-sm font-semibold text-[var(--color-on-ink)] disabled:opacity-50"
+            >
+              <Plus className="size-4" />
+              Nova seção
+            </button>
+          </>
         )}
       </PageHeader>
 
-      {secoes.length === 0 ? (
+      {erroEnvio && (
+        <p className="mx-4 mb-4 rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2 text-sm sm:mx-8">
+          {erroEnvio}
+        </p>
+      )}
+
+      {secoes.length === 0 && pdfs.length === 0 ? (
         <div className="px-4 sm:px-8">
           <section className="card mx-auto max-w-xl p-10 text-center">
             <BookOpen className="mx-auto size-10 text-[var(--color-accent)]" />
@@ -146,7 +265,8 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
             {admin ? (
               <>
                 <p className="mt-2 text-sm text-[var(--color-muted)]">
-                  Comece do zero com “Nova seção”, ou use o modelo: ele já traz a tabela das
+                  Envie o seu playbook pronto em PDF (“Enviar PDF”), comece do zero com
+                  “Nova seção”, ou use o modelo: ele já traz a tabela das
                   Avaliações 0 a 3 com os valores do Rodrigo e do Henrique, e tópicos de roteiro,
                   objeções e follow-up para vocês completarem.
                 </p>
@@ -206,13 +326,106 @@ export function Playbook({ secoes }: { secoes: Secao[] }) {
                   </div>
                 );
               })}
-              {termo && filtradas.length === 0 && (
+              {termo && filtradas.length === 0 && pdfsFiltrados.length === 0 && (
                 <p className="px-3 py-2 text-sm text-[var(--color-muted)]">Nada encontrado para “{busca}”.</p>
               )}
             </nav>
+
+            {pdfsFiltrados.length > 0 && (
+              <>
+                <p className="mt-4 px-3 text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">
+                  Documentos em PDF
+                </p>
+                <nav className="mt-1 flex flex-col gap-0.5">
+                  {pdfsFiltrados.map((p) => {
+                    // Achou dentro do PDF (e não no nome): mostra o trecho.
+                    const achado = termo && !p.name.toLowerCase().includes(termo) ? trecho(p.text, termo) : null;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => abrirPdf(p.id)}
+                        className={cn(
+                          "flex min-w-0 flex-col rounded-xl px-3 py-2 text-left transition-colors",
+                          p.id === pdfId ? "bg-[var(--color-ink)] text-[var(--color-on-ink)]" : "hover:bg-[var(--color-surface-2)]",
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+                          <FileText className="size-3.5 shrink-0 opacity-70" />
+                          <span className="truncate">{tituloPdf(p.name)}</span>
+                        </span>
+                        {achado && <span className="mt-0.5 line-clamp-2 text-[11px] opacity-70">{achado}</span>}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </>
+            )}
           </aside>
 
-          {atual && (
+          {pdfAtual && (
+            <article className="card min-w-0 p-6 sm:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-black uppercase tracking-tight">{tituloPdf(pdfAtual.name)}</h2>
+                  <p className="mt-1 text-xs text-[var(--color-muted)]">
+                    PDF · {tamanho(pdfAtual.size)} · enviado em {dataHora(pdfAtual.createdAt)}
+                    {pdfAtual.autor ? ` por ${pdfAtual.autor}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={`/api/playbook/arquivos/${pdfAtual.id}`}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Tela cheia
+                  </a>
+                  <a
+                    href={`/api/playbook/arquivos/${pdfAtual.id}?baixar=1`}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                  >
+                    <Download className="size-3.5" />
+                    Baixar
+                  </a>
+                  {admin && (
+                    <button
+                      onClick={() => setConfirmarPdf(true)}
+                      aria-label="Excluir PDF"
+                      className="rounded-full border p-2 text-[var(--color-muted)] hover:text-[var(--color-hot)]"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {confirmarPdf && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-hot)] p-3 text-sm">
+                  <span>Excluir o PDF “{tituloPdf(pdfAtual.name)}”? Não dá para desfazer.</span>
+                  <button onClick={() => void excluirPdf()} className="rounded-full bg-[var(--color-hot)] px-3 py-1 font-semibold text-[var(--color-on-ink)]">
+                    Excluir
+                  </button>
+                  <button onClick={() => setConfirmarPdf(false)} className="text-[var(--color-muted)]">
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              <iframe
+                key={pdfAtual.id}
+                src={`/api/playbook/arquivos/${pdfAtual.id}#view=FitH`}
+                title={tituloPdf(pdfAtual.name)}
+                className="mt-5 h-[78vh] w-full rounded-2xl border border-[var(--color-border)] bg-white"
+              />
+              <p className="mt-2 text-[11px] text-[var(--color-muted)]">
+                No celular, se o PDF não aparecer inteiro aqui, toque em “Tela cheia”.
+              </p>
+            </article>
+          )}
+
+          {atual && !pdfAtual && (
             <article className="card min-w-0 p-6 sm:p-8">
               {editando ? (
                 <>

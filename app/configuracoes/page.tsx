@@ -9,6 +9,7 @@ import { usuarioAtual } from "@/lib/auth/usuario";
 import { ehAdministrador } from "@/lib/auth/papeis";
 import { GerenciarUsuarios, MinhaConta } from "@/components/usuarios";
 import { PageHeader } from "@/components/ui";
+import { AvisosEmailAdmin, PreferenciaAvisos } from "@/components/avisos-email";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function ConfiguracoesPage() {
       <div className="scroll-thin flex-1 overflow-y-auto pb-10">
       <PageHeader
         title="Configurações"
-        subtitle={admin ? "Acessos, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta de acesso ao CRM."}
+        subtitle={admin ? "Acessos, avisos por e-mail, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta de acesso ao CRM."}
       />
       <div className="px-4 sm:px-8">
         <div className="grid max-w-6xl grid-cols-1 gap-5 lg:grid-cols-2">
@@ -52,6 +53,7 @@ export default async function ConfiguracoesPage() {
                 Trocar a senha desconecta os outros aparelhos onde você estava logado.
               </p>
               <MinhaConta nome={usuario.name} email={usuario.email} />
+              <PreferenciaAvisos />
             </section>
           )}
 
@@ -67,6 +69,14 @@ export default async function ConfiguracoesPage() {
           )}
 
           {admin && (<>
+          <section className="card p-6">
+            <h2 className="text-base font-semibold">Avisos por e-mail</h2>
+            <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
+              Lembretes das atividades marcadas e um resumo do dia, direto no e-mail de cada um.
+            </p>
+            <AvisosEmailAdmin />
+          </section>
+
           <section className="card p-6">
             <h2 className="text-base font-semibold">Conector do Claude</h2>
             <p className="mt-1 text-xs text-[var(--color-muted)]">
@@ -112,9 +122,10 @@ export default async function ConfiguracoesPage() {
               Etiquetas do WhatsApp Business
             </h2>
             <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
-              Etiquete uma conversa no celular e o lead anda no funil sozinho —
-              ou, com a opção “Ignorar contato”, some do CRM (família, fornecedor,
-              equipe). O sentido é único: mover o card aqui não aplica etiqueta lá.
+              Etiquete uma conversa no celular e o lead anda no funil sozinho,
+              fica com um vendedor (opção “Vendedor”) ou, com “Ignorar contato”,
+              some do CRM (família, fornecedor, equipe). Toda etiqueta fica no
+              histórico do lead, na aba Notas. O sentido é único: mover o card aqui não aplica etiqueta lá.
             </p>
             <EtiquetasEIgnorados contas={contas} />
           </section>

@@ -50,6 +50,8 @@ function exigeAdministrador(request: NextRequest): boolean {
   if (sob(c, "/api/usuarios")) return true;
   // Contatos ignorados: quem fica de fora do CRM é decisão de administrador.
   if (sob(c, "/api/contatos-ignorados")) return true;
+  // Situação e teste dos avisos por e-mail.
+  if (sob(c, "/api/avisos-email")) return true;
   // Estrutura: colunas do funil, campos próprios, conteúdo do playbook.
   if (!leitura && (sob(c, "/api/stages") || sob(c, "/api/custom-fields") || sob(c, "/api/playbook"))) return true;
   // Apagar um lead de vez reescreve as métricas; arquivar continua liberado.
