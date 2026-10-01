@@ -66,26 +66,75 @@ async function request<T>(
 ): Promise<T> {
   const { baseUrl, apiKey } = config();
 
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: init.method,
-    headers: {
-      apikey: apiKey,
-      "Content-Type": "application/json",
-    },
-    body: init.body ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
+  // Endereço da Evolution igual ao do próprio CRM: o pedido cairia no CRM,
+  // que responde com a tela de login. Acontece fácil na Railway, onde os dois
+  // serviços têm endereços parecidos (...up.railway.app).
+  const hostEvolution = new URL(baseUrl).host;
+  const hostsDoCrm = [process.env.RAILWAY_PUBLIC_DOMAIN, process.env.APP_URL && new URL(process.env.APP_URL).host];
+  if (hostsDoCrm.includes(hostEvolution)) {
     throw new EvolutionError(
-      `Evolution API respondeu ${res.status} em ${path}`,
-      res.status,
-      body.slice(0, 500),
+      `A variável EVOLUTION_API_URL está com o endereço do próprio CRM (${hostEvolution}). ` +
+        "Coloque o endereço do serviço da EVOLUTION (Railway → serviço da Evolution → Settings → Networking).",
+      400,
+      "",
     );
   }
 
-  return (await res.json()) as T;
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      method: init.method,
+      headers: {
+        apikey: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: init.body ? JSON.stringify(init.body) : undefined,
+      cache: "no-store",
+      // Sem seguir redirecionamento: a Evolution não redireciona; quem
+      // redireciona é um site que não é ela (ex.: o CRM mandando para o login).
+      redirect: "manual",
+    });
+  } catch {
+    throw new EvolutionError(
+      `Não consegui alcançar a Evolution em ${hostEvolution}. Confira se o serviço dela está no ar ` +
+        "(abrindo esse endereço no navegador deve aparecer “Welcome to the Evolution API”).",
+      503,
+      "",
+    );
+  }
+
+  const texto = await res.text().catch(() => "");
+  const ehPagina = /^\s*<(!doctype|html)/i.test(texto) || (res.status >= 300 && res.status < 400);
+
+  if (ehPagina) {
+    // Respondeu uma PÁGINA, não a API: endereço errado, ou a Railway mostrando
+    // a página de erro dela porque a Evolution não subiu.
+    throw new EvolutionError(
+      res.status >= 500
+        ? `O endereço ${hostEvolution} não está respondendo como a Evolution (erro ${res.status} da hospedagem). ` +
+            "Confira se o serviço da Evolution subiu e se o domínio dele usa a porta 8080."
+        : `O endereço ${hostEvolution} respondeu uma página de site, não a Evolution. ` +
+            "Confira se a EVOLUTION_API_URL tem o endereço do serviço da EVOLUTION (e não o do CRM).",
+      res.status,
+      texto.slice(0, 200),
+    );
+  }
+
+  if (!res.ok) {
+    throw new EvolutionError(
+      res.status === 401 || res.status === 403
+        ? "A Evolution recusou a chave: a EVOLUTION_API_KEY do CRM precisa ser igual à AUTHENTICATION_API_KEY da Evolution."
+        : `Evolution API respondeu ${res.status} em ${path}`,
+      res.status,
+      texto.slice(0, 500),
+    );
+  }
+
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new EvolutionError(`A Evolution respondeu algo que não é JSON em ${path}.`, res.status, texto.slice(0, 200));
+  }
 }
 
 /**
