@@ -47,8 +47,26 @@ const globalForPrisma = globalThis as unknown as {
   prisma: ReturnType<typeof createClient> | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? createClient();
-globalForPrisma.prisma = prisma;
+function cliente(): ReturnType<typeof createClient> {
+  return (globalForPrisma.prisma ??= createClient());
+}
+
+/**
+ * O cliente só nasce no primeiro uso, não ao importar este arquivo.
+ *
+ * O `next build` importa todas as rotas para ler a configuração delas; com o
+ * cliente criado no import, o build exigia DATABASE_URL e quebrava sem ela
+ * (num CI, ou numa hospedagem que só injeta as variáveis em tempo de execução).
+ * Os métodos são amarrados ao cliente real, para nada dentro do Prisma enxergar
+ * o intermediário.
+ */
+export const prisma = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_alvo, prop) {
+    const real = cliente();
+    const valor = Reflect.get(real, prop, real);
+    return typeof valor === "function" ? valor.bind(real) : valor;
+  },
+});
 
 /**
  * Abre várias conexões de uma vez, antes de alguém precisar delas.

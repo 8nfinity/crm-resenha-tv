@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 /**
  * Configuração do Prisma CLI (migrations e seed).
@@ -18,6 +18,10 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DIRECT_URL"),
+    // `prisma generate` (que roda no build) carrega este arquivo mas não
+    // conecta em nada; exigir a variável ali quebrava o build sem banco. Sem
+    // DIRECT_URL, uma migration falha tentando o host abaixo — cujo nome já
+    // diz o que falta.
+    url: process.env.DIRECT_URL || "postgresql://defina-a-DIRECT_URL@faltando-DIRECT_URL:5432/postgres",
   },
 });
