@@ -1,15 +1,21 @@
 /**
- * Envio de e-mail pela API HTTP da Resend (resend.com).
+ * Envio de e-mail por API HTTP — Brevo ou Resend, o que estiver configurado.
  *
  * Por que HTTP e não SMTP: a Railway bloqueia a saída SMTP (portas 25/465/587)
  * nos planos comuns, e um envio que trava esperando conexão derruba a rotina
  * inteira. A API HTTP passa pela porta 443 como qualquer requisição.
  *
+ * Dois serviços, para dois momentos:
+ *   BREVO   (brevo.com) — aceita um e-mail comum (ex.: seu Gmail) como
+ *           remetente, confirmado por um clique. Serve para quem não tem
+ *           domínio próprio. Plano grátis: 300 e-mails por dia.
+ *   RESEND  (resend.com) — exige domínio próprio verificado.
+ * Com as duas chaves, vale a do Brevo.
+ *
  * Variáveis:
- *   RESEND_API_KEY   a chave criada no painel da Resend (começa com "re_")
- *   EMAIL_REMETENTE  quem envia, ex.: "CRM Biomech <avisos@seudominio.com.br>"
- *                    (o domínio precisa estar verificado na Resend; para testar,
- *                    "onboarding@resend.dev" envia só para o e-mail da sua conta)
+ *   BREVO_API_KEY    chave do Brevo (começa com "xkeysib-")
+ *   RESEND_API_KEY   chave da Resend (começa com "re_")
+ *   EMAIL_REMETENTE  quem envia: "CRM Biomech <seuemail@gmail.com>"
  */
 
 export type Email = {
@@ -19,46 +25,112 @@ export type Email = {
   texto: string;
 };
 
+export type Provedor = "brevo" | "resend";
+
+export function provedor(): Provedor | null {
+  if (process.env.BREVO_API_KEY?.trim()) return "brevo";
+  if (process.env.RESEND_API_KEY?.trim()) return "resend";
+  return null;
+}
+
+export const NOME_PROVEDOR: Record<Provedor, string> = { brevo: "Brevo", resend: "Resend" };
+
 export function emailConfigurado(): boolean {
-  return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.EMAIL_REMETENTE?.trim());
+  return Boolean(provedor() && remetente());
 }
 
 export function remetente(): string | null {
   return process.env.EMAIL_REMETENTE?.trim() || null;
 }
 
+/** "CRM Biomech <avisos@x.com>" → { nome, email }. Só o e-mail também vale. */
+export function separarRemetente(texto: string): { nome: string; email: string } {
+  const m = texto.match(/^\s*"?([^"<]*?)"?\s*<\s*([^>\s]+)\s*>\s*$/);
+  if (m) return { nome: m[1].trim() || "CRM Biomech", email: m[2] };
+  return { nome: "CRM Biomech", email: texto.trim() };
+}
+
+type Resultado = { ok: true } | { ok: false; erro: string };
+
 /** Envia um e-mail. Nunca lança: devolve o erro em texto, para a tela mostrar. */
-export async function enviarEmail(email: Email): Promise<{ ok: true } | { ok: false; erro: string }> {
-  const chave = process.env.RESEND_API_KEY?.trim();
+export async function enviarEmail(email: Email): Promise<Resultado> {
+  const qual = provedor();
   const de = remetente();
-  if (!chave || !de) {
-    return { ok: false, erro: "E-mail não configurado: defina RESEND_API_KEY e EMAIL_REMETENTE nas variáveis." };
+  if (!qual || !de) {
+    return {
+      ok: false,
+      erro: "E-mail não configurado: defina BREVO_API_KEY (ou RESEND_API_KEY) e EMAIL_REMETENTE nas variáveis.",
+    };
   }
+  const para = Array.isArray(email.para) ? email.para : [email.para];
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: de,
-        to: Array.isArray(email.para) ? email.para : [email.para],
-        subject: email.assunto,
-        html: email.html,
-        text: email.texto,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (res.ok) return { ok: true };
-
-    const corpo = (await res.json().catch(() => null)) as { message?: string } | null;
-    const motivo = corpo?.message ?? `HTTP ${res.status}`;
-    if (res.status === 401 || res.status === 403) {
-      return { ok: false, erro: `A Resend recusou o envio (${motivo}). Confira a RESEND_API_KEY e se o domínio do remetente está verificado.` };
-    }
-    return { ok: false, erro: `A Resend recusou o envio: ${motivo}` };
+    return qual === "brevo" ? await viaBrevo(email, para, de) : await viaResend(email, para, de);
   } catch (error) {
-    return { ok: false, erro: `Não consegui falar com a Resend: ${(error as Error).message}` };
+    return { ok: false, erro: `Não consegui falar com o ${NOME_PROVEDOR[qual]}: ${(error as Error).message}` };
   }
+}
+
+async function viaBrevo(email: Email, para: string[], de: string): Promise<Resultado> {
+  const { nome, email: deEmail } = separarRemetente(de);
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": process.env.BREVO_API_KEY!.trim(),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: nome, email: deEmail },
+      to: para.map((e) => ({ email: e })),
+      subject: email.assunto,
+      htmlContent: email.html,
+      textContent: email.texto,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.ok) return { ok: true };
+
+  const corpo = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
+  const motivo = corpo?.message ?? `HTTP ${res.status}`;
+  if (/ip/i.test(motivo) && /unrecogni[sz]ed|authori[sz]ed/i.test(motivo)) {
+    return {
+      ok: false,
+      erro:
+        "O Brevo bloqueou o envio porque não reconhece o endereço da Railway. No Brevo: menu do seu perfil → " +
+        "Segurança → IPs autorizados → desative o bloqueio de IPs desconhecidos.",
+    };
+  }
+  if (/sender/i.test(motivo)) {
+    return {
+      ok: false,
+      erro: `O Brevo recusou o remetente (${motivo}). Confirme o e-mail do EMAIL_REMETENTE em Brevo → Remetentes (Senders).`,
+    };
+  }
+  if (res.status === 401) {
+    return { ok: false, erro: `O Brevo recusou a chave (${motivo}). Confira a BREVO_API_KEY.` };
+  }
+  return { ok: false, erro: `O Brevo recusou o envio: ${motivo}` };
+}
+
+async function viaResend(email: Email, para: string[], de: string): Promise<Resultado> {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY!.trim()}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: de, to: para, subject: email.assunto, html: email.html, text: email.texto }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.ok) return { ok: true };
+
+  const corpo = (await res.json().catch(() => null)) as { message?: string } | null;
+  const motivo = corpo?.message ?? `HTTP ${res.status}`;
+  if (res.status === 401 || res.status === 403) {
+    return {
+      ok: false,
+      erro: `A Resend recusou o envio (${motivo}). Confira a RESEND_API_KEY e se o domínio do remetente está verificado.`,
+    };
+  }
+  return { ok: false, erro: `A Resend recusou o envio: ${motivo}` };
 }
 
 /** Escapa texto que vai dentro do HTML — nome de lead e título de atividade vêm de fora. */

@@ -40,7 +40,7 @@ export function iniciarRotinasDoServidor() {
     setInterval(() => void conferirAvisos(), INTERVALO_AVISOS_MS).unref();
     setTimeout(() => void conferirAvisos(), 30_000).unref();
   } else {
-    console.log("Avisos por e-mail desligados: defina RESEND_API_KEY e EMAIL_REMETENTE para ligar.");
+    console.log("Avisos por e-mail desligados: defina BREVO_API_KEY (ou RESEND_API_KEY) e EMAIL_REMETENTE para ligar.");
   }
 
   if (estaHospedado()) {

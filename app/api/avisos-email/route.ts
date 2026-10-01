@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/auth/usuario";
-import { emailConfigurado, remetente } from "@/lib/email";
+import { NOME_PROVEDOR, emailConfigurado, provedor, remetente } from "@/lib/email";
 import { enviarEmailDeTeste, horaDoResumo, minutosAntes } from "@/lib/avisos";
 
 export const runtime = "nodejs";
@@ -12,6 +12,7 @@ export async function GET() {
 
   return NextResponse.json({
     configurado: emailConfigurado(),
+    servico: provedor() ? NOME_PROVEDOR[provedor()!] : null,
     remetente: remetente(),
     minutosAntes: minutosAntes(),
     horaDoResumo: horaDoResumo(),

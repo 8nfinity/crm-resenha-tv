@@ -75,6 +75,8 @@ export function PreferenciaAvisos() {
 
 type Situacao = {
   configurado: boolean;
+  /** "Brevo" ou "Resend" — o serviço que está enviando. */
+  servico: string | null;
   remetente: string | null;
   minutosAntes: number;
   horaDoResumo: number;
@@ -111,24 +113,25 @@ export function AvisosEmailAdmin() {
         <p className="flex items-center gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
           <Mail className="size-4 shrink-0 text-[var(--color-accent)]" />
           <span>
-            Ligado. Remetente: <strong>{s.remetente}</strong>. Lembrete {s.minutosAntes} min antes de cada
+            Ligado{s.servico ? ` (via ${s.servico})` : ""}. Remetente: <strong>{s.remetente}</strong>. Lembrete {s.minutosAntes} min antes de cada
             atividade e resumo do dia às {s.horaDoResumo}h.
           </span>
         </p>
       ) : (
         <div className="rounded-2xl bg-[color-mix(in_srgb,var(--color-warm)_12%,transparent)] px-3 py-2 text-xs leading-relaxed">
           <p className="font-semibold">Ainda não configurado.</p>
+          <p className="mt-1">Sem domínio próprio, use o Brevo (grátis, 300 e-mails por dia):</p>
           <ol className="mt-1 list-decimal pl-4">
-            <li>Crie uma conta grátis em resend.com e gere uma chave de API (API Keys).</li>
+            <li>Crie uma conta em brevo.com.</li>
+            <li>Em Remetentes (Senders), adicione o seu e-mail (ex.: seu Gmail) e confirme pelo link que chega nele.</li>
+            <li>Em SMTP &amp; API → Chaves de API, gere uma chave (começa com <code>xkeysib-</code>).</li>
+            <li>Em Segurança → IPs autorizados, desative o bloqueio de IPs desconhecidos (a Railway muda de IP).</li>
             <li>
-              Na Railway, no serviço do CRM, adicione as variáveis <code>RESEND_API_KEY</code> (a chave) e{" "}
-              <code>EMAIL_REMETENTE</code> — por exemplo <code>CRM Biomech &lt;avisos@seudominio.com.br&gt;</code>.
-            </li>
-            <li>
-              Para enviar a qualquer pessoa, verifique o seu domínio na Resend (Domains). Sem isso, use{" "}
-              <code>onboarding@resend.dev</code>, que só entrega no e-mail da sua conta da Resend.
+              Na Railway, no serviço do CRM, adicione <code>BREVO_API_KEY</code> (a chave) e{" "}
+              <code>EMAIL_REMETENTE</code> — por exemplo <code>CRM Biomech &lt;seuemail@gmail.com&gt;</code>.
             </li>
           </ol>
+          <p className="mt-1">Com domínio próprio, também dá para usar a Resend (<code>RESEND_API_KEY</code>).</p>
         </div>
       )}
 

@@ -237,7 +237,9 @@ lead, na aba **Notas**, junto das anotações, com data e hora.
 
 ## Avisos de atividades por e-mail
 
-Com `RESEND_API_KEY` e `EMAIL_REMETENTE` definidas (veja `.env.example`):
+Com `BREVO_API_KEY` (sem domínio próprio: o remetente pode ser seu Gmail) ou
+`RESEND_API_KEY` (com domínio próprio), mais `EMAIL_REMETENTE` (veja
+`.env.example`). Cada conta do CRM recebe no próprio e-mail de login:
 
 - **Lembrete** `AVISO_MINUTOS_ANTES` minutos antes de cada atividade marcada
   (padrão 30). Vai para quem marcou a atividade (sem autor, para os
