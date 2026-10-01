@@ -26,6 +26,13 @@ export type EvolutionChat = {
 export type EvolutionMessageKey = {
   id?: string | null;
   remoteJid?: string | null;
+  /**
+   * O outro identificador da mesma pessoa: quando remoteJid é "@lid", aqui
+   * vem o telefone ("@s.whatsapp.net"), e vice-versa (Baileys 7+).
+   */
+  remoteJidAlt?: string | null;
+  /** Nome antigo do mesmo dado em versões anteriores da Evolution. */
+  senderPn?: string | null;
   fromMe?: boolean | null;
 };
 

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { createDealForContact, moveDealToStage, recalculateScore } from "@/lib/deals";
 import { evolution } from "@/lib/evolution/client";
 import { isPersonJid } from "@/lib/evolution/parse";
-import { upsertContact } from "@/lib/ingest";
+import { acharContato, upsertContact } from "@/lib/ingest";
 import { etiquetasDoChat, ignorarContato, voltarAMostrar } from "@/lib/ignorar";
 
 /**
@@ -230,10 +230,8 @@ export async function removerEtiqueta(
   if (!isPersonJid(chatId)) return { acao: "ignorado", motivo: "não é uma conversa pessoal" };
 
   const etiqueta = await buscarEtiqueta(accountId, labelId);
-  const contato = await prisma.contact.findUnique({
-    where: { accountId_waJid: { accountId, waJid: chatId } },
-    select: { id: true },
-  });
+  // A etiqueta pode chegar pelo telefone ou pelo LID da conversa.
+  const contato = await acharContato(accountId, chatId);
   if (!contato) return { acao: "ignorado", motivo: "contato desconhecido" };
 
   if (etiqueta?.ignoreContact) {

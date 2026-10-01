@@ -12,6 +12,8 @@ import { MessageType } from "@/lib/generated/prisma/client";
 type ParsedMessage = {
   waMessageId: string;
   remoteJid: string;
+  /** O outro identificador da pessoa (telefone ↔ LID), quando veio. */
+  alt: string | null;
   fromMe: boolean;
   type: MessageType;
   body: string | null;
@@ -107,10 +109,30 @@ export function parseMessage(raw: EvolutionMessage): ParsedMessage | null {
   return {
     waMessageId,
     remoteJid,
+    alt: jidAlternativo(raw),
     fromMe: raw.key?.fromMe === true,
     type,
     body,
     timestamp: parseTimestamp(raw.messageTimestamp),
+  };
+}
+
+/** O identificador alternativo da conversa (telefone ↔ LID), se a mensagem trouxe. */
+export function jidAlternativo(raw: EvolutionMessage): string | null {
+  const alt = raw.key?.remoteJidAlt ?? raw.key?.senderPn ?? null;
+  return alt && alt !== raw.key?.remoteJid ? alt : null;
+}
+
+/**
+ * Separa as duas identidades de uma pessoa a partir do JID da conversa e do
+ * alternativo: o telefone ("@s.whatsapp.net") e o LID ("@lid"). Qualquer um
+ * dos dois pode faltar.
+ */
+export function identidades(jid: string, alt?: string | null): { pn: string | null; lid: string | null } {
+  const todos = [jid, alt].filter((j): j is string => Boolean(j));
+  return {
+    pn: todos.find((j) => j.endsWith("@s.whatsapp.net")) ?? null,
+    lid: todos.find((j) => j.endsWith("@lid")) ?? null,
   };
 }
 

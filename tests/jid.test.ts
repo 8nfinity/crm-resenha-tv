@@ -61,3 +61,22 @@ test("formata telefone brasileiro de forma legível", () => {
   assert.equal(formatPhone("14155551234"), "+14155551234", "fora do padrão BR");
   assert.equal(formatPhone(null), null);
 });
+
+test("telefone e LID da mesma pessoa: separa os dois, venha qual vier na conversa", async () => {
+  const { identidades, jidAlternativo } = await import("../lib/evolution/parse");
+  assert.deepEqual(identidades("12279412199448@lid", "555199544069@s.whatsapp.net"), {
+    pn: "555199544069@s.whatsapp.net",
+    lid: "12279412199448@lid",
+  });
+  assert.deepEqual(identidades("555199544069@s.whatsapp.net", "12279412199448@lid"), {
+    pn: "555199544069@s.whatsapp.net",
+    lid: "12279412199448@lid",
+  });
+  assert.deepEqual(identidades("12279412199448@lid", null), { pn: null, lid: "12279412199448@lid" });
+  // Formato que a Evolution manda na mensagem (Baileys 7).
+  assert.equal(
+    jidAlternativo({ key: { id: "1", remoteJid: "12279412199448@lid", remoteJidAlt: "555199544069@s.whatsapp.net" } }),
+    "555199544069@s.whatsapp.net",
+  );
+  assert.equal(jidAlternativo({ key: { id: "1", remoteJid: "555199544069@s.whatsapp.net" } }), null);
+});

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { evolution } from "@/lib/evolution/client";
 import { isPersonJid } from "@/lib/evolution/parse";
 import type { EvolutionChat } from "@/lib/evolution/types";
-import { upsertContact } from "@/lib/ingest";
+import { acharContato, upsertContact } from "@/lib/ingest";
 import { avisarMudanca } from "@/lib/eventos";
 
 /**
@@ -91,9 +91,7 @@ export async function ignorarQuemJaTemAEtiqueta(accountId: string, labelId: stri
 
 /** O contato está marcado para ignorar? Usado antes de gravar mensagens. */
 export async function estaIgnorado(accountId: string, waJid: string): Promise<boolean> {
-  const c = await prisma.contact.findUnique({
-    where: { accountId_waJid: { accountId, waJid } },
-    select: { ignoredAt: true },
-  });
+  // Pelo telefone ou pelo LID: a mesma pessoa chega pelos dois.
+  const c = await acharContato(accountId, waJid);
   return Boolean(c?.ignoredAt);
 }

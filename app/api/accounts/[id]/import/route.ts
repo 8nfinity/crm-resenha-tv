@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { evolution } from "@/lib/evolution/client";
 import { contactName } from "@/lib/queries";
-import { isPersonJid, jidToPhone } from "@/lib/evolution/parse";
+import { isPersonJid, jidAlternativo, jidToPhone } from "@/lib/evolution/parse";
 import { createDealForContact, recalculateScore } from "@/lib/deals";
 import { ingestMessages, upsertContact } from "@/lib/ingest";
 import { avisarMudanca } from "@/lib/eventos";
@@ -193,17 +193,17 @@ export async function POST(
     }
 
     try {
-      // O contato e as mensagens não dependem um do outro: viajam juntos.
-      const [contatoInicial, mensagens] = await Promise.all([
-        upsertContact({
-          accountId,
-          waJid,
-          savedName: nomePorJid.get(waJid) ?? null,
-          profilePicUrl: fotoPorJid.get(waJid) ?? null,
-        }),
-        evolution.findMessages(instanceName, waJid, MENSAGENS_POR_CONVERSA),
-      ]);
-      let contato = contatoInicial;
+      // As mensagens vêm primeiro: elas trazem o outro identificador da pessoa
+      // (telefone ↔ LID), que é o que evita criar o mesmo contato duas vezes.
+      const mensagens = await evolution.findMessages(instanceName, waJid, MENSAGENS_POR_CONVERSA);
+      const alt = mensagens.map(jidAlternativo).find(Boolean) ?? null;
+      let contato = await upsertContact({
+        accountId,
+        waJid,
+        alt,
+        savedName: nomePorJid.get(waJid) ?? null,
+        profilePicUrl: fotoPorJid.get(waJid) ?? null,
+      });
       if (contato.ignoredAt) {
         return { waJid, nome: contactName(contato), mensagensNovas: 0, erro: "contato ignorado" };
       }
@@ -213,7 +213,7 @@ export async function POST(
       // As mensagens dele às vezes trazem um nome que a agenda não tem.
       const pushName = mensagens.find((m) => m.key?.fromMe === false)?.pushName;
       if (nomeUtilizavel(pushName)) {
-        contato = await upsertContact({ accountId, waJid, pushName });
+        contato = await upsertContact({ accountId, waJid, alt, pushName });
       }
 
       const deal = await createDealForContact(contato.id);

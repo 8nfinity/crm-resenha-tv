@@ -92,6 +92,10 @@ model Contact {
   id            String    @id @default(cuid())
   accountId     String
   waJid         String // "5511999999999@s.whatsapp.net" ou "6219...@lid"
+  /// O identificador "@lid" da mesma pessoa. O WhatsApp manda a conversa ora
+  /// pelo telefone, ora pelo LID; guardar os dois é o que impede a mesma
+  /// pessoa de virar dois leads. Contato só com LID tem lid = waJid.
+  lid           String?
   phone         String?
   pushName      String? // nome que a pessoa definiu no WhatsApp
   savedName     String? // nome como está salvo na sua agenda
@@ -113,6 +117,7 @@ model Contact {
   /// A unicidade é por conta, não global: o mesmo JID pode existir em duas
   /// contas suas sem conflito.
   @@unique([accountId, waJid])
+  @@unique([accountId, lid])
   @@index([phone])
   @@index([isGroup])
   @@index([accountId])

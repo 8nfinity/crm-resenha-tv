@@ -11,6 +11,7 @@ import { GerenciarUsuarios, MinhaConta } from "@/components/usuarios";
 import { PageHeader } from "@/components/ui";
 import { AvisosEmailAdmin, PreferenciaAvisos } from "@/components/avisos-email";
 import { NotificacoesAparelho } from "@/components/notificacoes";
+import { emailConfigurado } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function ConfiguracoesPage() {
       <div className="scroll-thin flex-1 overflow-y-auto pb-10">
       <PageHeader
         title="Configurações"
-        subtitle={admin ? "Acessos, avisos por e-mail, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta de acesso ao CRM."}
+        subtitle={admin ? "Acessos, notificações, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta de acesso ao CRM."}
       />
       <div className="px-4 sm:px-8">
         <div className="grid max-w-6xl grid-cols-1 gap-5 lg:grid-cols-2">
@@ -71,14 +72,18 @@ export default async function ConfiguracoesPage() {
           )}
 
           {admin && (<>
-          <section className="card p-6">
-            <h2 className="text-base font-semibold">Avisos por e-mail</h2>
-            <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
-              Opcional: os lembretes já chegam como notificação nos aparelhos de quem ativou (em Minha
-              conta). Configure o e-mail só se quiser receber também por lá.
-            </p>
-            <AvisosEmailAdmin />
-          </section>
+          {/* E-mail é opcional (os avisos chegam como notificação no aparelho):
+              a seção só aparece quando o envio está configurado. Como
+              configurar fica no README. */}
+          {emailConfigurado() && (
+            <section className="card p-6">
+              <h2 className="text-base font-semibold">Avisos por e-mail</h2>
+              <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
+                Além das notificações nos aparelhos, os lembretes também saem por e-mail.
+              </p>
+              <AvisosEmailAdmin />
+            </section>
+          )}
 
           <section className="card p-6">
             <h2 className="text-base font-semibold">Conector do Claude</h2>

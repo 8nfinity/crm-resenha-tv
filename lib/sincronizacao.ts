@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
 import { createDealForContact, recalculateScore } from "@/lib/deals";
 import { evolution } from "@/lib/evolution/client";
-import { isPersonJid } from "@/lib/evolution/parse";
+import { isPersonJid, jidAlternativo } from "@/lib/evolution/parse";
 import type { EvolutionChat } from "@/lib/evolution/types";
 import { ingestMessages, upsertContact } from "@/lib/ingest";
+import { mesclarContatos } from "@/lib/mesclar-contatos";
 import { avisarMudanca } from "@/lib/eventos";
 
 /**
@@ -109,7 +110,8 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
       // O nome vem de uma mensagem DELE (a sua traria o seu próprio nome).
       const pushName =
         mensagens.find((m) => m.key?.fromMe === false)?.pushName ?? chat.pushName ?? null;
-      const contato = await upsertContact({ accountId: conta.id, waJid: jid, pushName });
+      const alt = mensagens.map(jidAlternativo).find(Boolean) ?? null;
+      const contato = await upsertContact({ accountId: conta.id, waJid: jid, alt, pushName });
       if (contato.ignoredAt) continue; // número marcado para ignorar
 
       const novas = await ingestMessages(contato.id, mensagens);
@@ -131,7 +133,58 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
   // pular para "agora" e deixar conversas para trás.
   const proximo = chats.length >= MAX_CONVERSAS_POR_VOLTA ? chats[chats.length - 1].quando : inicioDaVolta;
   estado.desde.set(conta.id, proximo);
+
+  // Arruma, aos poucos, contatos que entraram só pelo LID (antes desta
+  // correção, ou de conversas que nunca trouxeram o telefone).
+  await unificarContatosLid(conta).catch((e) => console.warn("Unificação de LID falhou:", (e as Error).message));
   return resultado;
+}
+
+/**
+ * Contatos que só têm o "@lid": pergunta à Evolution o telefone (vem nas
+ * mensagens da conversa) e junta com o contato do telefone — o lead duplicado
+ * some e fica um só, com tudo. Sem telefone conhecido, marca como conferido
+ * (lid preenchido) para não perguntar de novo a cada minuto.
+ */
+export async function unificarContatosLid(
+  conta: { id: string; instanceName: string },
+  limite = 40,
+): Promise<number> {
+  const pendentes = await prisma.contact.findMany({
+    where: { accountId: conta.id, waJid: { endsWith: "@lid" }, lid: null },
+    select: { id: true, waJid: true },
+    take: limite,
+  });
+  let unidos = 0;
+  for (const c of pendentes) {
+    try {
+      const mensagens = await evolution.findMessages(conta.instanceName, c.waJid, 5);
+      const alt = mensagens.map(jidAlternativo).find((j) => j?.endsWith("@s.whatsapp.net"));
+      if (alt) {
+        await upsertContact({ accountId: conta.id, waJid: c.waJid, alt });
+        unidos++;
+        continue;
+      }
+      // Já existe quem tenha esse LID guardado (o contato do telefone): junta.
+      const dono = await prisma.contact.findFirst({
+        where: { accountId: conta.id, lid: c.waJid, NOT: { id: c.id } },
+        select: { id: true },
+      });
+      if (dono) {
+        await mesclarContatos(dono.id, c.id);
+        unidos++;
+      } else {
+        await prisma.contact.update({ where: { id: c.id }, data: { lid: c.waJid } });
+      }
+    } catch (error) {
+      console.warn(`LID ${c.waJid}: `, (error as Error).message);
+    }
+  }
+  if (unidos > 0) {
+    console.log(`Unificação: ${unidos} contato(s) duplicado(s) pelo LID juntado(s)`);
+    avisarMudanca({ dealIds: [], motivo: "mensagem" });
+  }
+  return unidos;
 }
 
 /** Varre todas as contas. Nunca roda duas voltas ao mesmo tempo. */

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { createDealForContact } from "@/lib/deals";
-import { isPersonJid, jidToPhone, parseMessage } from "@/lib/evolution/parse";
+import { identidades, isPersonJid, jidToPhone, parseMessage } from "@/lib/evolution/parse";
+import { mesclarContatos } from "@/lib/mesclar-contatos";
 import type { EvolutionMessage } from "@/lib/evolution/types";
 
 /**
@@ -14,30 +15,139 @@ import type { EvolutionMessage } from "@/lib/evolution/types";
  * (contato, waMessageId) para mensagens. Reimportar não duplica nada.
  */
 
-export async function upsertContact(input: {
-  accountId: string;
-  waJid: string;
+type DadosContato = {
   pushName?: string | null;
   savedName?: string | null;
   profilePicUrl?: string | null;
-}) {
-  const phone = jidToPhone(input.waJid);
+};
 
+/** Só sobrescreve quando há valor novo: um evento sem nome não apaga o que já conhecíamos. */
+function camposNovos(input: DadosContato) {
+  return {
+    ...(input.pushName ? { pushName: input.pushName } : {}),
+    ...(input.savedName ? { savedName: input.savedName } : {}),
+    ...(input.profilePicUrl ? { profilePicUrl: input.profilePicUrl } : {}),
+  };
+}
+
+/** Contato por qualquer um dos identificadores (telefone ou LID). */
+export async function acharContato(accountId: string, jid: string) {
+  const achados = await prisma.contact.findMany({
+    where: { accountId, OR: [{ waJid: jid }, { lid: jid }] },
+  });
+  // O do telefone ganha do que só tem o LID.
+  return achados.find((c) => c.waJid.endsWith("@s.whatsapp.net")) ?? achados[0] ?? null;
+}
+
+/**
+ * Grava (ou acha) o contato de uma conversa.
+ *
+ * O WhatsApp identifica a mesma pessoa de duas formas: pelo telefone
+ * ("55…@s.whatsapp.net") e pelo LID ("…@lid"). A mesma conversa chega ora por
+ * um, ora pelo outro — e as mensagens novas trazem os dois (`alt`). Tratar
+ * cada um como um contato era o que duplicava leads.
+ *
+ * A regra: o contato é o do TELEFONE, com o LID guardado ao lado. Quando só
+ * o LID é conhecido, o contato nasce com ele e é convertido para o telefone
+ * assim que uma mensagem revelar o número. Se os dois já existiam separados,
+ * são juntados (mesclarContatos) — mensagens, notas e atividades vão juntos.
+ */
+export async function upsertContact(
+  input: { accountId: string; waJid: string; alt?: string | null } & DadosContato,
+) {
+  const { accountId } = input;
+  const { pn, lid } = identidades(input.waJid, input.alt);
+  const novos = camposNovos(input);
+
+  if (pn) {
+    let porFone = await prisma.contact.findUnique({ where: { accountId_waJid: { accountId, waJid: pn } } });
+    const porLid = lid
+      ? await prisma.contact.findFirst({
+          where: { accountId, OR: [{ waJid: lid }, { lid }], ...(porFone ? { NOT: { id: porFone.id } } : {}) },
+        })
+      : null;
+
+    if (!porFone && porLid) {
+      // Só existia pelo LID: vira o contato do telefone (mesmo registro, nada se perde).
+      porFone = await prisma.contact.update({
+        where: { id: porLid.id },
+        data: { waJid: pn, phone: jidToPhone(pn), lid },
+      });
+    } else if (porFone && porLid) {
+      await mesclarContatos(porFone.id, porLid.id);
+    }
+
+    if (porFone) {
+      return prisma.contact.update({
+        where: { id: porFone.id },
+        data: { ...novos, ...(lid && porFone.lid !== lid ? { lid } : {}) },
+      });
+    }
+
+    try {
+      return await prisma.contact.create({
+        data: {
+          accountId,
+          waJid: pn,
+          phone: jidToPhone(pn),
+          lid,
+          pushName: input.pushName ?? null,
+          savedName: input.savedName ?? null,
+          profilePicUrl: input.profilePicUrl ?? null,
+          isGroup: false,
+        },
+      });
+    } catch (error) {
+      // Outra requisição criou no mesmo instante (webhook + varredura): usa o dela.
+      if ((error as { code?: string }).code !== "P2002") throw error;
+      const existente = await prisma.contact.findUnique({ where: { accountId_waJid: { accountId, waJid: pn } } });
+      if (!existente) throw error;
+      return prisma.contact.update({ where: { id: existente.id }, data: novos });
+    }
+  }
+
+  if (lid) {
+    // Só o LID: acha pelo LID guardado (o contato do telefone) ou pela conversa
+    // antiga. Se os dois existem separados, junta no do telefone.
+    const achados = await prisma.contact.findMany({ where: { accountId, OR: [{ waJid: lid }, { lid }] } });
+    const existente = achados.find((c) => c.waJid.endsWith("@s.whatsapp.net")) ?? achados[0] ?? null;
+    for (const outro of achados) {
+      if (existente && outro.id !== existente.id) await mesclarContatos(existente.id, outro.id);
+    }
+    if (existente) {
+      return prisma.contact.update({
+        where: { id: existente.id },
+        data: { ...novos, ...(existente.lid ? {} : { lid }) },
+      });
+    }
+    try {
+      return await prisma.contact.create({
+        data: {
+          accountId,
+          waJid: lid,
+          lid,
+          pushName: input.pushName ?? null,
+          savedName: input.savedName ?? null,
+          profilePicUrl: input.profilePicUrl ?? null,
+          isGroup: false,
+        },
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "P2002") throw error;
+      const existente2 = await acharContato(accountId, lid);
+      if (!existente2) throw error;
+      return prisma.contact.update({ where: { id: existente2.id }, data: novos });
+    }
+  }
+
+  // Outros formatos (grupo etc.): pelo identificador como veio.
   return prisma.contact.upsert({
-    where: {
-      accountId_waJid: { accountId: input.accountId, waJid: input.waJid },
-    },
-    // Só sobrescreve quando há valor novo: um webhook sem pushName não pode
-    // apagar o nome que já conhecíamos.
-    update: {
-      ...(input.pushName ? { pushName: input.pushName } : {}),
-      ...(input.savedName ? { savedName: input.savedName } : {}),
-      ...(input.profilePicUrl ? { profilePicUrl: input.profilePicUrl } : {}),
-    },
+    where: { accountId_waJid: { accountId, waJid: input.waJid } },
+    update: novos,
     create: {
-      accountId: input.accountId,
+      accountId,
       waJid: input.waJid,
-      phone,
+      phone: jidToPhone(input.waJid),
       pushName: input.pushName ?? null,
       savedName: input.savedName ?? null,
       profilePicUrl: input.profilePicUrl ?? null,
@@ -99,6 +209,7 @@ export async function ingestLiveMessage(
   const contact = await upsertContact({
     accountId,
     waJid: parsed.remoteJid,
+    alt: parsed.alt,
     // O pushName de uma mensagem SUA é o seu próprio nome, não o do contato.
     pushName: parsed.fromMe ? null : (raw.pushName ?? null),
   });
@@ -111,5 +222,20 @@ export async function ingestLiveMessage(
   if (inserted === 0) return null; // já tínhamos essa mensagem
 
   const deal = await createDealForContact(contact.id);
+
+  // O funil é ordenado pela última mensagem do lead: atualiza já, para o card
+  // subir na hora (o recálculo do score vem depois e leva alguns segundos).
+  // Só avança — uma mensagem antiga reentregue não puxa a data para trás.
+  const quando = parsed.timestamp;
+  await prisma.deal.updateMany({
+    where: { id: deal.id, OR: [{ lastInteractionAt: null }, { lastInteractionAt: { lt: quando } }] },
+    data: { lastInteractionAt: quando },
+  });
+  if (!parsed.fromMe) {
+    await prisma.deal.updateMany({
+      where: { id: deal.id, OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: quando } }] },
+      data: { lastInboundAt: quando },
+    });
+  }
   return deal.id;
 }

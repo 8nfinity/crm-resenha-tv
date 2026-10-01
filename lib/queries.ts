@@ -69,8 +69,10 @@ export async function getStages(): Promise<StageColumn[]> {
 }
 
 /**
- * Todos os cards ativos do funil, ordenados por score dentro de cada coluna —
- * o lead mais quente sempre no topo, que é a razão de existir do score.
+ * Todos os cards ativos do funil, na ordem do WhatsApp: quem mandou mensagem
+ * por último fica no topo da coluna. Lead que nunca escreveu (só você falou
+ * com ele) vai para baixo, pela última conversa. O score continua no card,
+ * mas não decide a posição.
  */
 export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
   // Cada ida ao banco custa ~200ms de rede (ele fica em outra região). O que
@@ -88,7 +90,11 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
   const [deals, camposLista, previews, openCounts, contas] = await Promise.all([
     prisma.deal.findMany({
       where: { archivedAt: null },
-      orderBy: [{ score: "desc" }, { lastInteractionAt: "desc" }],
+      orderBy: [
+        { lastInboundAt: { sort: "desc", nulls: "last" } },
+        { lastInteractionAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
       // JOIN de verdade. No modo padrao o Prisma buscaria deals e depois
       // contatos — duas viagens de 200ms para montar um card.
       relationLoadStrategy: "join",
