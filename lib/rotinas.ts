@@ -22,10 +22,46 @@ export function iniciarRotinasDoServidor() {
   iniciado = true;
 
   agendarRecalculoDiario();
+  void criarAdministradorInicial();
 
   if (estaHospedado()) {
     // Espera o servidor terminar de subir antes de falar com a Evolution.
     setTimeout(() => void apontarWebhooks(), 15_000).unref();
+  }
+}
+
+/**
+ * Primeiro administrador a partir das variáveis ADMIN_EMAIL, ADMIN_NOME e
+ * ADMIN_SENHA — o caminho para quem só tem o painel da Railway, sem terminal.
+ *
+ * Só age com o banco SEM nenhum usuário. Depois que existe alguém, as
+ * variáveis são ignoradas: deixá-las lá não permite tomar conta do CRM nem
+ * resetar a senha de ninguém. Ainda assim, apague-as depois do primeiro login.
+ */
+async function criarAdministradorInicial() {
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const senha = process.env.ADMIN_SENHA;
+  if (!email || !senha) return;
+
+  try {
+    if ((await prisma.user.count()) > 0) return;
+    const { gerarHash, senhaFraca } = await import("@/lib/auth/senha");
+    const fraca = senhaFraca(senha);
+    if (fraca) {
+      console.warn(`ADMIN_SENHA recusada: ${fraca}`);
+      return;
+    }
+    await prisma.user.create({
+      data: {
+        email,
+        name: process.env.ADMIN_NOME?.trim() || "Administrador",
+        role: "ADMIN",
+        passwordHash: await gerarHash(senha),
+      },
+    });
+    console.log(`Administrador inicial criado: ${email}. Apague ADMIN_SENHA das variáveis.`);
+  } catch (error) {
+    console.warn("Não deu para criar o administrador inicial:", (error as Error).message);
   }
 }
 

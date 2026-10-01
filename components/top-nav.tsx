@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
+import type { Usuario } from "@/lib/auth/usuario";
 import { cn } from "@/lib/utils";
 import { AoVivo } from "@/components/ao-vivo";
 
@@ -18,9 +20,13 @@ const NAV = [
   { href: "/configuracoes", label: "Configurações" },
 ];
 
-export function TopNav() {
+export function TopNav({ usuario }: { usuario: Usuario | null }) {
   const pathname = usePathname();
   const ativo = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  // A tela de login é só o formulário; o "Ao vivo" também não roda ali,
+  // porque sem sessão o canal de avisos recusaria a conexão.
+  if (pathname === "/login" || !usuario) return null;
 
   return (
     <header className="flex shrink-0 items-center gap-4 px-4 pt-4 sm:px-8 sm:pt-6">
@@ -60,13 +66,77 @@ export function TopNav() {
 
       <AoVivo />
 
-      <Link
-        href="/configuracoes"
-        className="icon-btn hidden sm:inline-grid"
-        aria-label="Configurações"
-      >
-        <Settings className="size-4" />
-      </Link>
+      <MenuUsuario usuario={usuario} />
     </header>
+  );
+}
+
+/** Círculo com as iniciais; abre o menu com conta e sair. */
+function MenuUsuario({ usuario }: { usuario: Usuario }) {
+  const [aberto, setAberto] = useState(false);
+  const [saindo, setSaindo] = useState(false);
+  const caixa = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
+    };
+    document.addEventListener("mousedown", fora);
+    return () => document.removeEventListener("mousedown", fora);
+  }, [aberto]);
+
+  async function sair() {
+    setSaindo(true);
+    await fetch("/api/auth/sair", { method: "POST" }).catch(() => null);
+    window.location.assign("/login");
+  }
+
+  const iniciais = usuario.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <div className="relative shrink-0" ref={caixa}>
+      <button
+        onClick={() => setAberto((a) => !a)}
+        aria-label={`Conta de ${usuario.name}`}
+        className="grid size-10 place-items-center rounded-full bg-[var(--color-surface-2)] text-sm font-bold ring-1 ring-[var(--color-border)] transition-colors hover:ring-[var(--color-accent)]"
+      >
+        {iniciais || "?"}
+      </button>
+
+      {aberto && (
+        <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-2xl">
+          <div className="px-3 py-2">
+            <p className="truncate text-sm font-semibold">{usuario.name}</p>
+            <p className="truncate text-xs text-[var(--color-muted)]">{usuario.email}</p>
+            <span className="mt-1.5 inline-block rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-accent)]">
+              {usuario.role === "ADMIN" ? "Administrador" : "Vendedor"}
+            </span>
+          </div>
+          <div className="my-1 border-t" />
+          <Link
+            href="/configuracoes#conta"
+            onClick={() => setAberto(false)}
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-[var(--color-surface-2)]"
+          >
+            <Settings className="size-4" />
+            Minha conta e configurações
+          </Link>
+          <button
+            onClick={() => void sair()}
+            disabled={saindo}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-[var(--color-hot)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+          >
+            <LogOut className="size-4" />
+            {saindo ? "Saindo…" : "Sair"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

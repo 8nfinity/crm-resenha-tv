@@ -1,22 +1,64 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ipInCidr, secretsMatch } from "@/lib/ip";
+import { COOKIE_SESSAO } from "@/lib/auth/sessao";
+import { usuarioDoToken } from "@/lib/auth/usuario";
 
 /**
- * Proteção do endpoint MCP (convenção "proxy" do Next 16, ex-middleware).
+ * Porteiro de todas as requisições (convenção "proxy" do Next 16, ex-middleware).
  *
- * O conector do claude.ai não usa OAuth aqui, então a porta é trancada por duas
- * coisas: um segmento secreto na URL e a faixa de IP de saída publicada pela
- * Anthropic (160.79.104.0/21). Para um CRM de um usuário só isso é proporcional;
- * para um produto multi-inquilino, não seria — aí o caminho é OAuth 2.1.
+ * Duas portas diferentes:
  *
- * Toda recusa devolve 404, nunca 401 ou 403. Um 403 confirmaria para quem está
- * varrendo a internet que existe algo naquele caminho e que só falta a chave.
- * O 404 não conta nada.
+ * 1. O endpoint MCP (conector do Claude) tem proteção própria — segmento
+ *    secreto na URL e faixa de IP da Anthropic — e NÃO passa pelo login.
+ * 2. Todo o resto exige estar logado. Sem sessão válida, página vai para
+ *    /login e rota da API responde 401.
+ *
+ * Ficam abertas só as rotas que têm a própria trava ou precisam estar:
+ * o webhook da Evolution (segredo no header), a verificação de saúde da
+ * hospedagem e o cron (segredo próprio). As rotas também conferem por conta
+ * própria o que é de administrador — o proxy não é a única barreira.
  */
 
 export const config = {
-  matcher: "/api/mcp/:path*",
+  // Tudo, menos arquivos estáticos (JS/CSS do Next, imagens, fontes, logo):
+  // sem isso a própria tela de login viria sem estilo.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|fonts/).*)"],
 };
+
+/** Abertas sem login: cada uma tem a própria trava (ou é a tela de entrar). */
+const ROTAS_ABERTAS = ["/login", "/api/auth/login", "/api/webhooks/evolution", "/api/saude", "/api/cron/recalc"];
+
+function aberta(caminho: string): boolean {
+  return ROTAS_ABERTAS.some((r) => caminho === r || caminho.startsWith(`${r}/`));
+}
+
+export async function proxy(request: NextRequest) {
+  const caminho = request.nextUrl.pathname;
+
+  if (caminho.startsWith("/api/mcp")) return protegerMcp(request);
+
+  if (aberta(caminho)) {
+    // Quem já está logado e abre /login vai direto para o CRM.
+    if (caminho === "/login" && (await usuarioDoToken(request.cookies.get(COOKIE_SESSAO)?.value))) {
+      return NextResponse.redirect(new URL("/hoje", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  const usuario = await usuarioDoToken(request.cookies.get(COOKIE_SESSAO)?.value);
+  if (usuario) return NextResponse.next();
+
+  if (caminho.startsWith("/api/")) {
+    return NextResponse.json({ error: "Sessão expirada. Faça login de novo." }, { status: 401 });
+  }
+
+  const destino = new URL("/login", request.url);
+  // Volta para onde a pessoa queria ir depois de entrar.
+  if (caminho !== "/" && caminho !== "/hoje") destino.searchParams.set("de", caminho + request.nextUrl.search);
+  return NextResponse.redirect(destino);
+}
+
+// ─── Endpoint MCP ────────────────────────────────────────────────────────────
 
 /**
  * IP de origem da requisição.
@@ -37,7 +79,15 @@ function clientIp(request: NextRequest): string | null {
   return null;
 }
 
-export function proxy(request: NextRequest) {
+/**
+ * O conector do claude.ai não usa OAuth aqui, então a porta é trancada por duas
+ * coisas: um segmento secreto na URL e a faixa de IP de saída publicada pela
+ * Anthropic (160.79.104.0/21).
+ *
+ * Toda recusa devolve 404, nunca 401 ou 403. Um 403 confirmaria para quem está
+ * varrendo a internet que existe algo naquele caminho e que só falta a chave.
+ */
+function protegerMcp(request: NextRequest) {
   const notFound = () => new NextResponse(null, { status: 404 });
 
   const expectedSecret = process.env.MCP_SECRET_PATH;
@@ -53,7 +103,7 @@ export function proxy(request: NextRequest) {
   }
 
   // Escape hatch para desenvolvimento: o seu IP nunca estará na faixa da
-  // Anthropic. Precisa ficar "false" na Vercel.
+  // Anthropic. Precisa ficar "false" na hospedagem.
   if (process.env.MCP_DISABLE_IP_CHECK === "true") {
     return NextResponse.next();
   }

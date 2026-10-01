@@ -5,6 +5,8 @@ import { LabelMapping } from "@/components/label-mapping";
 import { CustomFieldEditor } from "@/components/custom-field-editor";
 import { prisma } from "@/lib/db";
 import { urlDoWebhook, urlPublica } from "@/lib/url-publica";
+import { usuarioAtual } from "@/lib/auth/usuario";
+import { GerenciarUsuarios, MinhaConta } from "@/components/usuarios";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +25,12 @@ export default async function ConfiguracoesPage() {
     select: { id: true, label: true, status: true },
   });
 
-  const secret = process.env.MCP_SECRET_PATH;
+  const usuario = await usuarioAtual();
+  const admin = usuario?.role === "ADMIN";
+
+  // O endereço do conector carrega o segredo que dá acesso a todos os leads:
+  // só o administrador vê. Vendedor não recebe nem o valor na página.
+  const secret = admin ? process.env.MCP_SECRET_PATH : undefined;
   const mcpUrl = secret ? `${base}/api/mcp/${secret}` : null;
   const ipCheckOff = process.env.MCP_DISABLE_IP_CHECK === "true";
   const emProducao = !new URL(base).hostname.startsWith("localhost");
@@ -33,10 +40,32 @@ export default async function ConfiguracoesPage() {
       <div className="scroll-thin flex-1 overflow-y-auto pb-10">
       <PageHeader
         title="Configurações"
-        subtitle="Conector do Claude, webhook, etiquetas, campos e estágios."
+        subtitle={admin ? "Acessos, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta, etiquetas, campos e estágios."}
       />
       <div className="px-4 sm:px-8">
         <div className="grid max-w-6xl grid-cols-1 gap-5 lg:grid-cols-2">
+          {usuario && (
+            <section id="conta" className="card scroll-mt-4 p-6">
+              <h2 className="text-base font-semibold">Minha conta</h2>
+              <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
+                Trocar a senha desconecta os outros aparelhos onde você estava logado.
+              </p>
+              <MinhaConta nome={usuario.name} email={usuario.email} />
+            </section>
+          )}
+
+          {admin && usuario && (
+            <section className="card p-6">
+              <h2 className="text-base font-semibold">Usuários</h2>
+              <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
+                Cada pessoa do time com o próprio acesso. Administradores gerenciam os
+                acessos e veem as seções técnicas; vendedores usam o CRM normalmente.
+              </p>
+              <GerenciarUsuarios meuId={usuario.id} />
+            </section>
+          )}
+
+          {admin && (<>
           <section className="card p-6">
             <h2 className="text-base font-semibold">Conector do Claude</h2>
             <p className="mt-1 text-xs text-[var(--color-muted)]">
@@ -76,6 +105,7 @@ export default async function ConfiguracoesPage() {
             </p>
             <CopyField value={webhookUrl} className="mt-3" />
           </section>
+          </>)}
 
           <section className="card p-6">
             <h2 className="text-base font-semibold">
