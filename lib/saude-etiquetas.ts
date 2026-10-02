@@ -16,7 +16,7 @@
  * depois de cada reconexão, e mostra o resultado na tela de etiquetas.
  */
 
-export type EstadoChave = "ok" | "chave_perdida" | "sem_chave" | "fora_do_ar" | "erro";
+export type EstadoChave = "ok" | "chave_perdida" | "sem_chave" | "desconectado" | "fora_do_ar" | "erro";
 
 export const MINUTO = 60_000;
 /** Conferência de rotina: a chave quase nunca muda sozinha. */
@@ -51,7 +51,7 @@ export function precisaVerificar(
     return true;
   }
 
-  const passageiro = conta.labelKeyStatus === "sem_chave" || conta.labelKeyStatus === "fora_do_ar" || conta.labelKeyStatus === "erro";
+  const passageiro = ["sem_chave", "desconectado", "fora_do_ar", "erro"].includes(conta.labelKeyStatus ?? "");
   if (passageiro && desde >= NOVA_TENTATIVA_MS) return true;
 
   return desde >= ROTINA_MS;
@@ -85,6 +85,18 @@ export function classificarFalha(mensagem: string, status: number | null, corpo:
         "depois de conectar; o CRM confere de novo sozinho. Se continuar por mais de uma hora, conecte o número de novo.",
     };
   }
+  // A Evolution respondeu, mas o WhatsApp dentro dela estava com a conexão
+  // fechada: ela reiniciando (redeploy, volume novo), reconectando, ou o
+  // número desconectado no celular. Não diz nada sobre a chave.
+  if (/connection (closed|terminated|lost)/i.test(detalhe)) {
+    return {
+      estado: "desconectado",
+      texto:
+        "O WhatsApp estava desconectado dentro da Evolution nesse momento — acontece enquanto ela reinicia " +
+        "(depois de um deploy ou de criar o volume) ou reconecta. O CRM confere de novo sozinho em alguns " +
+        "minutos. Se continuar, vá em Conexão, use “Desconectar → Só desconectar” e conecte o número de novo.",
+    };
+  }
   // Sem resposta da Evolution (ou a página de erro da hospedagem no lugar dela).
   const respostaDaApi = corpo.trim().startsWith("{") || corpo.trim().startsWith("[");
   if (status !== null && status >= 500 && !respostaDaApi) {
@@ -106,6 +118,8 @@ export function descreverEvento(kind: string): string {
       return "Chave das etiquetas perdida — a Evolution voltou sem os arquivos da sessão";
     case "sem_chave":
       return "O WhatsApp ainda não enviou a chave das etiquetas";
+    case "desconectado":
+      return "O WhatsApp estava desconectado dentro da Evolution";
     case "fora_do_ar":
       return "A Evolution não respondeu";
     default:

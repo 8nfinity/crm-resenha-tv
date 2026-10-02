@@ -111,6 +111,7 @@ test("conferência da chave das etiquetas: quando perguntar de novo", async () =
   // Estados passageiros tentam de novo logo; chave perdida só volta com novo pareamento.
   assert.equal(precisaVerificar(conta("sem_chave", 11), null, agora), true);
   assert.equal(precisaVerificar(conta("fora_do_ar", 11), null, agora), true);
+  assert.equal(precisaVerificar(conta("desconectado", 11), null, agora), true);
   assert.equal(precisaVerificar(conta("chave_perdida", 11), null, agora), false);
 });
 
@@ -128,6 +129,14 @@ test("leitura forçada: cada resposta da Evolution vira o diagnóstico certo", a
   assert.match(perdida.texto, /\/evolution\/instances/);
 
   assert.equal(classificarFalha("x", 400, corpo("Error: App state key not present!")).estado, "sem_chave");
+  // A Evolution respondeu, mas o WhatsApp dentro dela estava com a conexão fechada.
+  const fechada = classificarFalha(
+    "Evolution API respondeu 400 em /label/handleLabel/crm_muq73euq",
+    400,
+    corpo("Error: Connection Closed"),
+  );
+  assert.equal(fechada.estado, "desconectado");
+  assert.doesNotMatch(fechada.texto, /Evolution API respondeu/, "mensagem em português, sem o erro técnico");
   // Sem resposta (ou página de erro da hospedagem no lugar da Evolution).
   assert.equal(classificarFalha("Não consegui alcançar a Evolution", 503, "").estado, "fora_do_ar");
   assert.equal(classificarFalha("erro 502 da hospedagem", 502, "<html>").estado, "fora_do_ar");

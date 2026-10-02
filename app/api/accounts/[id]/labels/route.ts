@@ -43,7 +43,9 @@ export async function GET(
     // desconectar) — o que também confere se a chave delas está lá; depois
     // copia a lista para o CRM.
     const leitura = await verificarChaveDasEtiquetas(id);
-    if (!leitura.ok) erroSync = leitura.erro;
+    // Falha com estado já foi gravada na saúde da conta, que a tela mostra no
+    // quadro próprio — repetir aqui mostrava a mesma mensagem duas vezes.
+    if (!leitura.ok) erroSync = leitura.estado ? null : leitura.erro;
     else await new Promise((r) => setTimeout(r, 4000)); // a Evolution grava em seguida
     try {
       await sincronizarEtiquetas(id);
