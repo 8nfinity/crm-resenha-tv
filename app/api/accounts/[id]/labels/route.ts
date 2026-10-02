@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { EvolutionError } from "@/lib/evolution/client";
 import {
   aplicarEtiquetasMapeadas,
   moverQuemJaTemAEtiqueta,
@@ -52,9 +53,12 @@ export async function GET(
     } catch (error) {
       // Falhar a sincronização não pode esconder o que já está mapeado.
       erroSync ??=
-        error instanceof Error
-          ? error.message
-          : "Não consegui ler as etiquetas do aparelho";
+        error instanceof EvolutionError && error.status >= 500
+          ? "A Evolution não conseguiu listar as etiquetas agora — acontece enquanto ela reinicia ou o número " +
+            "reconecta. As etiquetas já configuradas continuam valendo; tente “Buscar do aparelho” de novo em alguns minutos."
+          : error instanceof Error
+            ? error.message
+            : "Não consegui ler as etiquetas do aparelho";
     }
     // Quem já está com uma etiqueta de estágio e não andou (evento perdido,
     // etiqueta ligada ao estágio depois) anda agora.

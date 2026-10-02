@@ -334,7 +334,9 @@ export const evolution = {
   async findLabels(
     instanceName: string,
   ): Promise<{ labelId: string; name: string; color: string | null }[]> {
-    const data = await request<unknown>(`/label/findLabels/${instanceName}`);
+    // A Evolution responde 500 aqui enquanto o número ainda não carregou na
+    // memória dela (reiniciando, reconectando): tentar de novo resolve.
+    const data = await comRetentativa(() => request<unknown>(`/label/findLabels/${instanceName}`));
     const bruto = Array.isArray(data) ? data : [];
 
     return bruto
