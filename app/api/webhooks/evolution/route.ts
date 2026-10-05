@@ -4,8 +4,10 @@ import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
 import { ingestLiveMessage, upsertContact } from "@/lib/ingest";
 import { isPersonJid } from "@/lib/evolution/parse";
+import { emFila } from "@/lib/fila";
 import {
   aplicarEtiqueta,
+  filaDeEtiquetas,
   registrarEdicaoDeEtiqueta,
   removerEtiqueta,
   sincronizarEtiquetas,
@@ -218,7 +220,12 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
   // aparecer). Tirar uma etiqueta de estágio não move o lead — ver labels.ts.
   let r: ResultadoEtiqueta;
   try {
-    r = tipo === "remove" ? await removerEtiqueta(accountId, chatId, labelId) : await aplicarEtiqueta(accountId, chatId, labelId);
+    // Uma de cada vez, na ordem de chegada: 50 conversas etiquetadas de uma
+    // vez viram 50 avisos simultâneos, e juntos eles estouravam as conexões
+    // com o banco (ver lib/fila.ts).
+    r = await emFila(filaDeEtiquetas(accountId), () =>
+      tipo === "remove" ? removerEtiqueta(accountId, chatId, labelId) : aplicarEtiqueta(accountId, chatId, labelId),
+    );
   } catch (error) {
     // Vai para o painel de conferência e sobe: a rota pede o reenvio.
     anotarEtiquetagem(accountId, {
@@ -262,12 +269,16 @@ async function handleLabelEdit(accountId: string, data: unknown) {
       await sincronizarEtiquetas(accountId);
       continue;
     }
-    await registrarEdicaoDeEtiqueta(accountId, {
-      labelId: String(labelId),
-      name: typeof item.name === "string" ? item.name : null,
-      color: item.color != null ? String(item.color) : null,
-      deleted: item.deleted === true,
-    });
+    // Na mesma fila das etiquetagens: a lista criada entra antes das
+    // conversas colocadas nela logo em seguida.
+    await emFila(filaDeEtiquetas(accountId), () =>
+      registrarEdicaoDeEtiqueta(accountId, {
+        labelId: String(labelId),
+        name: typeof item.name === "string" ? item.name : null,
+        color: item.color != null ? String(item.color) : null,
+        deleted: item.deleted === true,
+      }),
+    );
   }
   avisarMudanca({ dealIds: [], motivo: "etiqueta" });
 }

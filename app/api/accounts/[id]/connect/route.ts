@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { evolution } from "@/lib/evolution/client";
 import { urlDoWebhook } from "@/lib/url-publica";
+import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,12 @@ export async function POST(
     await evolution.createInstance(conta.instanceName);
 
     const qr = await evolution.connect(conta.instanceName);
+    // Linha do tempo: ao parear, o WhatsApp reenvia de uma vez todas as
+    // etiquetas que já estão nas conversas — é por este registro que o CRM
+    // reconhece esse reenvio (ver lib/labels.ts).
+    if (qr.base64 || qr.code || qr.pairingCode) {
+      await registrarEventoDeConexao(conta.id, "qr").catch(() => {});
+    }
 
     const secret = process.env.WEBHOOK_SECRET;
     let webhookConfigurado = false;

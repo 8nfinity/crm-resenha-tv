@@ -108,6 +108,8 @@ export function classificarFalha(mensagem: string, status: number | null, corpo:
 /** Frase de cada linha da linha do tempo da conexão. */
 export function descreverEvento(kind: string): string {
   switch (kind) {
+    case "qr":
+      return "QR Code gerado para conectar o número";
     case "open":
       return "WhatsApp conectou (ou reconectou)";
     case "close":

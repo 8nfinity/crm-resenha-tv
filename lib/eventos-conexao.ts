@@ -34,14 +34,24 @@ export function eventosRecentes(accountId: string, limite = 12) {
   });
 }
 
-/** Última vez que o WhatsApp (re)conectou. */
-export async function ultimaAbertura(accountId: string): Promise<Date | null> {
+/** Última vez que aconteceu um evento deste tipo na conta. */
+async function ultimoDoTipo(accountId: string, kind: string): Promise<Date | null> {
   const e = await prisma.connectionEvent.findFirst({
-    where: { accountId, kind: "open" },
+    where: { accountId, kind },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
   return e?.createdAt ?? null;
+}
+
+/** Última vez que o WhatsApp (re)conectou. */
+export function ultimaAbertura(accountId: string): Promise<Date | null> {
+  return ultimoDoTipo(accountId, "open");
+}
+
+/** Última vez que um QR Code foi gerado para parear o número (pelo CRM). */
+export function ultimoQrCode(accountId: string): Promise<Date | null> {
+  return ultimoDoTipo(accountId, "qr");
 }
 
 export async function limparEventosAntigos() {

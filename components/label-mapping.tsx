@@ -317,6 +317,7 @@ export function LabelMapping({
         const etiquetas = todas.filter((e) => !ehFiltroAutomatico(e.name));
         const filtros = todas.filter((e) => ehFiltroAutomatico(e.name));
         const conectado = conta.status === "open";
+        const semAcao = etiquetas.filter((e) => !e.stageId && !e.ignoreContact && !e.isSeller).length;
 
         return (
           <div key={conta.id} className="rounded-2xl border p-3">
@@ -351,6 +352,16 @@ export function LabelMapping({
                   : "Conecte este número para buscar as etiquetas."}
               </p>
             ) : (
+              <>
+              {semAcao > 0 && (
+                <p className="mb-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-warm)_14%,transparent)] px-3 py-2 text-xs">
+                  {semAcao === 1
+                    ? "1 etiqueta/lista ainda não move ninguém"
+                    : `${semAcao} etiquetas/listas ainda não movem ninguém`}{" "}
+                  (“Não move o lead”). Escolha o estágio de cada uma: na hora, todos os leads que já estão com ela
+                  entram no funil — sem limite — e os próximos que você etiquetar também.
+                </p>
+              )}
               <ul className="flex flex-col gap-2">
                 {etiquetas.map((etiqueta) => (
                   <li key={etiqueta.id} className="flex items-center gap-2">
@@ -407,6 +418,7 @@ export function LabelMapping({
                   </li>
                 ))}
               </ul>
+              </>
             )}
             {filtros.length > 0 && (
               <p className="mt-3 text-[11px] text-[var(--color-muted)]">
