@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   try {
     switch (event) {
       case "messages.upsert":
-        await handleMessages(conta.id, payload.data);
+        await handleMessages({ id: conta.id, instanceName: payload.instance }, payload.data);
         break;
       case "contacts.upsert":
       case "contacts.update":
@@ -147,7 +147,7 @@ function asArray<T>(data: unknown): T[] {
   return [];
 }
 
-async function handleMessages(accountId: string, data: unknown) {
+async function handleMessages(conta: { id: string; instanceName: string }, data: unknown) {
   const messages = asArray<EvolutionMessage>(data);
 
   // Recalcula o score uma vez por deal, mesmo que um lote traga várias
@@ -155,7 +155,7 @@ async function handleMessages(accountId: string, data: unknown) {
   const touched = new Set<string>();
 
   for (const message of messages) {
-    const dealId = await ingestLiveMessage(accountId, message);
+    const dealId = await ingestLiveMessage(conta, message);
     if (dealId) touched.add(dealId);
   }
   if (touched.size === 0) return;

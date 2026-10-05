@@ -42,7 +42,7 @@ async function main() {
     });
 
     // Chega uma mensagem pelo LID trazendo o telefone (como a Evolution manda hoje).
-    await ingestLiveMessage(conta.id, {
+    await ingestLiveMessage(conta, {
       key: { id: `C-${SUF}`, remoteJid: LID, remoteJidAlt: PN, fromMe: false },
       pushName: "Maria Teste",
       message: { conversation: "quero agendar" },

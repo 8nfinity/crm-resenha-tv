@@ -70,7 +70,7 @@ export async function GET(
       evolution.findContacts(conta.instanceName),
       prisma.contact.findMany({
         where: { accountId: conta.id, deals: { some: {} }, messages: { some: {} } },
-        select: { waJid: true },
+        select: { waJid: true, lid: true },
       }),
       prisma.contact.findMany({
         where: { accountId: conta.id, ignoredAt: { not: null } },
@@ -92,8 +92,9 @@ export async function GET(
     // "Já importado" significa ter virado lead nesta conta COM a conversa
     // dentro — não basta existir na agenda, nem ter um card vazio. O segundo
     // caso é o que sobra de uma importação que falhou no meio: sem esta
-    // exigência, ela nunca seria refeita.
-    const jaImportados = new Set(existentes.map((c) => c.waJid));
+    // exigência, ela nunca seria refeita. Vale pelo telefone ou pelo LID: a
+    // conversa listada pelo LID é a do lead que o CRM guardou pelo telefone.
+    const jaImportados = new Set(existentes.flatMap((c) => (c.lid ? [c.waJid, c.lid] : [c.waJid])));
     const { nomePorJid, fotoPorJid } = indexarContatos(contacts);
 
     const itens = chats

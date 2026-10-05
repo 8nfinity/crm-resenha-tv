@@ -66,6 +66,29 @@ export function instanciaPadrao(): string {
  * inclusive a fila das etiquetas, e as etiquetagens seguintes paravam junto.
  */
 const ESPERA_PADRAO_MS = 20_000;
+/** Para consultas no meio de uma fila: melhor seguir sem a resposta que travar as outras. */
+const ESPERA_RAPIDA_MS = 8_000;
+
+/**
+ * A lista de etiquetas como a Evolution devolve. Fica TODA etiqueta com id,
+ * mesmo de nome vazio: a Evolution apaga do nome tudo que não é ASCII, e uma
+ * etiqueta chamada só "🔥" chega sem nome. Descartá-la fazia a sincronização
+ * achar que ela tinha sido apagada no celular — e o CRM apagava a etiqueta
+ * junto com o estágio ligado a ela.
+ */
+export function lerEtiquetas(data: unknown): { labelId: string; name: string; color: string | null }[] {
+  const bruto = Array.isArray(data) ? data : [];
+  return bruto
+    .map((item) => {
+      const l = (item ?? {}) as Record<string, unknown>;
+      return {
+        labelId: String(l.labelId ?? l.id ?? ""),
+        name: String(l.name ?? "").trim(),
+        color: l.color != null ? String(l.color) : null,
+      };
+    })
+    .filter((l) => l.labelId);
+}
 
 async function request<T>(
   path: string,
@@ -319,14 +342,17 @@ export const evolution = {
 
   /**
    * O telefone de um LID, pelo cache de números da Evolution — consulta leve
-   * (uma linha por contato), sem varrer mensagens. A Evolution guarda o par
-   * quando a pessoa manda mensagem pelo telefone com o LID ao lado. Devolve
-   * null quando ela não sabe.
+   * (uma linha por contato), sem varrer mensagens. Só ajuda num caso: a
+   * conversa que chega pelo TELEFONE com o LID ao lado (a Evolution guarda o
+   * par). Na que chega pelo LID ela guarda só o telefone, sem o LID — por isso
+   * as mensagens são consultadas antes (ver descobrirPessoa). Devolve null
+   * quando ela não sabe.
    */
   async telefoneDoLid(instanceName: string, lid: string): Promise<string | null> {
     const data = await request<unknown>(`/chat/whatsappNumbers/${instanceName}`, {
       method: "POST",
       body: { numbers: [lid] },
+      esperaMs: ESPERA_RAPIDA_MS,
     });
     const lista = Array.isArray(data) ? (data as { jid?: unknown }[]) : [];
     const jid = lista.map((r) => (typeof r?.jid === "string" ? r.jid : "")).find((j) => j.endsWith("@s.whatsapp.net"));
@@ -338,27 +364,30 @@ export const evolution = {
    *
    * A Evolution 2.x ignora `limit` e pagina com `offset` (tamanho da página) e
    * `page`. Pedimos páginas de até 100 e paramos ao atingir o limite.
+   *
+   * A busca é só pelo `remoteJid` gravado — o identificador por onde a
+   * conversa chegou. A Evolution 2.3 NÃO filtra por `remoteJidAlt` (o filtro
+   * dela só conhece id, fromMe, remoteJid e participants): pedir o outro lado
+   * devolvia a conversa inteira sem filtro nenhum aplicado a ele.
    */
   async findMessages(
     instanceName: string,
     remoteJid: string,
     limit = 200,
     opcoes: {
-      /**
-       * Procura também no outro campo da chave. A Evolution grava a mensagem
-       * com o identificador por onde ela chegou em `remoteJid` e o outro em
-       * `remoteJidAlt`: a conversa de quem escreve pelo telefone tem o LID só
-       * no `remoteJidAlt`, e procurar o LID só em `remoteJid` não achava nada.
-       */
-      qualquerLado?: boolean;
       /** Só mensagens a partir de quando (a Evolution filtra antes de varrer). */
       desde?: Date;
+      /**
+       * Uma tentativa só e pouca espera: para quem está no meio de uma fila
+       * (etiquetas, avisos de mensagem) e não pode ficar segurando as outras.
+       */
+      rapido?: boolean;
     } = {},
   ): Promise<EvolutionMessage[]> {
     const porPagina = Math.min(limit, 100);
     const todas: EvolutionMessage[] = [];
     const where = {
-      key: opcoes.qualquerLado ? { remoteJid, remoteJidAlt: remoteJid } : { remoteJid },
+      key: { remoteJid },
       // A Evolution só aplica o período com as duas pontas.
       ...(opcoes.desde
         ? {
@@ -371,15 +400,18 @@ export const evolution = {
     };
 
     for (let page = 1; todas.length < limit; page++) {
-      const data = await comRetentativa(() =>
-        request<
-          | EvolutionMessage[]
-          | Paginated<EvolutionMessage>
-          | { messages?: Paginated<EvolutionMessage> }
-        >(`/chat/findMessages/${instanceName}`, {
-          method: "POST",
-          body: { where, offset: porPagina, page, limit },
-        }),
+      const data = await comRetentativa(
+        () =>
+          request<
+            | EvolutionMessage[]
+            | Paginated<EvolutionMessage>
+            | { messages?: Paginated<EvolutionMessage> }
+          >(`/chat/findMessages/${instanceName}`, {
+            method: "POST",
+            body: { where, offset: porPagina, page, limit },
+            ...(opcoes.rapido ? { esperaMs: ESPERA_RAPIDA_MS } : {}),
+          }),
+        opcoes.rapido ? 1 : 3,
       );
       const { records, pages } = paginaDe(data);
       todas.push(...records);
@@ -387,6 +419,25 @@ export const evolution = {
     }
 
     return todas.slice(0, limit);
+  },
+
+  /**
+   * Uma mensagem pelo id, como a Evolution GUARDOU — com a chave original.
+   *
+   * O aviso que ela manda ao CRM troca o LID pelo telefone (remoteJid e
+   * remoteJidAlt chegam iguais), mas no banco dela a mensagem fica com o LID
+   * em `remoteJid` e o telefone em `remoteJidAlt`. É daqui que o CRM tira o
+   * LID de quem acabou de escrever.
+   */
+  async mensagemPorId(instanceName: string, id: string): Promise<EvolutionMessage | null> {
+    const data = await request<
+      EvolutionMessage[] | Paginated<EvolutionMessage> | { messages?: Paginated<EvolutionMessage> }
+    >(`/chat/findMessages/${instanceName}`, {
+      method: "POST",
+      body: { where: { key: { id } }, offset: 1, page: 1 },
+      esperaMs: ESPERA_RAPIDA_MS,
+    });
+    return paginaDe(data).records.find((m) => m.key?.id === id) ?? null;
   },
 
   /**
@@ -400,19 +451,7 @@ export const evolution = {
   ): Promise<{ labelId: string; name: string; color: string | null }[]> {
     // A Evolution responde 500 aqui enquanto o número ainda não carregou na
     // memória dela (reiniciando, reconectando): tentar de novo resolve.
-    const data = await comRetentativa(() => request<unknown>(`/label/findLabels/${instanceName}`));
-    const bruto = Array.isArray(data) ? data : [];
-
-    return bruto
-      .map((item) => {
-        const l = item as Record<string, unknown>;
-        return {
-          labelId: String(l.labelId ?? l.id ?? ""),
-          name: String(l.name ?? ""),
-          color: l.color != null ? String(l.color) : null,
-        };
-      })
-      .filter((l) => l.labelId && l.name);
+    return lerEtiquetas(await comRetentativa(() => request<unknown>(`/label/findLabels/${instanceName}`)));
   },
 
   /**

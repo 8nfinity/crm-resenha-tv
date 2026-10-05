@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { outroIdentificadorDaMensagem, variantesDoTelefone } from "../lib/identidade-contato";
+import { avisoEscondeOLid, outroIdentificadorDaMensagem, variantesDoTelefone } from "../lib/identidade-contato";
 import { copiaDecideOEstagio } from "../lib/mesclar-contatos";
 import { emFila } from "../lib/fila";
 
@@ -32,6 +32,19 @@ test("telefone → LID, e nada inventado quando a mensagem não diz", () => {
   // Mensagem de outra conversa não revela nada sobre esta.
   assert.equal(outroIdentificadorDaMensagem({ key: { remoteJid: "999@s.whatsapp.net" } }, LID), null);
   assert.equal(outroIdentificadorDaMensagem({}, LID), null);
+});
+
+test("aviso de mensagem com o LID escondido: é quando o CRM relê a mensagem na Evolution", () => {
+  // Quem escreve pelo LID: a Evolution troca o LID pelo telefone nos dois campos.
+  assert.equal(avisoEscondeOLid({ key: { id: "1", remoteJid: PN, remoteJidAlt: PN, addressingMode: "lid" } }), true);
+  assert.equal(avisoEscondeOLid({ key: { id: "1", remoteJid: PN, remoteJidAlt: PN } }), true, "mesmo sem o addressingMode");
+  assert.equal(avisoEscondeOLid({ key: { id: "1", remoteJid: PN, addressingMode: "lid" } }), true, "mesmo sem o remoteJidAlt");
+  // O aviso já mostra o LID (quem escreve pelo telefone): nada escondido.
+  assert.equal(avisoEscondeOLid({ key: { id: "1", remoteJid: PN, remoteJidAlt: LID, addressingMode: "pn" } }), false);
+  // Conversa pelo telefone sem o outro lado, ou que chegou pelo próprio LID: nada a buscar.
+  assert.equal(avisoEscondeOLid({ key: { id: "1", remoteJid: PN } }), false);
+  assert.equal(avisoEscondeOLid({ key: { id: "1", remoteJid: LID } }), false);
+  assert.equal(avisoEscondeOLid({}), false);
 });
 
 test("o mesmo celular com e sem o 9 da frente", () => {

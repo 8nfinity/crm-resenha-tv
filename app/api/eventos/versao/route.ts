@@ -16,6 +16,9 @@ export const dynamic = "force-dynamic";
  * — é o que acende o aviso "WhatsApp desconectado" no topo da tela — e em
  * quantos as etiquetas pararam (a Evolution perdeu a chave delas): conectado,
  * mas nenhuma etiqueta chega, e isso precisa aparecer em qualquer tela.
+ *
+ * As etiquetas entram no carimbo: sem elas, uma etiqueta criada no celular
+ * cujo aviso instantâneo se perdeu só aparecia na tela recarregando a página.
  */
 export async function GET() {
   const [linha] = await prisma.$queryRaw<
@@ -30,7 +33,10 @@ export async function GET() {
       (SELECT count(*) FROM "Stage"),
       (SELECT max("updatedAt") FROM "PlaybookSection"),
       (SELECT count(*) FROM "PlaybookSection"),
-      (SELECT string_agg("status" || ':' || coalesce("labelKeyStatus", ''), ',' ORDER BY "id") FROM "WhatsAppAccount")
+      (SELECT string_agg("status" || ':' || coalesce("labelKeyStatus", ''), ',' ORDER BY "id") FROM "WhatsAppAccount"),
+      (SELECT count(*) FROM "WhatsAppLabel"),
+      (SELECT max("updatedAt") FROM "WhatsAppLabel"),
+      (SELECT max("createdAt") FROM "LabelEvent")
     ) AS versao,
     (SELECT count(*) FROM "WhatsAppAccount" WHERE "status" = 'open')::int AS conectados,
     (SELECT count(*) FROM "WhatsAppAccount")::int AS contas,

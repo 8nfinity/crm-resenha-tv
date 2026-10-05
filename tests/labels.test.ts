@@ -87,6 +87,31 @@ test("nome com acento: a lista da Evolution (sem acento) não estraga o nome cer
   // Nome provisório ("Etiqueta 12", de antes de o nome chegar) é trocado.
   assert.equal(nomeParaGuardar("Etiqueta 12", "Follow up"), "Follow up");
   assert.equal(nomeParaGuardar(null, "No lidas"), "Não lidas");
+  // Nome só de emoji: a Evolution guarda vazio. Fica o que o CRM já tem.
+  assert.equal(nomeParaGuardar("🔥", ""), "🔥");
+  assert.equal(nomeParaGuardar("Etiqueta 7", ""), "Etiqueta 7");
+  assert.equal(nomeParaGuardar(null, "  "), null, "sem nome nenhum: quem chama usa o provisório");
+});
+
+test("lista de etiquetas da Evolution: etiqueta de nome vazio (só emoji) continua existindo", async () => {
+  const { lerEtiquetas } = await import("../lib/evolution/client");
+  const lidas = lerEtiquetas([
+    { labelId: "5", name: "Qualificado", color: "1" },
+    { labelId: "7", name: "", color: "2" },
+    { id: 9, name: "VIP" },
+    { name: "sem id" },
+    null,
+  ]);
+  assert.deepEqual(
+    lidas.map((l) => [l.labelId, l.name]),
+    [
+      ["5", "Qualificado"],
+      ["7", ""],
+      ["9", "VIP"],
+    ],
+    "sem id não serve; sem nome serve (senão a sincronização apagava a etiqueta)",
+  );
+  assert.deepEqual(lerEtiquetas({ erro: true }), [], "resposta que não é lista");
 });
 
 test("conferência da chave das etiquetas: quando perguntar de novo", async () => {
@@ -158,5 +183,10 @@ test("lista nova com o nome de um estágio já nasce ligada a ele", async () => 
   assert.equal(estagioDeMesmoNome("Negociação", estagios)?.id, "3");
   assert.equal(estagioDeMesmoNome("Negociao", estagios)?.id, "3");
   assert.equal(estagioDeMesmoNome("Follow up", estagios), null, "sem estágio de mesmo nome: não liga");
+  // Pontuação e espaço não importam: "Follow-up" é o estágio "Follow up".
+  const comFollow = [...estagios, { id: "4", name: "Follow up" }];
+  assert.equal(estagioDeMesmoNome("Follow-up", comFollow)?.id, "4");
+  assert.equal(estagioDeMesmoNome("FOLLOWUP", comFollow)?.id, "4");
+  assert.equal(estagioDeMesmoNome("🔥", comFollow), null, "nome só de emoji não casa com nada");
   assert.equal(estagioDeMesmoNome("Não lidas", [{ id: "x", name: "Não lidas" }]), null, "lista automática nunca");
 });

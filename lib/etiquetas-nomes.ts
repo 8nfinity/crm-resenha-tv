@@ -45,10 +45,15 @@ export function nomeComoAEvolutionGuarda(nome: string): string {
  * O evento do celular traz o nome inteiro, com acento; a lista da Evolution
  * traz a versão sem. Se o nome que o CRM já tem vira exatamente `vindo` ao
  * perder os acentos, é a mesma etiqueta: fica o nome certo que já temos.
+ *
+ * Nome só de emoji chega VAZIO na lista da Evolution: fica o que o CRM já
+ * tem, ou null quando ele ainda não tem nenhum (quem chama usa o provisório).
  */
-export function nomeParaGuardar(atual: string | null | undefined, vindo: string): string {
-  if (atual && nomeComoAEvolutionGuarda(atual) === nomeComoAEvolutionGuarda(vindo)) return atual;
-  return corrigirNomeEtiqueta(vindo.trim());
+export function nomeParaGuardar(atual: string | null | undefined, vindo: string): string | null {
+  const limpo = vindo.trim();
+  if (atual && nomeComoAEvolutionGuarda(atual) === nomeComoAEvolutionGuarda(limpo)) return atual;
+  if (!limpo) return atual ?? null;
+  return corrigirNomeEtiqueta(limpo);
 }
 
 /** Nome provisório de etiqueta que chegou antes do próprio nome. */
@@ -58,14 +63,15 @@ export function nomeProvisorio(labelId: string): string {
 
 /**
  * O estágio do funil com o mesmo nome da etiqueta ou lista ("Qualificado" ↔
- * "Qualificado"), sem ligar para maiúsculas, espaços, acentos ou emojis.
+ * "Qualificado"), sem ligar para maiúsculas, espaços, pontuação, acentos ou
+ * emojis — "Follow-up", "follow up" e "FOLLOW UP" são o mesmo nome.
  *
  * A comparação usa o nome como a Evolution guarda, dos DOIS lados: a lista
  * dela tira os acentos ("Negociao"), o evento do celular não ("Negociação") —
  * assim os dois casam com o estágio "Negociação".
  */
 export function estagioDeMesmoNome<T extends { name: string }>(nome: string, estagios: T[]): T | null {
-  const chave = (s: string) => nomeComoAEvolutionGuarda(s).toLowerCase();
+  const chave = (s: string) => nomeComoAEvolutionGuarda(s).toLowerCase().replace(/[^a-z0-9]/g, "");
   const alvo = chave(nome);
   if (!alvo || ehFiltroAutomatico(nome)) return null;
   return estagios.find((e) => chave(e.name) === alvo) ?? null;

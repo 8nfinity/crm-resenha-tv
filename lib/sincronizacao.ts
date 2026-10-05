@@ -7,6 +7,7 @@ import { ingestMessages, upsertContact } from "@/lib/ingest";
 import { mesclarContatos } from "@/lib/mesclar-contatos";
 import { avisarMudanca } from "@/lib/eventos";
 import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
+import { emFila } from "@/lib/fila";
 import { descobrirPessoa, formaConhecidaDoTelefone } from "@/lib/identidade-contato";
 
 /**
@@ -50,11 +51,14 @@ export function chatsComAtividade(chats: EvolutionChat[], desde: number, limite 
     .slice(0, limite);
 }
 
-// Estado na memória do processo: até onde cada conta já foi varrida.
+// Estado na memória do processo: até onde cada conta já foi varrida, e
+// quando cada contato "só LID" foi conferido fora da rotina.
 const global_ = globalThis as unknown as {
   crmVarredura?: { desde: Map<string, number>; rodando: boolean };
+  crmUnificacaoLid?: Map<string, number>;
 };
 const estado = (global_.crmVarredura ??= { desde: new Map(), rodando: false });
+const conferidoEm = (global_.crmUnificacaoLid ??= new Map<string, number>());
 
 /**
  * Ponto de partida de uma conta: a mensagem mais recente que o CRM já tem
@@ -164,6 +168,10 @@ const NOVA_TENTATIVA_LID_MS = 6 * 60 * 60 * 1000;
  * some e fica um só, com tudo. Sem telefone conhecido, marca a tentativa e
  * volta a tentar daqui a algumas horas (antes, desistia para sempre — e o
  * duplicado ficava).
+ *
+ * Só quem é LEAD: a agenda do celular chega inteira pelo LID (milhares de
+ * contatos) e nenhum deles aparece no funil. Perguntar por todos, de novo a
+ * cada 6 h, era carga à toa na Evolution — a mesma que atende as etiquetas.
  */
 export async function unificarContatosLid(
   conta: { id: string; instanceName: string },
@@ -173,6 +181,7 @@ export async function unificarContatosLid(
     where: {
       accountId: conta.id,
       waJid: { endsWith: "@lid" },
+      deals: { some: {} },
       OR: [{ lid: null }, { updatedAt: { lt: new Date(Date.now() - NOVA_TENTATIVA_LID_MS) } }],
     },
     // Os nunca tentados primeiro; depois, os tentados há mais tempo.
@@ -199,8 +208,9 @@ export async function unificarContatosLid(
 export async function unificarContatoLid(
   conta: { id: string; instanceName: string },
   c: { id: string; waJid: string },
+  opcoes: { rapido?: boolean } = {},
 ): Promise<boolean> {
-  const { alt } = await descobrirPessoa(conta.instanceName, c.waJid);
+  const { alt } = await descobrirPessoa(conta.instanceName, c.waJid, opcoes);
   if (alt?.endsWith("@s.whatsapp.net")) {
     // Com o telefone e o LID juntos, upsertContact junta (ou converte) os dois.
     const telefone = await formaConhecidaDoTelefone(conta.id, alt);
@@ -219,6 +229,27 @@ export async function unificarContatoLid(
   // Sem telefone por enquanto: marca a tentativa (a data de atualização).
   await prisma.contact.update({ where: { id: c.id }, data: { lid: c.waJid } });
   return false;
+}
+
+const RECONFERIR_LID_MS = 10 * 60 * 1000;
+
+/**
+ * Confere em segundo plano se um contato "só LID" é a cópia de um lead do
+ * telefone — e junta, se for. Para quem não pode esperar a Evolution (a fila
+ * das etiquetas): a etiqueta move o lead na hora e, se havia uma cópia, a
+ * junção vem segundos depois, levando o estágio novo junto (ver
+ * copiaDecideOEstagio). Cada contato no máximo uma vez a cada 10 min.
+ */
+export function unificarEmSegundoPlano(conta: { id: string; instanceName: string }, c: { id: string; waJid: string }) {
+  if (!c.waJid.endsWith("@lid")) return;
+  const ultima = conferidoEm.get(c.id) ?? 0;
+  if (Date.now() - ultima < RECONFERIR_LID_MS) return;
+  conferidoEm.set(c.id, Date.now());
+  if (conferidoEm.size > 5000) conferidoEm.clear();
+
+  void emFila(`unificar:${conta.id}`, () => unificarContatoLid(conta, c, { rapido: true }), 30_000).catch((error) =>
+    console.warn(`LID ${c.waJid} (em segundo plano):`, (error as Error).message),
+  );
 }
 
 /** Varre todas as contas. Nunca roda duas voltas ao mesmo tempo. */

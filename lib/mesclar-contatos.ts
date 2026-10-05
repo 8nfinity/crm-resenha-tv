@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
+import { avisarMudanca } from "@/lib/eventos";
 
 /**
  * Junta dois contatos que são a mesma pessoa (um pelo telefone, outro pelo
@@ -27,12 +28,15 @@ export function copiaDecideOEstagio(
 export async function mesclarContatos(manterId: string, removerId: string): Promise<void> {
   if (manterId === removerId) return;
 
+  let juntou = false;
   const dealFinal = await prisma.$transaction(async (tx) => {
     const [manter, remover] = await Promise.all([
       tx.contact.findUnique({ where: { id: manterId }, include: { deals: true } }),
       tx.contact.findUnique({ where: { id: removerId }, include: { deals: true } }),
     ]);
+    // Outra requisição já juntou os dois neste meio-tempo.
     if (!manter || !remover) return null;
+    juntou = true;
 
     // Mensagens: passam para o contato que fica. As que já existem nele (a
     // mesma mensagem importada pelos dois caminhos) somem junto com a cópia.
@@ -103,4 +107,7 @@ export async function mesclarContatos(manterId: string, removerId: string): Prom
   });
 
   if (dealFinal) await recalculateScore(dealFinal).catch(() => {});
+  // O card da cópia some das telas abertas na hora — antes ficava até a
+  // próxima recarga, e parecia que o duplicado continuava lá.
+  if (juntou) avisarMudanca({ dealIds: dealFinal ? [dealFinal] : [], motivo: "funil" });
 }

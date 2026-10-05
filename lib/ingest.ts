@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { createDealForContact } from "@/lib/deals";
 import { identidades, isPersonJid, jidToPhone, parseMessage } from "@/lib/evolution/parse";
+import { avisoEscondeOLid, lidEscondidoNoAviso, variantesDoTelefone } from "@/lib/identidade-contato";
 import { mesclarContatos } from "@/lib/mesclar-contatos";
 import type { EvolutionMessage } from "@/lib/evolution/types";
 
@@ -30,13 +31,24 @@ function camposNovos(input: DadosContato) {
   };
 }
 
-/** Contato por qualquer um dos identificadores (telefone ou LID). */
+/** Contato por qualquer um dos identificadores (telefone, com ou sem o 9, ou LID). */
 export async function acharContato(accountId: string, jid: string) {
   const achados = await prisma.contact.findMany({
-    where: { accountId, OR: [{ waJid: jid }, { lid: jid }] },
+    where: { accountId, OR: [{ waJid: { in: variantesDoTelefone(jid) } }, { lid: jid }] },
   });
-  // O do telefone ganha do que só tem o LID.
-  return achados.find((c) => c.waJid.endsWith("@s.whatsapp.net")) ?? achados[0] ?? null;
+  // O do telefone ganha do que só tem o LID; entre as formas do celular, a que veio.
+  return (
+    achados.find((c) => c.waJid === jid && c.waJid.endsWith("@s.whatsapp.net")) ??
+    achados.find((c) => c.waJid.endsWith("@s.whatsapp.net")) ??
+    achados[0] ??
+    null
+  );
+}
+
+/** O contato deste telefone — na forma exata ou na outra (com/sem o 9). */
+async function contatoDoTelefone(accountId: string, pn: string) {
+  const achados = await prisma.contact.findMany({ where: { accountId, waJid: { in: variantesDoTelefone(pn) } } });
+  return achados.find((c) => c.waJid === pn) ?? achados[0] ?? null;
 }
 
 /**
@@ -60,7 +72,8 @@ export async function upsertContact(
   const novos = camposNovos(input);
 
   if (pn) {
-    let porFone = await prisma.contact.findUnique({ where: { accountId_waJid: { accountId, waJid: pn } } });
+    // O mesmo celular com e sem o 9 é o mesmo contato: fica a forma já guardada.
+    let porFone = await contatoDoTelefone(accountId, pn);
     const porLid = lid
       ? await prisma.contact.findFirst({
           where: { accountId, OR: [{ waJid: lid }, { lid }], ...(porFone ? { NOT: { id: porFone.id } } : {}) },
@@ -189,6 +202,19 @@ export async function ingestMessages(
 }
 
 /**
+ * O LID que o aviso de mensagem escondeu (ver avisoEscondeOLid): o que o CRM
+ * já guardou para este telefone ou, na primeira mensagem, o da mensagem como
+ * a Evolution gravou. Uma consulta à Evolution por pessoa, não por mensagem.
+ */
+async function lidDoAviso(conta: { id: string; instanceName: string }, telefone: string, raw: EvolutionMessage) {
+  const conhecido = await prisma.contact.findFirst({
+    where: { accountId: conta.id, waJid: { in: variantesDoTelefone(telefone) }, lid: { not: null } },
+    select: { lid: true },
+  });
+  return conhecido?.lid ?? (await lidEscondidoNoAviso(conta.instanceName, raw));
+}
+
+/**
  * Processa uma mensagem que acabou de chegar pelo webhook: garante o contato,
  * garante o deal e grava a mensagem.
  *
@@ -197,7 +223,7 @@ export async function ingestMessages(
  * ou veio de um JID que não é pessoa (grupo, status, newsletter).
  */
 export async function ingestLiveMessage(
-  accountId: string,
+  conta: { id: string; instanceName: string },
   raw: EvolutionMessage,
 ): Promise<string | null> {
   const parsed = parseMessage(raw);
@@ -206,10 +232,15 @@ export async function ingestLiveMessage(
   // Grupos e status não viram lead. Entrariam no funil como ruído puro.
   if (!isPersonJid(parsed.remoteJid)) return null;
 
+  // Quem escreve pelo LID chega aqui com o telefone no lugar do LID. Sem o
+  // LID, o lead importado da conversa (que tem só o LID) e este virariam dois
+  // cards da mesma pessoa. Com ele, o upsert junta os dois na hora.
+  const alt = parsed.alt ?? (avisoEscondeOLid(raw) ? await lidDoAviso(conta, parsed.remoteJid, raw) : null);
+
   const contact = await upsertContact({
-    accountId,
+    accountId: conta.id,
     waJid: parsed.remoteJid,
-    alt: parsed.alt,
+    alt,
     // O pushName de uma mensagem SUA é o seu próprio nome, não o do contato.
     pushName: parsed.fromMe ? null : (raw.pushName ?? null),
   });

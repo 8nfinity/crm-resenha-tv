@@ -42,9 +42,10 @@ export async function juntarDuplicados(accountId: string): Promise<ResultadoDupl
   });
   if (!conta) throw new Error("Conta não encontrada");
 
-  // 1. Pelo LID.
+  // 1. Pelo LID — só quem é lead: os contatos da agenda sem card não
+  // aparecem no funil, e conferir cada um custava uma consulta à Evolution.
   const soLid = await prisma.contact.findMany({
-    where: { accountId, waJid: { endsWith: "@lid" } },
+    where: { accountId, waJid: { endsWith: "@lid" }, deals: { some: {} } },
     orderBy: { updatedAt: "asc" },
     select: { id: true, waJid: true },
   });

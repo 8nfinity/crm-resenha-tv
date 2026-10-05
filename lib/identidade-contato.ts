@@ -6,22 +6,25 @@ import type { EvolutionMessage } from "@/lib/evolution/types";
  * Quem é a pessoa por trás de um identificador do WhatsApp.
  *
  * A mesma pessoa chega por dois identificadores: o telefone
- * ("55…@s.whatsapp.net") e o LID ("…@lid"). As etiquetas e listas chegam
- * cada vez mais pelo LID — e, se o CRM não descobre de quem é aquele LID, ele
- * cria um contato novo: o lead DUPLICA, a etiqueta move a cópia e o card que
- * você estava vendo fica parado.
+ * ("55…@s.whatsapp.net") e o LID ("…@lid"). Se o CRM não liga um ao outro,
+ * ele cria um contato para cada: o lead DUPLICA, a etiqueta move a cópia e o
+ * card que você estava vendo fica parado.
  *
- * Como a Evolution 2.3 guarda as coisas (conferido no código dela):
- *  - cada mensagem fica gravada com o identificador por onde chegou em
- *    `key.remoteJid` e o outro em `key.remoteJidAlt`. Quem escreve pelo
- *    telefone tem o LID SÓ no `remoteJidAlt`;
- *  - no aviso que manda para o CRM, ela troca o LID pelo telefone — o CRM
- *    recebe o telefone nos dois campos e nunca fica sabendo o LID;
- *  - ela mantém um cache leve de números (uma linha por contato) que, para
- *    quem escreveu pelo telefone, liga o LID ao número.
- *
- * Por isso a descoberta tenta primeiro o cache (consulta leve) e depois as
- * mensagens procuradas nos DOIS campos.
+ * Como a Evolution 2.3.7 trata os dois (conferido no código dela):
+ *  - grava cada mensagem com o identificador por onde ela chegou em
+ *    `key.remoteJid` e o outro em `key.remoteJidAlt`. Só as mensagens que
+ *    chegam com a conexão aberta trazem o outro lado; as do histórico (as que
+ *    vêm ao parear) não;
+ *  - no aviso que manda ao CRM ela TROCA o LID pelo telefone: `remoteJid` e
+ *    `remoteJidAlt` chegam iguais, os dois com o telefone. Fica só a pista
+ *    `addressingMode: "lid"`. O LID se recupera relendo a mensagem pelo id
+ *    (lidEscondidoNoAviso) — era isto que faltava: o lead importado ficava
+ *    com o LID, a primeira mensagem nova chegava com o telefone e virava um
+ *    segundo lead;
+ *  - a busca de mensagens dela só filtra por `remoteJid`: procurar o LID acha
+ *    as mensagens que chegaram pelo LID (e nelas o telefone);
+ *  - o cache de números dela só liga LID → telefone na conversa que chega
+ *    pelo telefone.
  */
 
 /** O outro identificador que uma mensagem revela, dado o que procuramos. */
@@ -52,6 +55,51 @@ export function variantesDoTelefone(jid: string): string[] {
   return [`55${ddd}9${semNove}@s.whatsapp.net`, `55${ddd}${semNove}@s.whatsapp.net`];
 }
 
+const ehLid = (j: unknown): j is string => typeof j === "string" && j.endsWith("@lid");
+const ehTelefone = (j: unknown): j is string => typeof j === "string" && j.endsWith("@s.whatsapp.net");
+
+/**
+ * O aviso de mensagem veio com o LID trocado pelo telefone?
+ *
+ * É o caso de quem escreve pelo LID: a Evolution põe o telefone nos dois
+ * campos (`remoteJid` igual a `remoteJidAlt`) e deixa `addressingMode: "lid"`.
+ * Se o aviso já mostra o LID, ou se a conversa é mesmo pelo telefone, não há
+ * nada escondido.
+ */
+export function avisoEscondeOLid(raw: EvolutionMessage): boolean {
+  const k = raw.key;
+  const jid = k?.remoteJid;
+  const alt = k?.remoteJidAlt ?? null;
+  if (!ehTelefone(jid)) return false;
+  if ([alt, k?.senderPn].some(ehLid)) return false;
+  return alt === jid || k?.addressingMode === "lid";
+}
+
+/**
+ * O LID que o aviso escondeu, lido da mensagem como a Evolution a gravou.
+ *
+ * Só vale se a mensagem gravada for da MESMA conversa — o telefone dela tem
+ * que bater com o do aviso. Um id repetido em outra conversa juntaria duas
+ * pessoas diferentes, que é pior que um duplicado.
+ */
+export async function lidEscondidoNoAviso(instanceName: string, raw: EvolutionMessage): Promise<string | null> {
+  const id = raw.key?.id;
+  const telefone = raw.key?.remoteJid;
+  if (!id || !ehTelefone(telefone)) return null;
+  try {
+    const gravada = await evolution.mensagemPorId(instanceName, id);
+    const lados = [gravada?.key?.remoteJid, gravada?.key?.remoteJidAlt];
+    const lid = lados.find(ehLid);
+    const fone = lados.find(ehTelefone);
+    if (!lid || !fone || !variantesDoTelefone(telefone).includes(fone)) return null;
+    return lid;
+  } catch (error) {
+    // Sem a Evolution agora: a varredura de cada minuto liga os dois depois.
+    console.warn(`LID da mensagem ${id}:`, (error as Error).message);
+    return null;
+  }
+}
+
 /**
  * O telefone na forma que o CRM já usa (com ou sem o 9), se ele já conhece
  * esse celular — para não criar um segundo contato do mesmo número.
@@ -69,30 +117,33 @@ export async function formaConhecidaDoTelefone(accountId: string, pnJid: string)
 /**
  * O outro identificador (telefone ↔ LID) e o nome da pessoa, perguntando à
  * Evolution. Vazio se ela não souber ou não responder — nunca chuta.
+ *
+ * `rapido`: uma tentativa e pouca espera, para quem está numa fila (a das
+ * etiquetas) e não pode segurar as próximas.
  */
 export async function descobrirPessoa(
   instanceName: string,
   jid: string,
+  opcoes: { rapido?: boolean } = {},
 ): Promise<{ alt: string | null; pushName: string | null }> {
   let alt: string | null = null;
   let pushName: string | null = null;
 
-  // 1. LID → telefone pelo cache de números: leve, não varre mensagens. Achou,
-  //    basta — o nome vem depois, com a conversa (ver trazerConversaRecente).
-  if (jid.endsWith("@lid")) {
-    alt = await evolution.telefoneDoLid(instanceName, jid).catch(() => null);
-    if (alt) return { alt, pushName: null };
-  }
-
-  // 2. As mensagens da conversa, procuradas nos dois campos da chave. Também
-  //    trazem o nome que a pessoa usa no WhatsApp.
+  // 1. As mensagens da conversa: as que chegaram com a conexão aberta trazem
+  //    o outro identificador. Também trazem o nome que a pessoa usa.
   try {
-    const mensagens = await evolution.findMessages(instanceName, jid, 10, { qualquerLado: true });
-    alt ??= mensagens.map((m) => outroIdentificadorDaMensagem(m, jid)).find(Boolean) ?? null;
+    const mensagens = await evolution.findMessages(instanceName, jid, 10, { rapido: opcoes.rapido });
+    alt = mensagens.map((m) => outroIdentificadorDaMensagem(m, jid)).find(Boolean) ?? null;
     // O nome vem de uma mensagem DELA (a sua traria o seu próprio nome).
     pushName = mensagens.find((m) => m.key?.fromMe === false && m.pushName)?.pushName ?? null;
   } catch {
-    // Sem as mensagens, fica com o que o cache disse.
+    // Sem as mensagens, tenta o cache.
+  }
+
+  // 2. LID → telefone pelo cache de números: só conhece a conversa que chega
+  //    pelo telefone com o LID ao lado.
+  if (!alt && jid.endsWith("@lid")) {
+    alt = await evolution.telefoneDoLid(instanceName, jid).catch(() => null);
   }
 
   return { alt, pushName };

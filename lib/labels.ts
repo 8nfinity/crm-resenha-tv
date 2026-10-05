@@ -9,6 +9,7 @@ import { emFila } from "@/lib/fila";
 import { ignorarContato, quemEstaComAEtiqueta, voltarAMostrar } from "@/lib/ignorar";
 import { corrigirNomeEtiqueta, estagioDeMesmoNome, nomeParaGuardar, nomeProvisorio } from "@/lib/etiquetas-nomes";
 import { avisarMudanca } from "@/lib/eventos";
+import { unificarEmSegundoPlano } from "@/lib/sincronizacao";
 import { classificarFalha, eventoDoEstado, MINUTO, precisaVerificar, type EstadoChave } from "@/lib/saude-etiquetas";
 import { limparEventosAntigos, registrarEventoDeConexao, ultimaAbertura, ultimoQrCode } from "@/lib/eventos-conexao";
 
@@ -41,17 +42,20 @@ export async function sincronizarEtiquetas(accountId: string) {
     (
       await prisma.whatsAppLabel.findMany({
         where: { accountId },
-        select: { labelId: true, name: true, stageId: true, ignoreContact: true, isSeller: true },
+        select: { labelId: true, name: true, color: true, stageId: true, ignoreContact: true, isSeller: true },
       })
     ).map((e) => [e.labelId, e]),
   );
 
   for (const etiqueta of doAparelho) {
     const antes = atuais.get(etiqueta.labelId) ?? null;
-    // A lista da Evolution vem sem acentos: não estraga o nome certo que o
-    // evento do celular já trouxe.
-    const nome = nomeParaGuardar(antes?.name, etiqueta.name);
+    // A lista da Evolution vem sem acentos (e sem emoji): não estraga o nome
+    // certo que o evento do celular já trouxe.
+    const nome = nomeParaGuardar(antes?.name, etiqueta.name) ?? nomeProvisorio(etiqueta.labelId);
     const estagio = await estagioParaEtiquetaNova(antes, etiqueta.labelId, nome);
+    // Sem mudança, sem escrita: a data de atualização das etiquetas é o que
+    // faz as telas abertas recarregarem a lista (ver /api/eventos/versao).
+    if (antes && antes.name === nome && antes.color === etiqueta.color && !estagio) continue;
     await prisma.whatsAppLabel.upsert({
       where: {
         accountId_labelId: { accountId, labelId: etiqueta.labelId },
@@ -59,6 +63,7 @@ export async function sincronizarEtiquetas(accountId: string) {
       update: { name: nome, color: etiqueta.color, ...(estagio ? { stageId: estagio.id } : {}) },
       create: { accountId, labelId: etiqueta.labelId, name: nome, color: etiqueta.color, stageId: estagio?.id ?? null },
     });
+    if (estagio) levarQuemJaTem(accountId, etiqueta.labelId);
   }
 
   // Etiquetas apagadas do celular somem daqui junto. Manter uma regra apontando
@@ -114,8 +119,28 @@ export async function registrarEdicaoDeEtiqueta(
     },
     create: { accountId, labelId, name: nome ?? nomeProvisorio(labelId), color: cor ?? null, stageId: estagio?.id ?? null },
   });
-  if (estagio) console.log(`Etiqueta/lista "${nome}" ligada sozinha ao estágio "${estagio.name}" (mesmo nome)`);
+  if (estagio) {
+    console.log(`Etiqueta/lista "${nome}" ligada sozinha ao estágio "${estagio.name}" (mesmo nome)`);
+    levarQuemJaTem(accountId, labelId);
+  }
   return "gravada";
+}
+
+/**
+ * A etiqueta acabou de ser ligada sozinha a um estágio (pelo nome). Quem já
+ * estava com ela — porque a etiquetagem chegou antes do nome, quando ela
+ * ainda era "Etiqueta 12" e não movia ninguém — anda agora, pelas mesmas
+ * regras do mapeamento feito à mão (só para a frente).
+ *
+ * Não espera: pode ter sido chamada de dentro da fila das etiquetas, e as
+ * etiquetagens que isto põe na fila só rodam depois que a atual terminar.
+ */
+function levarQuemJaTem(accountId: string, labelId: string) {
+  void moverQuemJaTemAEtiqueta(accountId, labelId)
+    .then((movidos) => {
+      if (movidos) avisarMudanca({ dealIds: [], motivo: "etiqueta" });
+    })
+    .catch((error) => console.warn(`Levar quem já tem a etiqueta ${labelId}:`, (error as Error).message));
 }
 
 /**
@@ -425,8 +450,13 @@ const JANELA_PAREAMENTO_MS = 15 * MINUTO;
 const JANELA_RAJADA_MS = MINUTO;
 const RAJADA = 5;
 
-const global_ = globalThis as unknown as { crmChegadasEtiqueta?: Map<string, number[]> };
+const global_ = globalThis as unknown as {
+  crmChegadasEtiqueta?: Map<string, number[]>;
+  crmNomesPendentes?: Set<string>;
+};
 const chegadas = (global_.crmChegadasEtiqueta ??= new Map<string, number[]>());
+/** Contas com a releitura do nome de uma etiqueta provisória já marcada. */
+const nomesPendentes = (global_.crmNomesPendentes ??= new Set<string>());
 
 /** Anota a chegada de um evento de etiqueta e diz quantos chegaram no último minuto. */
 function anotarChegada(accountId: string): number {
@@ -444,11 +474,12 @@ async function ehCopiaDoEstado(accountId: string): Promise<boolean> {
 }
 
 /**
- * O telefone da conversa (se ela veio pelo telefone ou se o LID revelou um),
- * na forma que o CRM já usa — com ou sem o 9. Junto, o nome da pessoa.
+ * O telefone da conversa (se ela veio pelo telefone ou se a Evolution revelou
+ * um), na forma que o CRM já usa — com ou sem o 9 —, o LID e o nome da pessoa.
+ * Só para conversa que o CRM ainda não conhece: é a parte que espera a Evolution.
  */
 async function quemEDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
-  const { alt, pushName } = await descobrirPessoa(conta.instanceName, chatId);
+  const { alt, pushName } = await descobrirPessoa(conta.instanceName, chatId, { rapido: true });
   const pn = chatId.endsWith("@s.whatsapp.net") ? chatId : alt?.endsWith("@s.whatsapp.net") ? alt : null;
   return {
     telefone: pn ? await formaConhecidaDoTelefone(conta.id, pn) : null,
@@ -465,9 +496,14 @@ async function quemEDaConversa(conta: { id: string; instanceName: string }, chat
  */
 async function contatoExistenteDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
   const achado = await acharContato(conta.id, chatId);
-  if (achado?.waJid.endsWith("@s.whatsapp.net")) return achado;
-  const { telefone } = await quemEDaConversa(conta, chatId);
-  return (telefone ? await acharContato(conta.id, telefone) : null) ?? achado;
+  if (achado) return achado;
+  const { telefone, lid } = await quemEDaConversa(conta, chatId);
+  for (const outro of [telefone, lid]) {
+    if (!outro || outro === chatId) continue;
+    const pelaOutraForma = await acharContato(conta.id, outro);
+    if (pelaOutraForma) return pelaOutraForma;
+  }
+  return null;
 }
 
 /** A etiqueta do evento, criada na hora se o CRM ainda não a conhece. */
@@ -482,26 +518,46 @@ async function garantirEtiqueta(accountId: string, labelId: string): Promise<Eti
   // Desconhecida: criada no celular e o evento dela ainda não chegou.
   // Registra para aparecer na tela de mapeamento. Upsert porque o evento da
   // criação pode estar sendo gravado neste mesmo instante.
-  return prisma.whatsAppLabel.upsert({
+  const criada = await prisma.whatsAppLabel.upsert({
     where: { accountId_labelId: { accountId, labelId } },
     update: {},
     create: { accountId, labelId, name: nomeProvisorio(labelId) },
   });
+  if (criada.name === nomeProvisorio(labelId)) buscarNomeDepois(accountId);
+  return criada;
+}
+
+/**
+ * Etiqueta que chegou antes do próprio nome ("Etiqueta 12"): daqui a pouco
+ * relê a lista da Evolution — que grava o nome logo depois de avisar — para
+ * a tela mostrar o nome de verdade sem esperar a rotina de 5 minutos.
+ */
+function buscarNomeDepois(accountId: string) {
+  if (nomesPendentes.has(accountId)) return;
+  nomesPendentes.add(accountId);
+  setTimeout(() => {
+    nomesPendentes.delete(accountId);
+    void sincronizarEtiquetas(accountId)
+      .then(() => avisarMudanca({ dealIds: [], motivo: "etiqueta" }))
+      .catch((error) => console.warn("Nome da etiqueta nova:", (error as Error).message));
+  }, 20_000).unref?.();
 }
 
 /**
  * O contato da conversa etiquetada.
  *
- * A etiqueta chega ora pelo telefone, ora pelo LID da conversa. Criar um
- * contato novo para o LID de quem já está no funil pelo telefone duplicava o
- * lead — e a etiqueta movia a cópia, não o card que você estava vendo. Quando
- * só o LID é conhecido, a Evolution diz o telefone (ver identidade-contato.ts)
- * — e o nome da pessoa, para o lead de quem nunca falou com o CRM não entrar
- * sem nome.
+ * A etiqueta chega ora pelo telefone, ora pelo LID da conversa. O CRM guarda
+ * os dois no contato (o LID também vem das mensagens — ver ingestLiveMessage),
+ * então o contato já conhecido sai direto do banco, sem esperar a Evolution:
+ * é o que faz 50 conversas etiquetadas de uma vez andarem em segundos.
+ *
+ * Só a conversa que o CRM nunca viu pergunta à Evolution quem é a pessoa
+ * (telefone ↔ LID), para não criar uma cópia de quem já está no funil pela
+ * outra forma — e para o lead novo não entrar sem nome.
  */
 async function contatoDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
   const achado = await acharContato(conta.id, chatId);
-  if (achado?.waJid.endsWith("@s.whatsapp.net")) return achado;
+  if (achado) return achado;
   // Sem a Evolution, fica com o identificador que veio.
   const { telefone, lid, pushName } = await quemEDaConversa(conta, chatId);
   return upsertContact({
@@ -520,11 +576,17 @@ async function contatoDaConversa(conta: { id: string; instanceName: string }, ch
  * Roda numa fila própria, depois da resposta: com 50 conversas etiquetadas de
  * uma vez, os 50 leads mudam de coluna primeiro, e os scores vêm em seguida.
  */
-function depoisDeMover(conta: { instanceName: string }, contactId: string, dealId: string, chatId: string, novo: boolean) {
+function depoisDeMover(
+  conta: { instanceName: string },
+  contato: { id: string; waJid: string; lid: string | null },
+  dealId: string,
+  chatId: string,
+  novo: boolean,
+) {
   void emFila(
     "etiquetas:depois",
     async () => {
-      if (novo) await trazerConversaRecente(conta.instanceName, contactId, dealId, chatId);
+      if (novo) await trazerConversaRecente(conta.instanceName, contato, dealId, chatId);
       await recalculateScore(dealId);
       avisarMudanca({ dealIds: [dealId], motivo: "etiqueta" });
     },
@@ -534,15 +596,28 @@ function depoisDeMover(conta: { instanceName: string }, contactId: string, dealI
 
 const MENSAGENS_DO_LEAD_NOVO = 50;
 
-async function trazerConversaRecente(instanceName: string, contactId: string, dealId: string, chatId: string) {
-  let mensagens: EvolutionMessage[];
-  try {
-    // Nos dois campos da chave: a conversa pode estar gravada pelo telefone
-    // mesmo que a etiqueta tenha chegado pelo LID (e vice-versa).
-    mensagens = await evolution.findMessages(instanceName, chatId, MENSAGENS_DO_LEAD_NOVO, { qualquerLado: true });
-  } catch {
-    return; // A conversa chega depois, pela varredura ou pela próxima mensagem.
+async function trazerConversaRecente(
+  instanceName: string,
+  contato: { id: string; waJid: string; lid: string | null },
+  dealId: string,
+  chatId: string,
+) {
+  const contactId = contato.id;
+  // Pelas duas formas da pessoa: a Evolution guarda cada mensagem pelo
+  // identificador por onde ela chegou, e a conversa pode estar pelo telefone
+  // mesmo que a etiqueta tenha chegado pelo LID (e vice-versa).
+  const identificadores = [...new Set([chatId, contato.waJid, contato.lid].filter((j): j is string => Boolean(j)))];
+  const porId = new Map<string, EvolutionMessage>();
+  for (const jid of identificadores) {
+    try {
+      for (const m of await evolution.findMessages(instanceName, jid, MENSAGENS_DO_LEAD_NOVO)) {
+        porId.set(m.key?.id ?? `${jid}:${porId.size}`, m);
+      }
+    } catch {
+      // A conversa chega depois, pela varredura ou pela próxima mensagem.
+    }
   }
+  const mensagens = [...porId.values()];
   if (mensagens.length === 0) return;
   await ingestMessages(contactId, mensagens);
 
@@ -606,17 +681,28 @@ export async function aplicarEtiqueta(
   labelId: string,
   origem: OrigemEtiqueta = "celular",
 ): Promise<ResultadoEtiqueta> {
-  const nomes: { contato?: string; etiqueta?: string } = {};
+  const nomes: Anotacoes = {};
   const resultado = await aplicar(accountId, chatId, labelId, origem, nomes);
-  return { ...resultado, ...nomes };
+  // Só depois de mover: se o contato for a cópia (só LID) de um lead do
+  // telefone, a junção leva junto o estágio que a etiqueta acabou de dar.
+  nomes.depois?.();
+  return { ...resultado, contato: nomes.contato, etiqueta: nomes.etiqueta };
 }
+
+type Anotacoes = {
+  /** Nomes para o painel de conferência. */
+  contato?: string;
+  etiqueta?: string;
+  /** O que fazer quando a etiquetagem terminar. */
+  depois?: () => void;
+};
 
 async function aplicar(
   accountId: string,
   chatId: string,
   labelId: string,
   origem: OrigemEtiqueta,
-  nomes: { contato?: string; etiqueta?: string },
+  nomes: Anotacoes,
 ): Promise<ResultadoEtiqueta> {
   // Antes de qualquer outra coisa: a rajada é contada por chegada.
   const copiaDoEstado = origem === "celular" && (await ehCopiaDoEstado(accountId));
@@ -634,6 +720,7 @@ async function aplicar(
   nomes.etiqueta = etiqueta.name;
   const contato = await contatoDaConversa(conta, chatId);
   nomes.contato = nomeDoContato(contato);
+  nomes.depois = () => unificarEmSegundoPlano(conta, contato);
 
   // Pelo celular, a mesma etiqueta de novo numa conversa que o histórico já
   // diz estar com ela é repetição — reenvio do webhook (logo em seguida) ou a
@@ -726,7 +813,7 @@ async function aplicar(
     // O card aparece na coluna certa JÁ; o score e, para o lead novo, a
     // conversa vêm logo depois, e a tela se atualiza de novo.
     avisarMudanca({ dealIds: [deal.id], motivo: "etiqueta" });
-    depoisDeMover(conta, contato.id, deal.id, chatId, !existente);
+    depoisDeMover(conta, contato, deal.id, chatId, !existente);
   }
 
   const detalhe = !existente

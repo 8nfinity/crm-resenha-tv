@@ -34,6 +34,12 @@ export type EvolutionMessageKey = {
   /** Nome antigo do mesmo dado em versões anteriores da Evolution. */
   senderPn?: string | null;
   fromMe?: boolean | null;
+  /**
+   * Por qual identificador a conversa chegou: "lid" ou "pn" (telefone). No
+   * aviso ao CRM a Evolution troca o LID pelo telefone, mas este campo fica —
+   * é a pista de que existe um LID escondido (ver identidade-contato.ts).
+   */
+  addressingMode?: string | null;
 };
 
 export type EvolutionMessage = {
