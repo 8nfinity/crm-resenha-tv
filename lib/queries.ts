@@ -250,7 +250,9 @@ export async function getDealDetail(dealId: string) {
   // o componente declara — foi a divergência entre as duas que quebrou a tela.
   return {
     ...resto,
-    contact: contactSemMensagens,
+    // O número do lead já formatado ("+55 11 98765-4321"); nulo quando o
+    // WhatsApp só informou o código interno da pessoa (LID).
+    contact: { ...contactSemMensagens, phone: formatPhone(contactSemMensagens.phone) },
     messages,
     labelEvents,
     displayName: contactName(contact),

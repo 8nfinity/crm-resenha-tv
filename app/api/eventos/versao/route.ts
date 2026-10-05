@@ -12,11 +12,15 @@ export const dynamic = "force-dynamic";
  * outro processo. A tela pergunta de tempos em tempos; se o carimbo mudou,
  * recarrega. Uma consulta só, barata.
  *
- * Aproveita a viagem para dizer quantos números de WhatsApp estão conectados:
- * é o que acende o aviso "WhatsApp desconectado" no topo da tela.
+ * Aproveita a viagem para dizer quantos números de WhatsApp estão conectados
+ * — é o que acende o aviso "WhatsApp desconectado" no topo da tela — e em
+ * quantos as etiquetas pararam (a Evolution perdeu a chave delas): conectado,
+ * mas nenhuma etiqueta chega, e isso precisa aparecer em qualquer tela.
  */
 export async function GET() {
-  const [linha] = await prisma.$queryRaw<{ versao: string; conectados: number; contas: number }[]>`
+  const [linha] = await prisma.$queryRaw<
+    { versao: string; conectados: number; contas: number; etiquetasParadas: number }[]
+  >`
     SELECT concat_ws('|',
       (SELECT max("createdAt") FROM "Message"),
       (SELECT count(*) FROM "Deal"),
@@ -26,15 +30,21 @@ export async function GET() {
       (SELECT count(*) FROM "Stage"),
       (SELECT max("updatedAt") FROM "PlaybookSection"),
       (SELECT count(*) FROM "PlaybookSection"),
-      (SELECT string_agg("status", ',' ORDER BY "id") FROM "WhatsAppAccount")
+      (SELECT string_agg("status" || ':' || coalesce("labelKeyStatus", ''), ',' ORDER BY "id") FROM "WhatsAppAccount")
     ) AS versao,
     (SELECT count(*) FROM "WhatsAppAccount" WHERE "status" = 'open')::int AS conectados,
-    (SELECT count(*) FROM "WhatsAppAccount")::int AS contas
+    (SELECT count(*) FROM "WhatsAppAccount")::int AS contas,
+    (SELECT count(*) FROM "WhatsAppAccount"
+      WHERE "status" = 'open' AND "labelKeyStatus" = 'chave_perdida')::int AS "etiquetasParadas"
   `;
   return NextResponse.json(
     {
       versao: linha?.versao ?? "",
-      whatsapp: { conectados: linha?.conectados ?? 0, contas: linha?.contas ?? 0 },
+      whatsapp: {
+        conectados: linha?.conectados ?? 0,
+        contas: linha?.contas ?? 0,
+        etiquetasParadas: linha?.etiquetasParadas ?? 0,
+      },
     },
     { headers: { "Cache-Control": "no-store" } },
   );

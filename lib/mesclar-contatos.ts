@@ -9,6 +9,21 @@ import { recalculateScore } from "@/lib/deals";
  * histórico de etiquetas e, se ele tinha um lead, as anotações, atividades e
  * movimentos no funil. Nada que você registrou se perde: só some a cópia.
  */
+/**
+ * Ao juntar dois leads da mesma pessoa, vale o estágio de quem andou por
+ * último no funil. É o caso da etiqueta que caiu na cópia (chegou pelo LID
+ * antes de o CRM saber o telefone): juntar não pode desfazer o movimento.
+ * Cópia parada na primeira coluna nunca puxa o lead de volta.
+ */
+export function copiaDecideOEstagio(
+  manter: { stageId: string; enteredStageAt: Date },
+  copia: { stageId: string; enteredStageAt: Date },
+  primeiraColunaId: string | null,
+): boolean {
+  if (copia.stageId === primeiraColunaId || copia.stageId === manter.stageId) return false;
+  return manter.stageId === primeiraColunaId || copia.enteredStageAt > manter.enteredStageAt;
+}
+
 export async function mesclarContatos(manterId: string, removerId: string): Promise<void> {
   if (manterId === removerId) return;
 
@@ -45,9 +60,8 @@ export async function mesclarContatos(manterId: string, removerId: string): Prom
         data: { dealId: dealManter.id },
       });
 
-      // Se a cópia andou no funil e o lead que fica não, vale o estágio dela.
       const primeira = await tx.stage.findFirst({ orderBy: { order: "asc" }, select: { id: true } });
-      const herdaEstagio = dealManter.stageId === primeira?.id && dealRemover.stageId !== primeira?.id;
+      const herdaEstagio = copiaDecideOEstagio(dealManter, dealRemover, primeira?.id ?? null);
       const maior = (a: Date | null, b: Date | null) => (!a ? b : !b ? a : a > b ? a : b);
 
       await tx.deal.update({

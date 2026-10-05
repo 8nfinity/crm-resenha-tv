@@ -4,10 +4,9 @@ import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
 import { ingestLiveMessage, upsertContact } from "@/lib/ingest";
 import { isPersonJid } from "@/lib/evolution/parse";
-import { emFila } from "@/lib/fila";
 import {
   aplicarEtiqueta,
-  filaDeEtiquetas,
+  naFilaDeEtiquetas,
   registrarEdicaoDeEtiqueta,
   removerEtiqueta,
   sincronizarEtiquetas,
@@ -223,7 +222,7 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
     // Uma de cada vez, na ordem de chegada: 50 conversas etiquetadas de uma
     // vez viram 50 avisos simultâneos, e juntos eles estouravam as conexões
     // com o banco (ver lib/fila.ts).
-    r = await emFila(filaDeEtiquetas(accountId), () =>
+    r = await naFilaDeEtiquetas(accountId, () =>
       tipo === "remove" ? removerEtiqueta(accountId, chatId, labelId) : aplicarEtiqueta(accountId, chatId, labelId),
     );
   } catch (error) {
@@ -271,7 +270,7 @@ async function handleLabelEdit(accountId: string, data: unknown) {
     }
     // Na mesma fila das etiquetagens: a lista criada entra antes das
     // conversas colocadas nela logo em seguida.
-    await emFila(filaDeEtiquetas(accountId), () =>
+    await naFilaDeEtiquetas(accountId, () =>
       registrarEdicaoDeEtiqueta(accountId, {
         labelId: String(labelId),
         name: typeof item.name === "string" ? item.name : null,

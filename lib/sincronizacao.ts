@@ -7,6 +7,7 @@ import { ingestMessages, upsertContact } from "@/lib/ingest";
 import { mesclarContatos } from "@/lib/mesclar-contatos";
 import { avisarMudanca } from "@/lib/eventos";
 import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
+import { descobrirPessoa, formaConhecidaDoTelefone } from "@/lib/identidade-contato";
 
 /**
  * Varredura de segurança: busca na Evolution o que o webhook não entregou.
@@ -102,13 +103,20 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
 
   const desde = estado.desde.get(conta.id) ?? (await pontoDePartida(conta.id));
   const inicioDaVolta = Date.now();
-  const chats = chatsComAtividade(await evolution.findChats(conta.instanceName), desde);
+  // Só a janela desde a última volta: pedir a lista inteira a cada minuto
+  // fazia a Evolution varrer TODAS as mensagens do número (ela não tem índice
+  // por conversa) — e ela ficava mais lenta a cada semana de mensagens.
+  const inicioDaJanela = new Date(desde - FOLGA_MS);
+  const janela = { desde: inicioDaJanela, ate: new Date(Date.now() + FOLGA_MS) };
+  const chats = chatsComAtividade(await evolution.findChats(conta.instanceName, janela), desde);
   resultado.conversasVistas = chats.length;
 
   const afetados = new Set<string>();
   for (const { jid, chat } of chats) {
     try {
-      const mensagens = await evolution.findMessages(conta.instanceName, jid, MENSAGENS_POR_CONVERSA);
+      const mensagens = await evolution.findMessages(conta.instanceName, jid, MENSAGENS_POR_CONVERSA, {
+        desde: inicioDaJanela,
+      });
       if (mensagens.length === 0) continue;
 
       // O nome vem de uma mensagem DELE (a sua traria o seu próprio nome).
@@ -145,41 +153,37 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
 }
 
 /**
- * Contatos que só têm o "@lid": pergunta à Evolution o telefone (vem nas
- * mensagens da conversa) e junta com o contato do telefone — o lead duplicado
- * some e fica um só, com tudo. Sem telefone conhecido, marca como conferido
- * (lid preenchido) para não perguntar de novo a cada minuto.
+ * Contato que ficou sem telefone volta a ser tentado depois deste tempo: a
+ * Evolution aprende o número quando a pessoa escreve pelo telefone.
+ */
+const NOVA_TENTATIVA_LID_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Contatos que só têm o "@lid": descobre o telefone (ver
+ * identidade-contato.ts) e junta com o contato do telefone — o lead duplicado
+ * some e fica um só, com tudo. Sem telefone conhecido, marca a tentativa e
+ * volta a tentar daqui a algumas horas (antes, desistia para sempre — e o
+ * duplicado ficava).
  */
 export async function unificarContatosLid(
   conta: { id: string; instanceName: string },
-  limite = 40,
+  limite = 10,
 ): Promise<number> {
   const pendentes = await prisma.contact.findMany({
-    where: { accountId: conta.id, waJid: { endsWith: "@lid" }, lid: null },
+    where: {
+      accountId: conta.id,
+      waJid: { endsWith: "@lid" },
+      OR: [{ lid: null }, { updatedAt: { lt: new Date(Date.now() - NOVA_TENTATIVA_LID_MS) } }],
+    },
+    // Os nunca tentados primeiro; depois, os tentados há mais tempo.
+    orderBy: [{ lid: { sort: "asc", nulls: "first" } }, { updatedAt: "asc" }],
     select: { id: true, waJid: true },
     take: limite,
   });
   let unidos = 0;
   for (const c of pendentes) {
     try {
-      const mensagens = await evolution.findMessages(conta.instanceName, c.waJid, 5);
-      const alt = mensagens.map(jidAlternativo).find((j) => j?.endsWith("@s.whatsapp.net"));
-      if (alt) {
-        await upsertContact({ accountId: conta.id, waJid: c.waJid, alt });
-        unidos++;
-        continue;
-      }
-      // Já existe quem tenha esse LID guardado (o contato do telefone): junta.
-      const dono = await prisma.contact.findFirst({
-        where: { accountId: conta.id, lid: c.waJid, NOT: { id: c.id } },
-        select: { id: true },
-      });
-      if (dono) {
-        await mesclarContatos(dono.id, c.id);
-        unidos++;
-      } else {
-        await prisma.contact.update({ where: { id: c.id }, data: { lid: c.waJid } });
-      }
+      if (await unificarContatoLid(conta, c)) unidos++;
     } catch (error) {
       console.warn(`LID ${c.waJid}: `, (error as Error).message);
     }
@@ -189,6 +193,32 @@ export async function unificarContatosLid(
     avisarMudanca({ dealIds: [], motivo: "mensagem" });
   }
   return unidos;
+}
+
+/** Junta UM contato "só LID" com o do telefone, se der para descobrir. Devolve se juntou. */
+export async function unificarContatoLid(
+  conta: { id: string; instanceName: string },
+  c: { id: string; waJid: string },
+): Promise<boolean> {
+  const { alt } = await descobrirPessoa(conta.instanceName, c.waJid);
+  if (alt?.endsWith("@s.whatsapp.net")) {
+    // Com o telefone e o LID juntos, upsertContact junta (ou converte) os dois.
+    const telefone = await formaConhecidaDoTelefone(conta.id, alt);
+    await upsertContact({ accountId: conta.id, waJid: telefone, alt: c.waJid });
+    return true;
+  }
+  // Já existe quem tenha esse LID guardado (o contato do telefone): junta.
+  const dono = await prisma.contact.findFirst({
+    where: { accountId: conta.id, lid: c.waJid, NOT: { id: c.id } },
+    select: { id: true },
+  });
+  if (dono) {
+    await mesclarContatos(dono.id, c.id);
+    return true;
+  }
+  // Sem telefone por enquanto: marca a tentativa (a data de atualização).
+  await prisma.contact.update({ where: { id: c.id }, data: { lid: c.waJid } });
+  return false;
 }
 
 /** Varre todas as contas. Nunca roda duas voltas ao mesmo tempo. */

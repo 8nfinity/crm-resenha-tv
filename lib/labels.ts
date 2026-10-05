@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
 import { createDealForContact, moveDealToStage, recalculateScore } from "@/lib/deals";
 import { evolution, EvolutionError } from "@/lib/evolution/client";
-import { isPersonJid, jidAlternativo, parseMessage } from "@/lib/evolution/parse";
-import type { EvolutionChat, EvolutionMessage } from "@/lib/evolution/types";
+import { isPersonJid, parseMessage } from "@/lib/evolution/parse";
+import { descobrirPessoa, formaConhecidaDoTelefone } from "@/lib/identidade-contato";
+import type { EvolutionMessage } from "@/lib/evolution/types";
 import { acharContato, ingestMessages, upsertContact } from "@/lib/ingest";
 import { emFila } from "@/lib/fila";
-import { etiquetasDoChat, ignorarContato, quemEstaComAEtiqueta, voltarAMostrar } from "@/lib/ignorar";
+import { ignorarContato, quemEstaComAEtiqueta, voltarAMostrar } from "@/lib/ignorar";
 import { corrigirNomeEtiqueta, estagioDeMesmoNome, nomeParaGuardar, nomeProvisorio } from "@/lib/etiquetas-nomes";
 import { avisarMudanca } from "@/lib/eventos";
 import { classificarFalha, eventoDoEstado, MINUTO, precisaVerificar, type EstadoChave } from "@/lib/saude-etiquetas";
@@ -443,28 +444,17 @@ async function ehCopiaDoEstado(accountId: string): Promise<boolean> {
 }
 
 /**
- * O que as últimas mensagens da conversa dizem da pessoa: o outro
- * identificador (telefone ↔ LID) e o nome que ela usa no WhatsApp. Vazio se a
- * Evolution não souber ou não responder.
+ * O telefone da conversa (se ela veio pelo telefone ou se o LID revelou um),
+ * na forma que o CRM já usa — com ou sem o 9. Junto, o nome da pessoa.
  */
-async function pelaConversa(
-  instanceName: string,
-  chatId: string,
-): Promise<{ alt: string | null; pushName: string | null }> {
-  try {
-    const mensagens = await evolution.findMessages(instanceName, chatId, 5);
-    return {
-      alt: mensagens.map(jidAlternativo).find(Boolean) ?? null,
-      // O nome vem de uma mensagem DELA (a sua traria o seu próprio nome).
-      pushName: mensagens.find((m) => m.key?.fromMe === false && m.pushName)?.pushName ?? null,
-    };
-  } catch {
-    return { alt: null, pushName: null };
-  }
-}
-
-async function outroIdentificador(instanceName: string, chatId: string): Promise<string | null> {
-  return (await pelaConversa(instanceName, chatId)).alt;
+async function quemEDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
+  const { alt, pushName } = await descobrirPessoa(conta.instanceName, chatId);
+  const pn = chatId.endsWith("@s.whatsapp.net") ? chatId : alt?.endsWith("@s.whatsapp.net") ? alt : null;
+  return {
+    telefone: pn ? await formaConhecidaDoTelefone(conta.id, pn) : null,
+    lid: chatId.endsWith("@lid") ? chatId : alt?.endsWith("@lid") ? alt : null,
+    pushName,
+  };
 }
 
 /**
@@ -476,8 +466,8 @@ async function outroIdentificador(instanceName: string, chatId: string): Promise
 async function contatoExistenteDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
   const achado = await acharContato(conta.id, chatId);
   if (achado?.waJid.endsWith("@s.whatsapp.net")) return achado;
-  const alt = await outroIdentificador(conta.instanceName, chatId);
-  return (alt ? await acharContato(conta.id, alt) : null) ?? achado;
+  const { telefone } = await quemEDaConversa(conta, chatId);
+  return (telefone ? await acharContato(conta.id, telefone) : null) ?? achado;
 }
 
 /** A etiqueta do evento, criada na hora se o CRM ainda não a conhece. */
@@ -505,15 +495,21 @@ async function garantirEtiqueta(accountId: string, labelId: string): Promise<Eti
  * A etiqueta chega ora pelo telefone, ora pelo LID da conversa. Criar um
  * contato novo para o LID de quem já está no funil pelo telefone duplicava o
  * lead — e a etiqueta movia a cópia, não o card que você estava vendo. Quando
- * só o LID é conhecido, as mensagens da conversa dizem o telefone — e o nome
- * da pessoa, para o lead de quem nunca falou com o CRM não entrar sem nome.
+ * só o LID é conhecido, a Evolution diz o telefone (ver identidade-contato.ts)
+ * — e o nome da pessoa, para o lead de quem nunca falou com o CRM não entrar
+ * sem nome.
  */
 async function contatoDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
   const achado = await acharContato(conta.id, chatId);
   if (achado?.waJid.endsWith("@s.whatsapp.net")) return achado;
   // Sem a Evolution, fica com o identificador que veio.
-  const { alt, pushName } = await pelaConversa(conta.instanceName, chatId);
-  return upsertContact({ accountId: conta.id, waJid: chatId, alt, pushName });
+  const { telefone, lid, pushName } = await quemEDaConversa(conta, chatId);
+  return upsertContact({
+    accountId: conta.id,
+    waJid: telefone ?? chatId,
+    alt: telefone ? lid : null,
+    pushName,
+  });
 }
 
 /**
@@ -525,11 +521,15 @@ async function contatoDaConversa(conta: { id: string; instanceName: string }, ch
  * uma vez, os 50 leads mudam de coluna primeiro, e os scores vêm em seguida.
  */
 function depoisDeMover(conta: { instanceName: string }, contactId: string, dealId: string, chatId: string, novo: boolean) {
-  void emFila("etiquetas:depois", async () => {
-    if (novo) await trazerConversaRecente(conta.instanceName, contactId, dealId, chatId);
-    await recalculateScore(dealId);
-    avisarMudanca({ dealIds: [dealId], motivo: "etiqueta" });
-  }).catch((error) => console.warn(`Depois da etiqueta (lead ${dealId}):`, (error as Error).message));
+  void emFila(
+    "etiquetas:depois",
+    async () => {
+      if (novo) await trazerConversaRecente(conta.instanceName, contactId, dealId, chatId);
+      await recalculateScore(dealId);
+      avisarMudanca({ dealIds: [dealId], motivo: "etiqueta" });
+    },
+    60_000,
+  ).catch((error) => console.warn(`Depois da etiqueta (lead ${dealId}):`, (error as Error).message));
 }
 
 const MENSAGENS_DO_LEAD_NOVO = 50;
@@ -537,12 +537,20 @@ const MENSAGENS_DO_LEAD_NOVO = 50;
 async function trazerConversaRecente(instanceName: string, contactId: string, dealId: string, chatId: string) {
   let mensagens: EvolutionMessage[];
   try {
-    mensagens = await evolution.findMessages(instanceName, chatId, MENSAGENS_DO_LEAD_NOVO);
+    // Nos dois campos da chave: a conversa pode estar gravada pelo telefone
+    // mesmo que a etiqueta tenha chegado pelo LID (e vice-versa).
+    mensagens = await evolution.findMessages(instanceName, chatId, MENSAGENS_DO_LEAD_NOVO, { qualquerLado: true });
   } catch {
     return; // A conversa chega depois, pela varredura ou pela próxima mensagem.
   }
   if (mensagens.length === 0) return;
   await ingestMessages(contactId, mensagens);
+
+  // O nome que a pessoa usa no WhatsApp, se o contato entrou sem nenhum.
+  const nome = mensagens.find((m) => m.key?.fromMe === false && m.pushName)?.pushName;
+  if (nome) {
+    await prisma.contact.updateMany({ where: { id: contactId, pushName: null }, data: { pushName: nome } });
+  }
 
   // O funil é ordenado pela última mensagem: a do lead que entrou agora conta.
   const lidas = mensagens.map(parseMessage).filter((m): m is NonNullable<typeof m> => m !== null);
@@ -564,9 +572,15 @@ async function trazerConversaRecente(instanceName: string, contactId: string, de
   }
 }
 
+/**
+ * Quanto uma etiquetagem pode segurar a fila. Normal é uma fração de
+ * segundo; passa disso só esperando a Evolution — e aí as próximas seguem.
+ */
+const LIMITE_POR_ETIQUETA_MS = 45_000;
+
 /** Fila das etiquetagens de uma conta: uma de cada vez, na ordem em que chegam. */
-export function filaDeEtiquetas(accountId: string): string {
-  return `etiquetas:${accountId}`;
+export function naFilaDeEtiquetas<T>(accountId: string, tarefa: () => Promise<T>): Promise<T> {
+  return emFila(`etiquetas:${accountId}`, tarefa, LIMITE_POR_ETIQUETA_MS);
 }
 
 /**
@@ -785,23 +799,16 @@ export async function removerEtiqueta(
  * funil. Só para a frente: não se sabe quando a etiqueta foi posta, e um lead
  * que já avançou no CRM não deve voltar. Devolve quantos leads andaram.
  */
-export async function moverQuemJaTemAEtiqueta(
-  accountId: string,
-  labelId: string,
-  conversas?: EvolutionChat[],
-): Promise<number> {
-  const [conta, etiqueta] = await Promise.all([
-    prisma.whatsAppAccount.findUnique({ where: { id: accountId }, select: { instanceName: true } }),
-    buscarEtiqueta(accountId, labelId),
-  ]);
-  if (!conta || !etiqueta?.stageId) return 0;
+export async function moverQuemJaTemAEtiqueta(accountId: string, labelId: string): Promise<number> {
+  const etiqueta = await buscarEtiqueta(accountId, labelId);
+  if (!etiqueta?.stageId) return 0;
 
   // Todos, sem limite: 50 conversas com a etiqueta são 50 leads no estágio.
   // Pela mesma fila dos avisos do celular, para não atropelar um que chegue agora.
   let movidos = 0;
-  for (const jid of await quemEstaComAEtiqueta(accountId, conta.instanceName, labelId, conversas)) {
+  for (const jid of await quemEstaComAEtiqueta(accountId, labelId)) {
     try {
-      const r = await emFila(filaDeEtiquetas(accountId), () => aplicarEtiqueta(accountId, jid, labelId, "mapeamento"));
+      const r = await naFilaDeEtiquetas(accountId, () => aplicarEtiqueta(accountId, jid, labelId, "mapeamento"));
       if (r.acao === "movido") movidos++;
     } catch (error) {
       console.warn(`Etiqueta ${labelId} em ${jid}:`, (error as Error).message);
@@ -817,18 +824,13 @@ export async function moverQuemJaTemAEtiqueta(
  * frente e sem mexer em lead arquivado. Roda no "Buscar do aparelho".
  */
 export async function aplicarEtiquetasMapeadas(accountId: string): Promise<number> {
-  const conta = await prisma.whatsAppAccount.findUnique({ where: { id: accountId }, select: { instanceName: true } });
-  if (!conta) return 0;
   const mapeadas = await prisma.whatsAppLabel.findMany({
     where: { accountId, stageId: { not: null }, removedAt: null },
     select: { labelId: true },
   });
-  if (mapeadas.length === 0) return 0;
-
-  const conversas = await evolution.findChats(conta.instanceName).catch(() => [] as EvolutionChat[]);
   let movidos = 0;
   for (const { labelId } of mapeadas) {
-    movidos += await moverQuemJaTemAEtiqueta(accountId, labelId, conversas);
+    movidos += await moverQuemJaTemAEtiqueta(accountId, labelId);
   }
   return movidos;
 }
@@ -842,49 +844,14 @@ export async function aplicarEtiquetasMapeadas(accountId: string): Promise<numbe
  * Devolve quantos contatos ganharam registro novo.
  */
 export async function registrarAtendenteDeQuemJaTemAEtiqueta(accountId: string, labelId: string): Promise<number> {
-  const [conta, etiqueta] = await Promise.all([
-    prisma.whatsAppAccount.findUnique({ where: { id: accountId } }),
-    buscarEtiqueta(accountId, labelId),
-  ]);
-  if (!conta || !etiqueta?.isSeller) return 0;
+  const etiqueta = await buscarEtiqueta(accountId, labelId);
+  if (!etiqueta?.isSeller) return 0;
 
+  // Quem já está com a etiqueta tem a linha no histórico (toda etiquetagem
+  // vira uma): basta ela passar a contar como atendimento.
   await prisma.labelEvent.updateMany({
     where: { labelId, contact: { accountId }, kind: { notIn: TIPOS_ATENDENTE } },
     data: { kind: "atendente" },
   });
-
-  let chats;
-  try {
-    chats = await evolution.findChats(conta.instanceName);
-  } catch {
-    return 0; // Evolution fora do ar: vale a partir da próxima etiquetagem.
-  }
-
-  let total = 0;
-  for (const chat of chats) {
-    const jid = chat.remoteJid ?? chat.id ?? "";
-    if (!isPersonJid(jid) || !etiquetasDoChat(chat).includes(labelId)) continue;
-    const contato = await upsertContact({ accountId, waJid: jid });
-    if (contato.ignoredAt) continue;
-
-    // Já registrado (a etiqueta foi aplicada com o CRM ligado): não repete.
-    const ultimo = await prisma.labelEvent.findFirst({
-      where: { contactId: contato.id, labelId },
-      orderBy: { createdAt: "desc" },
-      select: { action: true },
-    });
-    if (ultimo?.action === "add") continue;
-
-    const anterior = await atendenteAnterior(contato.id);
-    const texto = textoDoAtendimento(anterior, nomeDoAtendente(etiqueta));
-    await registrar(
-      contato.id,
-      labelId,
-      etiqueta,
-      "add",
-      texto ? `${texto} (etiqueta já estava no celular)` : "Etiqueta já estava no celular",
-    );
-    total++;
-  }
-  return total;
+  return (await quemEstaComAEtiqueta(accountId, labelId)).length;
 }

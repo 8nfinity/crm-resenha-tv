@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, MessageSquare, CheckSquare } from "lucide-react";
+import { Clock, MessageSquare, CheckSquare, Phone } from "lucide-react";
 import type { DealCard as DealCardType } from "@/lib/types";
 import { cn, formatCurrency, initials, relativeDays } from "@/lib/utils";
 
@@ -78,6 +78,23 @@ export function DealCardView({
             )}
             <p className="truncate text-sm font-medium">{deal.title}</p>
           </div>
+          {/* O número do lead em todo card. Sem ele (o WhatsApp só mandou o
+              código interno da pessoa), diz isso em vez de esconder. */}
+          {deal.contact.phone ? (
+            deal.contact.phone !== deal.title && (
+              <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] tabular-nums text-[var(--color-muted)]">
+                <Phone className="size-3" />
+                {deal.contact.phone}
+              </p>
+            )
+          ) : (
+            <p
+              className="mt-0.5 text-[11px] italic text-[var(--color-muted)]"
+              title="O WhatsApp só informou o código interno desta pessoa. O número aparece quando ela mandar mensagem — e, se houver um card repetido, o CRM junta os dois."
+            >
+              número ainda não informado pelo WhatsApp
+            </p>
+          )}
           {deal.lastMessagePreview && (
             <p className="mt-0.5 truncate text-xs text-[var(--color-muted)]">
               {deal.lastMessagePreview}

@@ -192,8 +192,15 @@ export function DealPanel({
 
               <div className="min-w-0 flex-1">
                 <h2 className="truncate font-semibold">{deal.displayName}</h2>
-                <p className="text-xs text-[var(--color-muted)]">
-                  {deal.contact.phone ?? deal.contact.waJid}
+                <p className="select-all text-xs tabular-nums text-[var(--color-muted)]">
+                  {deal.contact.phone ?? (
+                    <span
+                      className="italic"
+                      title="O WhatsApp só informou o código interno desta pessoa. O número aparece quando ela mandar mensagem."
+                    >
+                      Número ainda não informado pelo WhatsApp
+                    </span>
+                  )}
                 </p>
                 <span
                   className="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px]"

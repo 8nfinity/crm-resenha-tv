@@ -60,9 +60,16 @@ export function instanciaPadrao(): string {
   return process.env.EVOLUTION_INSTANCE ?? "crm";
 }
 
+/**
+ * Quanto esperar a Evolution antes de desistir. Sem limite, um pedido preso
+ * (a Evolution sobrecarregada) segurava por minutos quem esperava por ele —
+ * inclusive a fila das etiquetas, e as etiquetagens seguintes paravam junto.
+ */
+const ESPERA_PADRAO_MS = 20_000;
+
 async function request<T>(
   path: string,
-  init: { method: "GET" | "POST" | "DELETE"; body?: unknown } = { method: "GET" },
+  init: { method: "GET" | "POST" | "DELETE"; body?: unknown; esperaMs?: number } = { method: "GET" },
 ): Promise<T> {
   const { baseUrl, apiKey } = config();
 
@@ -80,7 +87,9 @@ async function request<T>(
     );
   }
 
+  const limite = AbortSignal.timeout(init.esperaMs ?? ESPERA_PADRAO_MS);
   let res: Response;
+  let texto: string;
   try {
     res = await fetch(`${baseUrl}${path}`, {
       method: init.method,
@@ -93,8 +102,18 @@ async function request<T>(
       // Sem seguir redirecionamento: a Evolution não redireciona; quem
       // redireciona é um site que não é ela (ex.: o CRM mandando para o login).
       redirect: "manual",
+      signal: limite,
     });
+    texto = await res.text();
   } catch {
+    if (limite.aborted) {
+      throw new EvolutionError(
+        `A Evolution demorou mais de ${Math.round((init.esperaMs ?? ESPERA_PADRAO_MS) / 1000)} s para responder ` +
+          `em ${path.split("/").slice(0, 3).join("/")} — ela está sobrecarregada ou reiniciando.`,
+        504,
+        "",
+      );
+    }
     throw new EvolutionError(
       `Não consegui alcançar a Evolution em ${hostEvolution}. Confira se o serviço dela está no ar ` +
         "(abrindo esse endereço no navegador deve aparecer “Welcome to the Evolution API”).",
@@ -103,7 +122,6 @@ async function request<T>(
     );
   }
 
-  const texto = await res.text().catch(() => "");
   const ehPagina = /^\s*<(!doctype|html)/i.test(texto) || (res.status >= 300 && res.status < 400);
 
   if (ehPagina) {
@@ -282,14 +300,37 @@ export const evolution = {
    * Todas as conversas. Mais útil que findContacts para o CRM: a agenda inteira
    * inclui gente com quem você nunca falou, e conversa aberta é sinal de lead.
    */
-  async findChats(instanceName: string): Promise<EvolutionChat[]> {
+  async findChats(instanceName: string, janela?: { desde: Date; ate: Date }): Promise<EvolutionChat[]> {
+    // A Evolution monta a lista varrendo TODAS as mensagens do número (a
+    // tabela dela não tem índice por conversa): fica mais lenta a cada mês de
+    // mensagens guardadas. Com a janela, ela só olha as mensagens do período —
+    // a varredura de cada minuto só precisa das conversas que se mexeram.
+    const body = janela
+      ? { where: { messageTimestamp: { gte: janela.desde.toISOString(), lte: janela.ate.toISOString() } } }
+      : {};
     const data = await comRetentativa(() =>
       request<EvolutionChat[] | Paginated<EvolutionChat>>(
         `/chat/findChats/${instanceName}`,
-        { method: "POST", body: {} },
+        { method: "POST", body, esperaMs: 60_000 },
       ),
     );
     return unwrapList(data);
+  },
+
+  /**
+   * O telefone de um LID, pelo cache de números da Evolution — consulta leve
+   * (uma linha por contato), sem varrer mensagens. A Evolution guarda o par
+   * quando a pessoa manda mensagem pelo telefone com o LID ao lado. Devolve
+   * null quando ela não sabe.
+   */
+  async telefoneDoLid(instanceName: string, lid: string): Promise<string | null> {
+    const data = await request<unknown>(`/chat/whatsappNumbers/${instanceName}`, {
+      method: "POST",
+      body: { numbers: [lid] },
+    });
+    const lista = Array.isArray(data) ? (data as { jid?: unknown }[]) : [];
+    const jid = lista.map((r) => (typeof r?.jid === "string" ? r.jid : "")).find((j) => j.endsWith("@s.whatsapp.net"));
+    return jid ?? null;
   },
 
   /**
@@ -302,9 +343,32 @@ export const evolution = {
     instanceName: string,
     remoteJid: string,
     limit = 200,
+    opcoes: {
+      /**
+       * Procura também no outro campo da chave. A Evolution grava a mensagem
+       * com o identificador por onde ela chegou em `remoteJid` e o outro em
+       * `remoteJidAlt`: a conversa de quem escreve pelo telefone tem o LID só
+       * no `remoteJidAlt`, e procurar o LID só em `remoteJid` não achava nada.
+       */
+      qualquerLado?: boolean;
+      /** Só mensagens a partir de quando (a Evolution filtra antes de varrer). */
+      desde?: Date;
+    } = {},
   ): Promise<EvolutionMessage[]> {
     const porPagina = Math.min(limit, 100);
     const todas: EvolutionMessage[] = [];
+    const where = {
+      key: opcoes.qualquerLado ? { remoteJid, remoteJidAlt: remoteJid } : { remoteJid },
+      // A Evolution só aplica o período com as duas pontas.
+      ...(opcoes.desde
+        ? {
+            messageTimestamp: {
+              gte: opcoes.desde.toISOString(),
+              lte: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            },
+          }
+        : {}),
+    };
 
     for (let page = 1; todas.length < limit; page++) {
       const data = await comRetentativa(() =>
@@ -314,7 +378,7 @@ export const evolution = {
           | { messages?: Paginated<EvolutionMessage> }
         >(`/chat/findMessages/${instanceName}`, {
           method: "POST",
-          body: { where: { key: { remoteJid } }, offset: porPagina, page, limit },
+          body: { where, offset: porPagina, page, limit },
         }),
       );
       const { records, pages } = paginaDe(data);

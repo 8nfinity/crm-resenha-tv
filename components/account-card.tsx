@@ -8,6 +8,7 @@ import {
   Power,
   AlertCircle,
   CheckCircle2,
+  Combine,
 } from "lucide-react";
 import type { ContaResumo } from "@/lib/accounts";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function AccountCard({
   );
   const [confirmando, setConfirmando] = useState(false);
   const [editandoNome, setEditandoNome] = useState(false);
+  const [juntando, setJuntando] = useState(false);
 
   const cancelarRef = useRef(false);
   const importandoRef = useRef(false);
@@ -216,6 +218,49 @@ export function AccountCard({
     }
   }
 
+  /**
+   * A mesma pessoa em dois cards (pelo telefone e pelo código interno do
+   * WhatsApp, ou o celular com e sem o 9) vira um card só, com tudo junto.
+   */
+  async function juntarDuplicados() {
+    setJuntando(true);
+    setErro(null);
+    setResumo(null);
+    try {
+      const res = await fetch(`/api/accounts/${conta.id}/duplicados`, { method: "POST" });
+      const r = await res.json();
+      if (!res.ok) {
+        setErro(r.error ?? "Falha ao juntar os duplicados");
+        return;
+      }
+      const juntados = r.pelaLid + r.peloNove;
+      const partes = [
+        juntados
+          ? `${juntados} ${juntados === 1 ? "lead duplicado juntado" : "leads duplicados juntados"} (cada um virou um card só, com as conversas e notas juntas).`
+          : "Nenhum duplicado para juntar agora.",
+      ];
+      if (r.restantes) partes.push(`Faltam ${r.restantes} para conferir — clique de novo.`);
+      if (r.semTelefone) {
+        partes.push(
+          `${r.semTelefone} ${r.semTelefone === 1 ? "lead continua" : "leads continuam"} só com o código interno do WhatsApp: ` +
+            "o número aparece quando a pessoa mandar mensagem, e o CRM junta sozinho se houver cópia.",
+        );
+      }
+      if (r.emOutroNumero) {
+        partes.push(
+          `${r.emOutroNumero} ${r.emOutroNumero === 1 ? "pessoa também é lead" : "pessoas também são leads"} em outro número ` +
+            "conectado — isso não é duplicado: cada número seu tem o seu card.",
+        );
+      }
+      setResumo(partes.join(" "));
+      if (juntados) onMudou();
+    } catch {
+      setErro("Não consegui falar com o servidor.");
+    } finally {
+      setJuntando(false);
+    }
+  }
+
   // ── Ações da conta ─────────────────────────────────────────────────────────
 
   async function renomear(label: string) {
@@ -308,6 +353,15 @@ export function AccountCard({
             >
               <Download className="size-4" />
               Importar todas
+            </button>
+            <button
+              onClick={() => void juntarDuplicados()}
+              disabled={juntando || progresso !== null}
+              title="Junta a mesma pessoa que aparece em dois cards"
+              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              {juntando ? <Loader2 className="size-4 animate-spin" /> : <Combine className="size-4" />}
+              {juntando ? "Juntando…" : "Juntar duplicados"}
             </button>
             <button
               onClick={() => setConfirmando(true)}

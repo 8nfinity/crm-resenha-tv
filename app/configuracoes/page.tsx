@@ -125,7 +125,7 @@ export default async function ConfiguracoesPage() {
             <CopyField value={webhookUrl} className="mt-3" />
           </section>
 
-          <section className="card p-6">
+          <section id="etiquetas" className="card scroll-mt-4 p-6">
             <h2 className="text-base font-semibold">
               Etiquetas e listas do WhatsApp
             </h2>

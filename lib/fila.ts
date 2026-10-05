@@ -15,11 +15,24 @@
 const global_ = globalThis as unknown as { crmFilas?: Map<string, Promise<unknown>> };
 const filas = (global_.crmFilas ??= new Map<string, Promise<unknown>>());
 
-export function emFila<T>(chave: string, tarefa: () => Promise<T>): Promise<T> {
+export function emFila<T>(chave: string, tarefa: () => Promise<T>, limiteMs = 0): Promise<T> {
   const anterior = filas.get(chave) ?? Promise.resolve();
   const atual = anterior.then(tarefa);
+  // A fila anda quando a tarefa termina — ou, com limite, quando ele estoura
+  // (contado a partir de quando ela COMEÇA): uma tarefa presa, esperando a
+  // Evolution que não responde, não pode parar todas as seguintes. Ela
+  // continua rodando e quem a pediu ainda recebe o resultado.
+  const andou =
+    limiteMs > 0
+      ? anterior.then(() =>
+          Promise.race([atual, new Promise<void>((r) => setTimeout(r, limiteMs).unref?.())]),
+        )
+      : atual;
   // A cauda nunca falha: o erro de uma tarefa é de quem a pediu, não da fila.
-  const cauda = atual.catch(() => {});
+  const cauda = andou.then(
+    () => {},
+    () => {},
+  );
   filas.set(chave, cauda);
   void cauda.then(() => {
     if (filas.get(chave) === cauda) filas.delete(chave);

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { WifiOff } from "lucide-react";
+import { Tag as TagIcon, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Evento de janela para componentes que buscam dados por conta própria. */
@@ -18,7 +18,7 @@ const FORA_DA_ABA_MS = 30_000;
 // Rede de segurança: de quanto em quanto tempo conferir o carimbo dos dados.
 const CONFERIR_MS = 15_000;
 
-type Carimbo = { versao: string; whatsapp: { conectados: number; contas: number } };
+type Carimbo = { versao: string; whatsapp: { conectados: number; contas: number; etiquetasParadas?: number } };
 
 /**
  * Mantém a tela em dia com o WhatsApp.
@@ -147,6 +147,28 @@ export function AoVivo() {
         <span className="relative flex size-2">
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--color-hot)] opacity-70" />
           <span className="relative inline-flex size-2 rounded-full bg-[var(--color-hot)]" />
+        </span>
+      </Link>
+    );
+  }
+
+  // Conectado, mas a Evolution perdeu a chave das etiquetas: as mensagens
+  // chegam, as etiquetas não — o "depois de um tempo para de mover". Sem
+  // este aviso, só dava para descobrir abrindo Configurações.
+  if (whatsapp?.etiquetasParadas) {
+    return (
+      <Link
+        href="/configuracoes#etiquetas"
+        title="A Evolution perdeu a chave das etiquetas (reiniciou sem guardar os arquivos da sessão). Etiquetar no celular não move os leads até reconectar o número. Clique para ver o que fazer."
+        className="ilha inline-flex shrink-0 items-center gap-2 py-2 pl-2.5 pr-3.5 text-xs font-semibold transition-transform hover:scale-[1.03]"
+      >
+        <span className="grid size-6 place-items-center rounded-full bg-[var(--color-warm)]/20">
+          <TagIcon className="size-3.5 text-[var(--color-warm)]" />
+        </span>
+        <span className="hidden text-white sm:inline">Etiquetas paradas</span>
+        <span className="relative flex size-2">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--color-warm)] opacity-70" />
+          <span className="relative inline-flex size-2 rounded-full bg-[var(--color-warm)]" />
         </span>
       </Link>
     );
