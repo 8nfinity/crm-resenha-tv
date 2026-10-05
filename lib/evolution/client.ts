@@ -455,15 +455,20 @@ export const evolution = {
   },
 
   /**
-   * Aplica ou retira uma etiqueta de uma conversa. Antes de mexer, a
-   * biblioteca do WhatsApp baixa de novo TODAS as etiquetas da conta — é o que
-   * usamos para forçar a leitura (ver forcarLeituraDasEtiquetas).
+   * A foto de perfil de alguém, pelo telefone ou pelo LID — só leitura, como o
+   * WhatsApp Web faz ao abrir uma conversa. Null se a pessoa não tem foto ou a
+   * privacidade dela esconde.
+   *
+   * (Não existe aqui nada que aplique ou retire etiqueta: escrever nos dados
+   * da conta trava a chegada das etiquetas — ver lib/labels.ts.)
    */
-  async handleLabel(instanceName: string, numero: string, labelId: string, acao: "add" | "remove"): Promise<unknown> {
-    return request(`/label/handleLabel/${instanceName}`, {
+  async fotoDePerfil(instanceName: string, jid: string): Promise<string | null> {
+    const data = await request<{ profilePictureUrl?: unknown }>(`/chat/fetchProfilePictureUrl/${instanceName}`, {
       method: "POST",
-      body: { number: numero, labelId, action: acao },
+      body: { number: jid },
+      esperaMs: ESPERA_RAPIDA_MS,
     });
+    return typeof data?.profilePictureUrl === "string" && data.profilePictureUrl ? data.profilePictureUrl : null;
   },
 
   /** Para onde a instância está mandando os eventos hoje (null se nada configurado). */

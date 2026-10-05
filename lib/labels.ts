@@ -1,17 +1,17 @@
 import { prisma } from "@/lib/db";
 import { createDealForContact, moveDealToStage, recalculateScore } from "@/lib/deals";
-import { evolution, EvolutionError } from "@/lib/evolution/client";
+import { evolution } from "@/lib/evolution/client";
 import { isPersonJid, parseMessage } from "@/lib/evolution/parse";
-import { descobrirPessoa, formaConhecidaDoTelefone } from "@/lib/identidade-contato";
+import { descobrirPessoa, formaConhecidaDoTelefone, pessoaPelaFoto } from "@/lib/identidade-contato";
 import type { EvolutionMessage } from "@/lib/evolution/types";
 import { acharContato, ingestMessages, upsertContact } from "@/lib/ingest";
 import { emFila } from "@/lib/fila";
 import { ignorarContato, quemEstaComAEtiqueta, voltarAMostrar } from "@/lib/ignorar";
 import { corrigirNomeEtiqueta, estagioDeMesmoNome, nomeParaGuardar, nomeProvisorio } from "@/lib/etiquetas-nomes";
 import { avisarMudanca } from "@/lib/eventos";
-import { unificarEmSegundoPlano } from "@/lib/sincronizacao";
-import { classificarFalha, eventoDoEstado, MINUTO, precisaVerificar, type EstadoChave } from "@/lib/saude-etiquetas";
-import { limparEventosAntigos, registrarEventoDeConexao, ultimaAbertura, ultimoQrCode } from "@/lib/eventos-conexao";
+import { marcarLidConferido, unificarEmSegundoPlano } from "@/lib/sincronizacao";
+import { MINUTO } from "@/lib/saude-etiquetas";
+import { limparEventosAntigos, ultimoQrCode } from "@/lib/eventos-conexao";
 
 /**
  * Etiquetas do WhatsApp Business → estágios do funil.
@@ -24,6 +24,14 @@ import { limparEventosAntigos, registrarEventoDeConexao, ultimaAbertura, ultimoQ
  * aplica a etiqueta, a etiqueta volta como evento e mexe no estágio de novo.
  * Dá para quebrar esse ciclo, mas é complexidade que só se paga se você
  * realmente trabalhar pelos dois lados.
+ *
+ * E o CRM NUNCA escreve nas etiquetas do WhatsApp — nem para testar. Uma
+ * "leitura forçada" antiga retirava uma etiqueta inexistente da conversa
+ * "Mensagem para mim": por dentro, isso grava uma alteração de verdade nos
+ * dados da conta, que vai para o celular e para todos os aparelhos. Em
+ * 05/10/2026 as etiquetas pararam de chegar 4 segundos depois de uma dessas
+ * leituras (as mensagens continuaram), e era a mesma "parada depois de uns
+ * minutos" de antes: a leitura rodava ~5 min depois de conectar.
  */
 
 /**
@@ -175,94 +183,6 @@ export async function tirarEtiquetaDoCrm(accountId: string, labelId: string) {
   });
 }
 
-/** Id que não existe em nenhum celular: retirá-la de uma conversa não muda nada. */
-const ETIQUETA_INEXISTENTE = "987654321";
-
-type ResultadoLeitura = { ok: true } | { ok: false; erro: string; estado?: EstadoChave };
-
-/**
- * Força a Evolution a ler as etiquetas do WhatsApp agora, sem desconectar.
- *
- * As etiquetas chegam por um canal separado das mensagens (os "dados da
- * conta"), e às vezes a conexão nunca faz essa leitura. Pedir para RETIRAR
- * uma etiqueta inexistente da conversa "Mensagem para mim" não muda nada no
- * celular, mas obriga a biblioteca do WhatsApp a baixar antes todas as
- * etiquetas da conta e quem está com cada uma — e a Evolution repassa ao CRM.
- *
- * É também o único jeito de saber se a chave desses dados está lá: sem ela, a
- * resposta diz exatamente isso (ver classificarFalha).
- */
-async function forcarLeituraDasEtiquetas(conta: {
-  id: string;
-  instanceName: string;
-  status: string;
-  phone: string | null;
-}): Promise<ResultadoLeitura> {
-  if (conta.status !== "open") return { ok: false, erro: "Conecte o número antes de buscar as etiquetas." };
-
-  const numero =
-    conta.phone ??
-    (await prisma.contact.findFirst({ where: { accountId: conta.id, phone: { not: null } }, select: { phone: true } }))
-      ?.phone;
-  if (!numero) return { ok: false, erro: "Não encontrei um número desta conta para fazer a leitura." };
-
-  try {
-    await evolution.handleLabel(conta.instanceName, numero, ETIQUETA_INEXISTENTE, "remove");
-    return { ok: true };
-  } catch (error) {
-    const status = error instanceof EvolutionError ? error.status : null;
-    const corpo = error instanceof EvolutionError ? error.body : "";
-    const { estado, texto } = classificarFalha((error as Error).message, status, corpo);
-    return { ok: false, erro: texto, estado };
-  }
-}
-
-function quando(d: Date): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-}
-
-/**
- * Lê as etiquetas à força e guarda o resultado na conta (a tela de etiquetas
- * mostra) e na linha do tempo da conexão, quando ele muda.
- */
-export async function verificarChaveDasEtiquetas(accountId: string): Promise<ResultadoLeitura> {
-  const conta = await prisma.whatsAppAccount.findUnique({ where: { id: accountId } });
-  if (!conta) return { ok: false, erro: "Conta não encontrada." };
-
-  const leitura = await forcarLeituraDasEtiquetas(conta);
-  // Sem estado: nem chegou a perguntar (número desconectado). Nada a guardar.
-  if (!leitura.ok && !leitura.estado) return leitura;
-
-  const estado: EstadoChave = leitura.ok ? "ok" : leitura.estado!;
-  let detalhe = leitura.ok ? null : leitura.erro;
-
-  if (estado === "chave_perdida" && conta.labelKeyStatus === "ok" && conta.labelKeyCheckedAt) {
-    // Estava boa e sumiu: se houve reconexão no meio, é a Evolution que
-    // reiniciou sem guardar os arquivos. Data e hora ajudam a achar no log.
-    const reconexao = await ultimaAbertura(accountId);
-    if (reconexao && reconexao > conta.labelKeyCheckedAt) {
-      detalhe =
-        `Em ${quando(conta.labelKeyCheckedAt)} a chave estava OK; o WhatsApp reconectou em ${quando(reconexao)} ` +
-        `e voltou sem ela. ${detalhe}`;
-    }
-  }
-
-  await prisma.whatsAppAccount.update({
-    where: { id: accountId },
-    data: { labelKeyStatus: estado, labelKeyCheckedAt: new Date(), labelKeyDetail: detalhe },
-  });
-  if (estado !== conta.labelKeyStatus) {
-    await registrarEventoDeConexao(accountId, eventoDoEstado(estado), detalhe);
-  }
-  return leitura;
-}
-
 let atualizandoListas = false;
 
 /**
@@ -270,8 +190,8 @@ let atualizandoListas = false;
  * número conectado. O caminho normal é o aviso do celular, na hora em que a
  * etiqueta é criada; esta rotina é a rede de segurança — se o aviso se
  * perdeu, a etiqueta nova aparece mesmo assim em poucos minutos, sem
- * precisar apertar "Buscar do aparelho". Só lê o banco da Evolution; não
- * mexe no WhatsApp.
+ * precisar apertar "Atualizar". Só lê o banco da Evolution; não mexe no
+ * WhatsApp.
  */
 export async function atualizarEtiquetasDosNumeros(): Promise<void> {
   if (atualizandoListas) return;
@@ -279,11 +199,9 @@ export async function atualizarEtiquetasDosNumeros(): Promise<void> {
   try {
     const contas = await prisma.whatsAppAccount.findMany({
       where: { status: "open" },
-      select: { id: true, instanceName: true, labelKeyStatus: true },
+      select: { id: true, instanceName: true },
     });
     for (const conta of contas) {
-      // Sem a chave, a lista da Evolution parou no tempo: não traz nada novo.
-      if (conta.labelKeyStatus === "chave_perdida") continue;
       try {
         const antes = await prisma.whatsAppLabel.findMany({ where: { accountId: conta.id }, select: { labelId: true } });
         const conhecidas = new Set(antes.map((e) => e.labelId));
@@ -300,34 +218,9 @@ export async function atualizarEtiquetasDosNumeros(): Promise<void> {
         console.warn(`Lista de etiquetas de ${conta.instanceName}:`, (error as Error).message);
       }
     }
-  } finally {
-    atualizandoListas = false;
-  }
-}
-
-let conferindoChaves = false;
-
-/**
- * Rotina do servidor: confere a chave das etiquetas de cada número conectado
- * quando é hora (ver precisaVerificar) — principalmente logo depois de uma
- * reconexão, que é quando a Evolution pode ter voltado sem os arquivos.
- */
-export async function conferirChavesDasEtiquetas(): Promise<void> {
-  if (conferindoChaves) return;
-  conferindoChaves = true;
-  try {
-    const contas = await prisma.whatsAppAccount.findMany({
-      where: { status: "open" },
-      select: { id: true, instanceName: true, labelKeyStatus: true, labelKeyCheckedAt: true },
-    });
-    for (const conta of contas) {
-      if (!precisaVerificar(conta, await ultimaAbertura(conta.id))) continue;
-      const r = await verificarChaveDasEtiquetas(conta.id);
-      if (!r.ok) console.warn(`Etiquetas de ${conta.instanceName}: ${r.erro}`);
-    }
     await limparEventosAntigos();
   } finally {
-    conferindoChaves = false;
+    atualizandoListas = false;
   }
 }
 
@@ -558,14 +451,24 @@ function buscarNomeDepois(accountId: string) {
 async function contatoDaConversa(conta: { id: string; instanceName: string }, chatId: string) {
   const achado = await acharContato(conta.id, chatId);
   if (achado) return achado;
-  // Sem a Evolution, fica com o identificador que veio.
   const { telefone, lid, pushName } = await quemEDaConversa(conta, chatId);
-  return upsertContact({
+  // LID que a Evolution não liga a telefone nenhum: pode ser de um lead cuja
+  // conversa veio do histórico pelo telefone. A foto de perfil diz de quem.
+  const doTelefone = !telefone && lid ? await pessoaPelaFoto(conta, lid) : null;
+  if (doTelefone) {
+    console.log(`Etiqueta pelo LID ${lid}: é o lead ${doTelefone.waJid} (mesma foto de perfil)`);
+    return upsertContact({ accountId: conta.id, waJid: doTelefone.waJid, alt: lid, pushName });
+  }
+  // Sem a Evolution, fica com o identificador que veio.
+  const novo = await upsertContact({
     accountId: conta.id,
     waJid: telefone ?? chatId,
     alt: telefone ? lid : null,
     pushName,
   });
+  // Já passou por tudo que a conferência de segundo plano faria.
+  marcarLidConferido(novo.id);
+  return novo;
 }
 
 /**
@@ -908,7 +811,7 @@ export async function moverQuemJaTemAEtiqueta(accountId: string, labelId: string
  * Leva ao estágio quem já está com QUALQUER etiqueta ligada a estágio e não
  * andou — o evento se perdeu, a etiqueta foi ligada ao estágio depois, ou
  * moveu uma cópia do contato pelo LID. Mesmas regras do mapeamento: só para a
- * frente e sem mexer em lead arquivado. Roda no "Buscar do aparelho".
+ * frente e sem mexer em lead arquivado. Roda no "Atualizar" da tela de etiquetas.
  */
 export async function aplicarEtiquetasMapeadas(accountId: string): Promise<number> {
   const mapeadas = await prisma.whatsAppLabel.findMany({

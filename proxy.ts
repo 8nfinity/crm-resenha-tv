@@ -58,6 +58,8 @@ function exigeAdministrador(request: NextRequest): boolean {
   if (request.method === "DELETE" && /^\/api\/deals\/[^/]+$/.test(c) && request.nextUrl.searchParams.get("permanente") === "true") {
     return true;
   }
+  // Juntar dois cards da mesma pessoa não dá para desfazer.
+  if (/^\/api\/deals\/[^/]+\/juntar$/.test(c)) return true;
   return false;
 }
 

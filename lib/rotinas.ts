@@ -5,7 +5,7 @@ import { estaHospedado, urlDoWebhook } from "@/lib/url-publica";
 import { varrerTudo } from "@/lib/sincronizacao";
 import { emailConfigurado } from "@/lib/email";
 import { enviarLembretes, enviarResumoDiario } from "@/lib/avisos";
-import { atualizarEtiquetasDosNumeros, conferirChavesDasEtiquetas } from "@/lib/labels";
+import { atualizarEtiquetasDosNumeros } from "@/lib/labels";
 
 /**
  * Rotinas que o próprio servidor executa — sem depender de cron externo.
@@ -34,14 +34,9 @@ export function iniciarRotinasDoServidor() {
     setTimeout(() => void varrerTudo().catch(() => {}), 20_000).unref();
     setInterval(() => void varrerTudo().catch(() => {}), INTERVALO_VARREDURA_MS).unref();
 
-    // Chave das etiquetas: a Evolution pode reiniciar e voltar sem ela (sem
-    // volume em /evolution/instances). A rotina só pergunta quando é hora —
-    // depois de cada reconexão e de tempos em tempos (lib/saude-etiquetas.ts).
-    setTimeout(() => void conferirChavesDasEtiquetas().catch(() => {}), 90_000).unref();
-    setInterval(() => void conferirChavesDasEtiquetas().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
-
     // Etiquetas e listas novas aparecem sozinhas mesmo se o aviso do celular
-    // se perder (o aviso é o caminho rápido; isto é a rede de segurança).
+    // se perder (o aviso é o caminho rápido; isto é a rede de segurança). Só
+    // LÊ: o CRM nunca escreve nas etiquetas do WhatsApp (ver lib/labels.ts).
     setTimeout(() => void atualizarEtiquetasDosNumeros().catch(() => {}), 60_000).unref();
     setInterval(() => void atualizarEtiquetasDosNumeros().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
   }

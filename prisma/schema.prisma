@@ -41,14 +41,12 @@ model WhatsAppAccount {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  /// Saúde da chave que abre as etiquetas e listas (os "dados da conta" do
-  /// WhatsApp). A Evolution guarda essa chave em ARQUIVO, em
-  /// /evolution/instances — se ela reinicia sem volume ali, a conexão continua
-  /// de pé (o login fica no banco), mas nenhuma etiqueta chega mais.
-  /// "ok", "chave_perdida", "sem_chave", "desconectado", "fora_do_ar" ou "erro".
+  /// SEM USO desde 05/10/2026. Guardavam a "conferência da chave das
+  /// etiquetas", que retirava uma etiqueta inexistente de uma conversa — isso
+  /// escreve nos dados da conta do WhatsApp e travava a chegada das etiquetas.
+  /// Ficam no banco para não exigir migration; nada lê nem grava.
   labelKeyStatus    String?
   labelKeyCheckedAt DateTime?
-  /// Frase pronta para a tela, quando não está "ok".
   labelKeyDetail    String?
 
   contacts         Contact[]

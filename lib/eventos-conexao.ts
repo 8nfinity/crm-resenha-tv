@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
 
 /**
- * Linha do tempo da conexão de cada conta: quando o WhatsApp abriu ou caiu e
- * o que deu cada verificação da chave das etiquetas.
+ * Linha do tempo da conexão de cada conta: quando o QR Code foi gerado e
+ * quando o WhatsApp abriu ou caiu.
  *
- * É ela que responde "a Evolution reiniciou e perdeu os arquivos?": uma
- * reconexão seguida de "chave perdida" é exatamente esse caso.
+ * É ela que responde "a Evolution reiniciou?": uma reconexão sem QR Code,
+ * seguida de etiquetas que não chegam, é a Evolution que voltou sem os
+ * arquivos da sessão (sem volume em /evolution/instances).
  */
 
 /** Um mesmo evento repetido dentro deste intervalo vira uma linha só. */
@@ -42,11 +43,6 @@ async function ultimoDoTipo(accountId: string, kind: string): Promise<Date | nul
     select: { createdAt: true },
   });
   return e?.createdAt ?? null;
-}
-
-/** Última vez que o WhatsApp (re)conectou. */
-export function ultimaAbertura(accountId: string): Promise<Date | null> {
-  return ultimoDoTipo(accountId, "open");
 }
 
 /** Última vez que um QR Code foi gerado para parear o número (pelo CRM). */

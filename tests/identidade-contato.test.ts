@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { avisoEscondeOLid, outroIdentificadorDaMensagem, variantesDoTelefone } from "../lib/identidade-contato";
+import { arquivoDaFoto, avisoEscondeOLid, outroIdentificadorDaMensagem, variantesDoTelefone } from "../lib/identidade-contato";
 import { copiaDecideOEstagio } from "../lib/mesclar-contatos";
 import { emFila } from "../lib/fila";
 
@@ -47,6 +47,26 @@ test("aviso de mensagem com o LID escondido: é quando o CRM relê a mensagem na
   assert.equal(avisoEscondeOLid({}), false);
 });
 
+test("foto de perfil: o arquivo identifica a pessoa, sem a assinatura que muda a cada pedido", () => {
+  // Formato real devolvido pelo WhatsApp (a mesma pessoa pelo LID e pelo telefone).
+  const pelaLid =
+    "https://pps.whatsapp.net/v/t61.24694-24/761236504_1369317727887550_1782546312973305809_n.jpg?ccb=11-4&oh=01_Q5Aa2wE&oe=68F1A2B3&_nc_sid=5e03e0&_nc_cat=105";
+  const peloTelefone =
+    "https://pps.whatsapp.net/v/t61.24694-24/761236504_1369317727887550_1782546312973305809_n.jpg?ccb=11-4&oh=01_OUTRA&oe=68F9C0DE&_nc_sid=5e03e0&_nc_cat=109";
+  assert.equal(arquivoDaFoto(pelaLid), arquivoDaFoto(peloTelefone));
+  assert.equal(arquivoDaFoto(pelaLid), "/v/t61.24694-24/761236504_1369317727887550_1782546312973305809_n.jpg");
+  assert.notEqual(
+    arquivoDaFoto(pelaLid),
+    arquivoDaFoto("https://pps.whatsapp.net/v/t61.24694-24/534423706_1660731988168521_3220736755575974958_n.jpg?oh=x"),
+    "outra foto, outra pessoa",
+  );
+  // Sem foto, ou algo que não é endereço de imagem: não serve para comparar.
+  assert.equal(arquivoDaFoto(null), null);
+  assert.equal(arquivoDaFoto(""), null);
+  assert.equal(arquivoDaFoto("não é endereço"), null);
+  assert.equal(arquivoDaFoto("https://pps.whatsapp.net/v/"), null);
+});
+
 test("o mesmo celular com e sem o 9 da frente", () => {
   const com9 = "5511987654321@s.whatsapp.net";
   const sem9 = "551187654321@s.whatsapp.net";
@@ -84,6 +104,20 @@ test("juntar duplicados não desfaz o movimento da etiqueta", () => {
     copiaDecideOEstagio({ stageId: primeira, enteredStageAt: depois }, { stageId: "qualificado", enteredStageAt: antes }, primeira),
     true,
   );
+});
+
+test("juntar à mão: fica o card do telefone; entre iguais, o de mais conversa", async () => {
+  const { qualFica } = await import("../lib/juntar-leads");
+  const fone = (dealId: string, mensagens: number) => ({ dealId, waJid: PN, mensagens });
+  const lid = (dealId: string, mensagens: number) => ({ dealId, waJid: LID, mensagens });
+  // O caso da Helena: a cópia pelo LID (sem conversa) foi aberta; fica o do telefone.
+  assert.equal(qualFica(lid("copia", 0), fone("helena", 15)), "helena");
+  assert.equal(qualFica(fone("helena", 15), lid("copia", 0)), "helena");
+  // Telefone ganha mesmo com menos conversa: é ele que mostra o número.
+  assert.equal(qualFica(lid("a", 300), fone("b", 2)), "b");
+  // Dois do mesmo tipo: mais conversa; empate, o que está aberto.
+  assert.equal(qualFica(lid("a", 3), lid("b", 9)), "b");
+  assert.equal(qualFica(fone("a", 5), fone("b", 5)), "a");
 });
 
 test("uma etiquetagem presa não para a fila: as seguintes andam depois do limite", async () => {

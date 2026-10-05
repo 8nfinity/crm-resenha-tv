@@ -101,6 +101,68 @@ export async function lidEscondidoNoAviso(instanceName: string, raw: EvolutionMe
 }
 
 /**
+ * O arquivo da foto de perfil, sem o servidor e sem a assinatura temporária
+ * ("?oh=…&oe=…"): "/v/t61.24694-24/7612…_n.jpg". O WhatsApp devolve o MESMO
+ * arquivo pelo telefone e pelo LID da mesma pessoa (conferido em contatos
+ * reais em 05/10/2026), e cada foto enviada ganha um arquivo próprio.
+ */
+export function arquivoDaFoto(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const caminho = new URL(url).pathname;
+    return /\.(jpe?g|png|webp)$/i.test(caminho) ? caminho : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Quantos leads, no máximo, ganham uma consulta de foto por vez. */
+const MAX_CONSULTAS_DE_FOTO = 12;
+
+/**
+ * O lead do telefone dono de um LID que nada mais liga a um telefone — pela
+ * foto de perfil.
+ *
+ * Caso real (Helena, 05/10/2026): a conversa veio do histórico pelo
+ * TELEFONE, e a etiqueta chegou pelo LID. Nem as mensagens nem o cache da
+ * Evolution ligam os dois, e o CRM criava um segundo card. Os candidatos são
+ * os leads do telefone que ainda não têm o LID guardado — poucos, porque
+ * quase toda conversa já vem pelo LID. Só vale se UM candidato tiver
+ * exatamente a mesma foto; sem foto (ou escondida pela privacidade), null.
+ */
+export async function pessoaPelaFoto(
+  conta: { id: string; instanceName: string },
+  lid: string,
+): Promise<{ id: string; waJid: string } | null> {
+  const candidatos = (
+    await prisma.contact.findMany({
+      where: { accountId: conta.id, waJid: { endsWith: "@s.whatsapp.net" }, lid: null, ignoredAt: null, deals: { some: {} } },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, waJid: true, profilePicUrl: true },
+    })
+  ).filter((c) => !c.waJid.startsWith("0@"));
+  if (candidatos.length === 0) return null;
+
+  const daFoto = arquivoDaFoto(await evolution.fotoDePerfil(conta.instanceName, lid).catch(() => null));
+  if (!daFoto) return null;
+
+  // Primeiro pelas fotos já guardadas, sem perguntar nada ao WhatsApp.
+  const pelaGuardada = candidatos.filter((c) => arquivoDaFoto(c.profilePicUrl) === daFoto);
+  if (pelaGuardada.length > 0) return pelaGuardada.length === 1 ? pelaGuardada[0] : null;
+
+  // Depois, a foto atual de cada um (a guardada pode ser antiga ou faltar).
+  const iguais: { id: string; waJid: string }[] = [];
+  for (const c of candidatos.slice(0, MAX_CONSULTAS_DE_FOTO)) {
+    const url = await evolution.fotoDePerfil(conta.instanceName, c.waJid).catch(() => null);
+    if (url && url !== c.profilePicUrl) {
+      await prisma.contact.update({ where: { id: c.id }, data: { profilePicUrl: url } }).catch(() => {});
+    }
+    if (arquivoDaFoto(url) === daFoto) iguais.push(c);
+  }
+  return iguais.length === 1 ? iguais[0] : null;
+}
+
+/**
  * O telefone na forma que o CRM já usa (com ou sem o 9), se ele já conhece
  * esse celular — para não criar um segundo contato do mesmo número.
  */

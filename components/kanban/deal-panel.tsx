@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Send, Trash2, Tag, UserRound, StickyNote } from "lucide-react";
+import { X, Send, Trash2, Tag, UserRound, StickyNote, Combine, Loader2 } from "lucide-react";
 import { AtividadesLead, type AtividadeDoLead } from "@/components/atividades-lead";
 import { dataHora } from "@/lib/atividades";
 import { useEhAdmin } from "@/components/sessao";
@@ -42,6 +42,145 @@ type EventoEtiqueta = {
   createdAt: string;
 };
 
+/** Lead que pode ser a mesma pessoa (ver /api/deals/[id]/juntar). */
+type OpcaoDeJuncao = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  estagio: { name: string; color: string };
+};
+
+/**
+ * Juntar este card com outro da mesma pessoa. O CRM junta sozinho quando
+ * descobre (mensagem nova, foto de perfil); isto é para o que sobrar.
+ */
+function JuntarComOutro({
+  dealId,
+  nome,
+  onFeito,
+  onCancelar,
+}: {
+  dealId: string;
+  nome: string;
+  onFeito: (r: { ficou: string; saiu: string }) => void;
+  onCancelar: () => void;
+}) {
+  const [busca, setBusca] = useState("");
+  const [opcoes, setOpcoes] = useState<OpcaoDeJuncao[]>([]);
+  const [sugestoes, setSugestoes] = useState(true);
+  const [escolhido, setEscolhido] = useState<OpcaoDeJuncao | null>(null);
+  const [juntando, setJuntando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetch(`/api/deals/${dealId}/juntar?busca=${encodeURIComponent(busca)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { leads: OpcaoDeJuncao[]; sugestoes: boolean } | null) => {
+          if (!d) return;
+          setOpcoes(d.leads);
+          setSugestoes(d.sugestoes);
+        })
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [dealId, busca]);
+
+  async function juntar() {
+    if (!escolhido) return;
+    setJuntando(true);
+    setErro(null);
+    const res = await fetch(`/api/deals/${dealId}/juntar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comDealId: escolhido.id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setJuntando(false);
+    if (!res.ok) {
+      setErro(d.error ?? "Não consegui juntar os dois leads.");
+      return;
+    }
+    onFeito(d);
+  }
+
+  return (
+    <div className="border-b bg-[var(--color-surface-2)] p-4">
+      <p className="text-sm font-medium">Juntar com outro lead (a mesma pessoa)</p>
+
+      {escolhido ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs text-[var(--color-muted)]">
+            {nome} e {escolhido.nome} viram um card só: conversas, notas, atividades e o histórico de etiquetas vão
+            juntos, e fica o estágio de quem andou por último no funil. Não dá para desfazer.
+          </p>
+          {erro && <p className="text-xs text-[var(--color-hot)]">{erro}</p>}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void juntar()}
+              disabled={juntando}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-ink)] disabled:opacity-50"
+            >
+              {juntando ? <Loader2 className="size-4 animate-spin" /> : <Combine className="size-4" />}
+              Juntar
+            </button>
+            <button
+              onClick={() => setEscolhido(null)}
+              disabled={juntando}
+              className="px-1 py-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            >
+              Escolher outro
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2">
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome ou número"
+            className="w-full rounded-xl bg-[var(--color-surface)] px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          />
+          {sugestoes && opcoes.length > 0 && (
+            <p className="text-[11px] text-[var(--color-muted)]">Mais prováveis:</p>
+          )}
+          <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+            {opcoes.map((o) => (
+              <li key={o.id}>
+                <button
+                  onClick={() => setEscolhido(o)}
+                  className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface)]"
+                >
+                  <span className="min-w-0 flex-1 truncate">{o.nome}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-[var(--color-muted)]">{o.telefone ?? "sem número"}</span>
+                  <span
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px]"
+                    style={{ color: o.estagio.color, backgroundColor: `${o.estagio.color}1a` }}
+                  >
+                    {o.estagio.name}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {opcoes.length === 0 && (
+              <li className="px-2 py-1.5 text-xs text-[var(--color-muted)]">
+                {busca ? "Nenhum lead com esse nome ou número." : "Busque pelo nome ou pelo número."}
+              </li>
+            )}
+          </ul>
+          <button
+            onClick={onCancelar}
+            className="self-start px-1 py-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Notas e histórico de etiquetas numa linha do tempo só, do mais novo ao mais antigo. */
 type ItemDaLinha =
   | { tipo: "nota"; id: string; em: string; texto: string }
@@ -71,6 +210,7 @@ export function DealPanel({
   const [campos, setCampos] = useState<Campo[]>([]);
   const [confirmando, setConfirmando] = useState(false);
   const [removendo, setRemovendo] = useState(false);
+  const [juntandoCom, setJuntandoCom] = useState(false);
 
   async function load() {
     const res = await fetch(`/api/deals/${dealId}`);
@@ -214,8 +354,24 @@ export function DealPanel({
               </div>
 
               <div className="flex items-center gap-1">
+                {admin && (
+                  <button
+                    onClick={() => {
+                      setConfirmando(false);
+                      setJuntandoCom((v) => !v);
+                    }}
+                    className="rounded-full p-1.5 text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                    aria-label="Juntar com outro lead"
+                    title="Juntar com outro lead (a mesma pessoa em dois cards)"
+                  >
+                    <Combine className="size-4" />
+                  </button>
+                )}
                 <button
-                  onClick={() => setConfirmando(true)}
+                  onClick={() => {
+                    setJuntandoCom(false);
+                    setConfirmando(true);
+                  }}
                   className="rounded-full p-1.5 text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-hot)]"
                   aria-label="Remover do funil"
                   title="Remover do funil"
@@ -231,6 +387,22 @@ export function DealPanel({
                 </button>
               </div>
             </header>
+
+            {juntandoCom && (
+              <JuntarComOutro
+                dealId={dealId}
+                nome={deal.displayName}
+                onCancelar={() => setJuntandoCom(false)}
+                onFeito={({ ficou, saiu }) => {
+                  setJuntandoCom(false);
+                  // O card que saiu some da tela na hora; se era este, o
+                  // painel fecha (o que ficou já está no funil, com tudo).
+                  onRemoved?.(saiu);
+                  if (saiu === dealId) onClose();
+                  else if (ficou === dealId) void load();
+                }}
+              />
+            )}
 
             {/* Duas opções em vez de um "confirmar": a diferença entre elas não
                 é de grau, é de consequência. Arquivar preserva as métricas;

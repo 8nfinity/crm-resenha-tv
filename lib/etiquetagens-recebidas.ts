@@ -5,7 +5,8 @@
  *   - etiquetou e apareceu aqui com "Moveu para X": funcionou;
  *   - apareceu, mas com outro resultado: o motivo está escrito;
  *   - não apareceu nada: o aviso nem chegou ao CRM (o WhatsApp não mandou
- *     para a Evolution — chave das etiquetas — ou a Evolution não repassou).
+ *     para a Evolution — ela reiniciou sem o volume da sessão — ou a Evolution
+ *     não repassou).
  *
  * Fica na memória do processo (o CRM roda como um servidor só) e recomeça a
  * cada publicação: é um painel de conferência, não um histórico. O histórico

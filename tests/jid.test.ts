@@ -30,6 +30,8 @@ test("descarta o que não é pessoa", () => {
   assert.equal(isPersonJid("123@newsletter"), false, "newsletter");
   assert.equal(isPersonJid("123@broadcast"), false, "lista de transmissão");
   assert.equal(isPersonJid("123@bot"), false, "bot");
+  assert.equal(isPersonJid("0@s.whatsapp.net"), false, "conta de sistema do WhatsApp (virava um lead sem nome)");
+  assert.equal(isPersonJid("5511900000000@s.whatsapp.net"), true, "telefone que começa com 0 depois do DDI continua valendo");
 });
 
 test("extrai telefone apenas do formato que realmente tem um", () => {

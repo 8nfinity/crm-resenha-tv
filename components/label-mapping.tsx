@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Loader2, ArrowRight, Tag, Trash2, ShieldCheck, ShieldAlert, Smartphone } from "lucide-react";
+import { RefreshCw, Loader2, ArrowRight, Tag, Trash2, Smartphone } from "lucide-react";
 import { corrigirNomeEtiqueta, ehFiltroAutomatico, estagioDeMesmoNome } from "@/lib/etiquetas-nomes";
 import { descreverEvento } from "@/lib/saude-etiquetas";
 import { EVENTO_MUDOU, type DetalheMudou } from "@/components/ao-vivo";
@@ -28,8 +28,6 @@ const ATENDENTE = "__atendente__";
 
 type Conta = { id: string; label: string | null; status: string };
 
-/** Resultado da última conferência da chave das etiquetas (null: nunca conferida). */
-type Saude = { estado: string | null; detalhe: string | null; verificadoEm: string | null };
 type EventoConexao = { kind: string; detail: string | null; createdAt: string };
 
 function horario(iso: string): string {
@@ -51,8 +49,9 @@ function RecebidasDoCelular({ recebidas }: { recebidas: Etiquetagem[] }) {
       {recebidas.length === 0 ? (
         <p className="mt-1.5 text-[var(--color-muted)]">
           Nada desde que o CRM foi publicado pela última vez. Para testar, coloque uma conversa numa lista ou
-          etiqueta no celular: ela aparece aqui em poucos segundos, com o que o CRM fez. Se não aparecer, o aviso
-          não chegou ao CRM — veja a chave das etiquetas acima.
+          etiqueta no celular: ela aparece aqui em poucos segundos, com o que o CRM fez. Se não aparecer, o
+          WhatsApp não mandou o aviso para a Evolution — em Conexão, use “Desconectar → Só desconectar” e
+          conecte o número de novo (os leads ficam).
         </p>
       ) : (
         <ul className="mt-1.5 flex flex-col gap-1">
@@ -75,52 +74,23 @@ function RecebidasDoCelular({ recebidas }: { recebidas: Etiquetagem[] }) {
 }
 
 /**
- * Se a chave que abre as etiquetas está lá. Sem ela a conexão parece normal
- * (mensagens chegam), mas nenhuma etiqueta, lista ou exclusão chega ao CRM —
- * é o que a Evolution sofre ao reiniciar sem volume.
+ * Quando o WhatsApp conectou e caiu. Uma reconexão sozinha (sem QR Code)
+ * seguida de etiquetas que não chegam é a Evolution que reiniciou sem o
+ * volume em /evolution/instances.
  */
-function SaudeDasEtiquetas({ saude, eventos }: { saude: Saude | undefined; eventos: EventoConexao[] }) {
-  if (!saude?.estado) return null;
-  const ok = saude.estado === "ok";
-  const grave = saude.estado === "chave_perdida";
-
+function LinhaDoTempo({ eventos }: { eventos: EventoConexao[] }) {
+  if (eventos.length === 0) return null;
   return (
-    <div className="mb-3 flex flex-col gap-1.5">
-      {ok ? (
-        <p className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-muted)]">
-          <ShieldCheck className="size-3.5 text-[var(--color-accent)]" />
-          Chave das etiquetas OK{saude.verificadoEm ? ` · conferida em ${horario(saude.verificadoEm)}` : ""}
-        </p>
-      ) : (
-        <div
-          className={`flex gap-2 rounded-2xl px-3 py-2 text-xs ${
-            grave
-              ? "bg-[color-mix(in_srgb,var(--color-hot)_14%,transparent)]"
-              : "bg-[color-mix(in_srgb,var(--color-warm)_14%,transparent)]"
-          }`}
-        >
-          <ShieldAlert className={`mt-0.5 size-3.5 shrink-0 ${grave ? "text-[var(--color-hot)]" : "text-[var(--color-warm)]"}`} />
-          <p>
-            {saude.detalhe ?? "A última conferência das etiquetas falhou."}
-            {saude.verificadoEm && (
-              <span className="text-[var(--color-muted)]"> (conferido em {horario(saude.verificadoEm)})</span>
-            )}
-          </p>
-        </div>
-      )}
-      {eventos.length > 0 && (
-        <details className="text-[11px] text-[var(--color-muted)]">
-          <summary className="cursor-pointer select-none">Linha do tempo da conexão</summary>
-          <ul className="mt-1.5 flex flex-col gap-0.5 pl-1">
-            {eventos.map((e, i) => (
-              <li key={i}>
-                <span className="tabular-nums">{horario(e.createdAt)}</span> — {descreverEvento(e.kind)}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </div>
+    <details className="mb-3 text-[11px] text-[var(--color-muted)]">
+      <summary className="cursor-pointer select-none">Linha do tempo da conexão</summary>
+      <ul className="mt-1.5 flex flex-col gap-0.5 pl-1">
+        {eventos.map((e, i) => (
+          <li key={i}>
+            <span className="tabular-nums">{horario(e.createdAt)}</span> — {descreverEvento(e.kind)}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -140,8 +110,8 @@ export function LabelMapping({
 }) {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [porConta, setPorConta] = useState<Record<string, Etiqueta[]>>({});
-  const [saudePorConta, setSaudePorConta] = useState<
-    Record<string, { saude: Saude; eventos: EventoConexao[]; recebidas: Etiquetagem[] }>
+  const [conexaoPorConta, setConexaoPorConta] = useState<
+    Record<string, { eventos: EventoConexao[]; recebidas: Etiquetagem[] }>
   >({});
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -169,9 +139,9 @@ export function LabelMapping({
             );
           }
           setPorConta((p) => ({ ...p, [conta.id]: data.etiquetas }));
-          setSaudePorConta((p) => ({
+          setConexaoPorConta((p) => ({
             ...p,
-            [conta.id]: { saude: data.saude, eventos: data.eventos ?? [], recebidas: data.recebidas ?? [] },
+            [conta.id]: { eventos: data.eventos ?? [], recebidas: data.recebidas ?? [] },
           }));
         } catch {
           setErro("Não consegui falar com o servidor.");
@@ -335,20 +305,17 @@ export function LabelMapping({
                 ) : (
                   <RefreshCw className="size-3.5" />
                 )}
-                Buscar do aparelho
+                Atualizar
               </button>
             </div>
 
-            <SaudeDasEtiquetas
-              saude={saudePorConta[conta.id]?.saude}
-              eventos={saudePorConta[conta.id]?.eventos ?? []}
-            />
+            <LinhaDoTempo eventos={conexaoPorConta[conta.id]?.eventos ?? []} />
 
             {etiquetas.length === 0 ? (
               <p className="text-xs text-[var(--color-muted)]">
                 {conectado
                   ? "Nenhuma etiqueta ou lista encontrada. Crie etiquetas (WhatsApp Business) ou listas " +
-                    "(aba Conversas → Listas, no WhatsApp) no celular e clique em “Buscar do aparelho”."
+                    "(aba Conversas → Listas, no WhatsApp) no celular: elas aparecem aqui sozinhas em segundos."
                   : "Conecte este número para buscar as etiquetas."}
               </p>
             ) : (
@@ -426,7 +393,7 @@ export function LabelMapping({
                 {filtros.map((f) => corrigirNomeEtiqueta(f.name)).join(", ")}.
               </p>
             )}
-            <RecebidasDoCelular recebidas={saudePorConta[conta.id]?.recebidas ?? []} />
+            <RecebidasDoCelular recebidas={conexaoPorConta[conta.id]?.recebidas ?? []} />
           </div>
         );
       })}

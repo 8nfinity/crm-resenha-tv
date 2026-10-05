@@ -1,109 +1,21 @@
 /**
- * Saúde das etiquetas — regras puras, usadas no servidor e na tela.
+ * Linha do tempo da conexão — regras puras, usadas no servidor e na tela.
  *
  * As etiquetas e listas chegam por um canal separado das mensagens (os "dados
  * da conta" do WhatsApp), trancado por uma chave que o celular entrega ao
  * parear. A Evolution 2.3 guarda o login no BANCO, mas essa chave em ARQUIVO,
- * em /evolution/instances. Se ela reinicia sem um volume ali:
+ * em /evolution/instances: se ela reinicia sem um volume ali, a conexão
+ * continua de pé e as mensagens chegam, mas nenhuma etiqueta chega mais — só
+ * volta pareando o número de novo. A linha do tempo mostra as reconexões, que
+ * é onde isso aparece.
  *
- *   - a conexão continua "conectada" (o login estava no banco);
- *   - as mensagens continuam chegando;
- *   - mas nenhuma etiqueta, lista ou exclusão chega mais — nem à Evolution,
- *     nem ao CRM. Só volta pareando o número de novo.
- *
- * Por isso o problema parece "aleatório": tudo funciona até o próximo
- * reinício da Evolution. O CRM confere essa chave de tempos em tempos e
- * depois de cada reconexão, e mostra o resultado na tela de etiquetas.
+ * O CRM já conferiu essa chave à força, retirando uma etiqueta inexistente de
+ * uma conversa. Isso ESCREVE nos dados da conta do WhatsApp e foi o que fez as
+ * etiquetas pararem de chegar minutos depois de conectar — saiu. Os tipos
+ * "chave_*" abaixo ficam só para as linhas antigas da linha do tempo.
  */
-
-export type EstadoChave = "ok" | "chave_perdida" | "sem_chave" | "desconectado" | "fora_do_ar" | "erro";
 
 export const MINUTO = 60_000;
-/** Conferência de rotina: a chave quase nunca muda sozinha. */
-const ROTINA_MS = 6 * 60 * MINUTO;
-/** Estados que costumam se resolver sozinhos (o WhatsApp manda a chave, a Evolution volta). */
-const NOVA_TENTATIVA_MS = 10 * MINUTO;
-/** Depois de uma reconexão: espera a sessão assentar e não confere mais que isso. */
-const ESPERA_RECONEXAO_MS = MINUTO;
-const INTERVALO_MINIMO_MS = 30 * MINUTO;
-
-/**
- * Hora de conferir a chave de novo?
- *
- * `ultimaAbertura` é a última vez que o WhatsApp (re)conectou. Uma reconexão
- * depois da última conferência é justamente quando a chave pode ter sumido —
- * a Evolution reiniciou.
- */
-export function precisaVerificar(
-  conta: { labelKeyStatus: string | null; labelKeyCheckedAt: Date | null },
-  ultimaAbertura: Date | null,
-  agora: Date = new Date(),
-): boolean {
-  if (!conta.labelKeyCheckedAt) return true;
-  const desde = agora.getTime() - conta.labelKeyCheckedAt.getTime();
-
-  if (
-    ultimaAbertura &&
-    ultimaAbertura > conta.labelKeyCheckedAt &&
-    agora.getTime() - ultimaAbertura.getTime() >= ESPERA_RECONEXAO_MS &&
-    desde >= INTERVALO_MINIMO_MS
-  ) {
-    return true;
-  }
-
-  const passageiro = ["sem_chave", "desconectado", "fora_do_ar", "erro"].includes(conta.labelKeyStatus ?? "");
-  if (passageiro && desde >= NOVA_TENTATIVA_MS) return true;
-
-  return desde >= ROTINA_MS;
-}
-
-/**
- * Traduz a resposta da leitura forçada em estado + frase para a tela.
- *
- * `status` e `corpo` vêm do erro da Evolution; `mensagem` é a do cliente.
- */
-export function classificarFalha(mensagem: string, status: number | null, corpo: string): { estado: EstadoChave; texto: string } {
-  const detalhe = `${mensagem} ${corpo}`;
-
-  // A conexão sabe QUAL chave abre os dados da conta, mas o arquivo dela
-  // sumiu: a Evolution reiniciou sem volume em /evolution/instances.
-  if (/myAppStateKey .*not present/i.test(detalhe)) {
-    return {
-      estado: "chave_perdida",
-      texto:
-        "A Evolution perdeu a chave que abre as etiquetas e listas: ela reiniciou e os arquivos da sessão não " +
-        "foram guardados. Enquanto isso, etiquetar ou apagar uma lista no celular não chega ao CRM. Confira o " +
-        "volume da Evolution na Railway (montado em /evolution/instances) e conecte o número de novo — a " +
-        "chave volta no pareamento.",
-    };
-  }
-  if (/app state key not present/i.test(detalhe)) {
-    return {
-      estado: "sem_chave",
-      texto:
-        "O WhatsApp ainda não enviou a chave das etiquetas para esta conexão. Costuma chegar alguns minutos " +
-        "depois de conectar; o CRM confere de novo sozinho. Se continuar por mais de uma hora, conecte o número de novo.",
-    };
-  }
-  // A Evolution respondeu, mas o WhatsApp dentro dela estava com a conexão
-  // fechada: ela reiniciando (redeploy, volume novo), reconectando, ou o
-  // número desconectado no celular. Não diz nada sobre a chave.
-  if (/connection (closed|terminated|lost)/i.test(detalhe)) {
-    return {
-      estado: "desconectado",
-      texto:
-        "O WhatsApp estava desconectado dentro da Evolution nesse momento — acontece enquanto ela reinicia " +
-        "(depois de um deploy ou de criar o volume) ou reconecta. O CRM confere de novo sozinho em alguns " +
-        "minutos. Se continuar, vá em Conexão, use “Desconectar → Só desconectar” e conecte o número de novo.",
-    };
-  }
-  // Sem resposta da Evolution (ou a página de erro da hospedagem no lugar dela).
-  const respostaDaApi = corpo.trim().startsWith("{") || corpo.trim().startsWith("[");
-  if (status !== null && status >= 500 && !respostaDaApi) {
-    return { estado: "fora_do_ar", texto: mensagem.trim().slice(0, 300) };
-  }
-  return { estado: "erro", texto: `A leitura das etiquetas falhou: ${detalhe.trim().slice(0, 300)}` };
-}
 
 /** Frase de cada linha da linha do tempo da conexão. */
 export function descreverEvento(kind: string): string {
@@ -127,9 +39,4 @@ export function descreverEvento(kind: string): string {
     default:
       return "A verificação das etiquetas falhou";
   }
-}
-
-/** O evento a registrar na linha do tempo para cada estado da chave. */
-export function eventoDoEstado(estado: EstadoChave): string {
-  return estado === "ok" ? "chave_ok" : estado;
 }

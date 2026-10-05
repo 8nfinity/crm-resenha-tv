@@ -8,7 +8,6 @@ import {
   registrarAtendenteDeQuemJaTemAEtiqueta,
   sincronizarEtiquetas,
   tirarEtiquetaDoCrm,
-  verificarChaveDasEtiquetas,
 } from "@/lib/labels";
 import { avisarMudanca } from "@/lib/eventos";
 import { eventosRecentes } from "@/lib/eventos-conexao";
@@ -19,11 +18,12 @@ export const runtime = "nodejs";
 
 /**
  * GET — etiquetas desta conta e para qual estágio cada uma aponta, mais a
- * saúde da chave das etiquetas e a linha do tempo da conexão.
+ * linha do tempo da conexão.
  *
- * `?sincronizar=true` busca a lista fresca do aparelho antes de responder.
- * Sem o parâmetro devolve o que já está no banco, que é o caso comum e não
- * depende da Evolution estar respondendo.
+ * `?sincronizar=true` relê a lista da Evolution antes de responder (só
+ * leitura: nada é escrito no WhatsApp — ver lib/labels.ts). Sem o parâmetro
+ * devolve o que já está no banco, que é o caso comum e não depende da
+ * Evolution estar respondendo.
  */
 export async function GET(
   request: Request,
@@ -41,25 +41,17 @@ export async function GET(
   let movidos = 0;
 
   if (sincronizar) {
-    // Primeiro obriga a Evolution a reler as etiquetas do celular (sem
-    // desconectar) — o que também confere se a chave delas está lá; depois
-    // copia a lista para o CRM.
-    const leitura = await verificarChaveDasEtiquetas(id);
-    // Falha com estado já foi gravada na saúde da conta, que a tela mostra no
-    // quadro próprio — repetir aqui mostrava a mesma mensagem duas vezes.
-    if (!leitura.ok) erroSync = leitura.estado ? null : leitura.erro;
-    else await new Promise((r) => setTimeout(r, 4000)); // a Evolution grava em seguida
     try {
       await sincronizarEtiquetas(id);
     } catch (error) {
       // Falhar a sincronização não pode esconder o que já está mapeado.
-      erroSync ??=
+      erroSync =
         error instanceof EvolutionError && error.status >= 500
           ? "A Evolution não conseguiu listar as etiquetas agora — acontece enquanto ela reinicia ou o número " +
-            "reconecta. As etiquetas já configuradas continuam valendo; tente “Buscar do aparelho” de novo em alguns minutos."
+            "reconecta. As etiquetas já configuradas continuam valendo; tente “Atualizar” de novo em alguns minutos."
           : error instanceof Error
             ? error.message
-            : "Não consegui ler as etiquetas do aparelho";
+            : "Não consegui ler as etiquetas da Evolution";
     }
     // Quem já está com uma etiqueta de estágio e não andou (evento perdido,
     // etiqueta ligada ao estágio depois) anda agora.
@@ -86,11 +78,6 @@ export async function GET(
     etiquetas,
     erroSync,
     movidos,
-    saude: {
-      estado: conta.labelKeyStatus,
-      detalhe: conta.labelKeyDetail,
-      verificadoEm: conta.labelKeyCheckedAt,
-    },
     eventos,
     // O que chegou do celular desde que o servidor subiu, e o que o CRM fez.
     recebidas: etiquetagensRecentes(id),

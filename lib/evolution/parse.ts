@@ -170,9 +170,12 @@ export function isGroupJid(jid: string): boolean {
 /**
  * Descarta JIDs que não são pessoas: grupos, status/stories, newsletters,
  * transmissões e bots. Sem isso o funil nasce entupido de ruído.
+ *
+ * "0@s.whatsapp.net" é a conta de sistema do próprio WhatsApp (avisos de
+ * segurança, termos de uso): tem cara de telefone, mas não é ninguém.
  */
 export function isPersonJid(jid: string): boolean {
-  if (jid.startsWith("status@")) return false;
+  if (jid.startsWith("status@") || jid.startsWith("0@")) return false;
   return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid");
 }
 

@@ -107,10 +107,17 @@ sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
    *Mount path* precisa ser exatamente `/evolution/instances`. Depois de criar ou corrigir o
    volume, conecte o número de novo (a chave só volta no pareamento).
 
-   O CRM confere essa chave sozinho depois de cada reconexão e a cada 6 h, e
-   mostra o resultado em **Configurações → Etiquetas e listas** (com a linha
-   do tempo da conexão: uma reconexão seguida de "chave perdida" é a Evolution
-   reiniciando sem volume).
+   Em **Configurações → Etiquetas e listas**, o quadro "O que chegou do
+   celular" mostra cada etiquetagem que chegou e o que o CRM fez — é o teste:
+   etiquete uma conversa e ela aparece ali em segundos. A linha do tempo da
+   conexão mostra as reconexões: uma reconexão sem QR Code seguida de
+   etiquetas que não chegam é a Evolution que reiniciou sem o volume.
+
+   > O CRM **nunca escreve** nas etiquetas do WhatsApp. Uma versão antiga
+   > "conferia a chave" retirando uma etiqueta inexistente de uma conversa;
+   > isso grava uma alteração nos dados da conta e as etiquetas paravam de
+   > chegar minutos depois de conectar. Se o número foi conectado antes dessa
+   > correção (05/10/2026), desconecte ("Só desconectar") e conecte de novo.
 4. **Settings → Networking → Generate Domain** (porta `8080`).
 
 #### 3b. Serviço do CRM

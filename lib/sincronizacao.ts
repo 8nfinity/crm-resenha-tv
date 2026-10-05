@@ -8,7 +8,7 @@ import { mesclarContatos } from "@/lib/mesclar-contatos";
 import { avisarMudanca } from "@/lib/eventos";
 import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
 import { emFila } from "@/lib/fila";
-import { descobrirPessoa, formaConhecidaDoTelefone } from "@/lib/identidade-contato";
+import { descobrirPessoa, formaConhecidaDoTelefone, pessoaPelaFoto } from "@/lib/identidade-contato";
 
 /**
  * Varredura de segurança: busca na Evolution o que o webhook não entregou.
@@ -226,6 +226,18 @@ export async function unificarContatoLid(
     await mesclarContatos(dono.id, c.id);
     return true;
   }
+  // Lead sem nenhuma mensagem pelo LID — nasceu de uma etiqueta: a conversa
+  // da pessoa pode estar guardada pelo telefone, num lead que ainda não sabe
+  // o LID. A foto de perfil diz qual (ver pessoaPelaFoto). Só para esses:
+  // perguntar a foto de todo lead pelo LID seria consulta demais ao WhatsApp.
+  const temMensagem = await prisma.message.findFirst({ where: { contactId: c.id }, select: { id: true } });
+  if (!temMensagem) {
+    const pelaFoto = await pessoaPelaFoto(conta, c.waJid);
+    if (pelaFoto) {
+      await mesclarContatos(pelaFoto.id, c.id);
+      return true;
+    }
+  }
   // Sem telefone por enquanto: marca a tentativa (a data de atualização).
   await prisma.contact.update({ where: { id: c.id }, data: { lid: c.waJid } });
   return false;
@@ -244,12 +256,17 @@ export function unificarEmSegundoPlano(conta: { id: string; instanceName: string
   if (!c.waJid.endsWith("@lid")) return;
   const ultima = conferidoEm.get(c.id) ?? 0;
   if (Date.now() - ultima < RECONFERIR_LID_MS) return;
-  conferidoEm.set(c.id, Date.now());
-  if (conferidoEm.size > 5000) conferidoEm.clear();
+  marcarLidConferido(c.id);
 
   void emFila(`unificar:${conta.id}`, () => unificarContatoLid(conta, c, { rapido: true }), 30_000).catch((error) =>
     console.warn(`LID ${c.waJid} (em segundo plano):`, (error as Error).message),
   );
+}
+
+/** O contato acabou de passar pela conferência completa: a de segundo plano não precisa repetir. */
+export function marcarLidConferido(contactId: string) {
+  if (conferidoEm.size > 5000) conferidoEm.clear();
+  conferidoEm.set(contactId, Date.now());
 }
 
 /** Varre todas as contas. Nunca roda duas voltas ao mesmo tempo. */
