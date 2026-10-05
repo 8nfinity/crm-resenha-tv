@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Loader2, ArrowRight, Tag, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
-import { corrigirNomeEtiqueta, ehFiltroAutomatico } from "@/lib/etiquetas-nomes";
+import { RefreshCw, Loader2, ArrowRight, Tag, Trash2, ShieldCheck, ShieldAlert, Smartphone } from "lucide-react";
+import { corrigirNomeEtiqueta, ehFiltroAutomatico, estagioDeMesmoNome } from "@/lib/etiquetas-nomes";
 import { descreverEvento } from "@/lib/saude-etiquetas";
+import { EVENTO_MUDOU, type DetalheMudou } from "@/components/ao-vivo";
+import type { Etiquetagem } from "@/lib/etiquetagens-recebidas";
 
 type Estagio = { id: string; name: string; color: string };
 
@@ -32,6 +34,44 @@ type EventoConexao = { kind: string; detail: string | null; createdAt: string };
 
 function horario(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * O que chegou do celular e o que o CRM fez com cada etiquetagem. É o teste
+ * na hora: etiquete uma conversa no celular e ela aparece aqui em segundos.
+ * Se não aparecer, o aviso nem chegou ao CRM.
+ */
+function RecebidasDoCelular({ recebidas }: { recebidas: Etiquetagem[] }) {
+  return (
+    <details className="mt-3 text-[11px]" open={recebidas.length > 0}>
+      <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 text-[var(--color-muted)]">
+        <Smartphone className="size-3.5" />
+        O que chegou do celular {recebidas.length > 0 ? `(${recebidas.length})` : ""}
+      </summary>
+      {recebidas.length === 0 ? (
+        <p className="mt-1.5 text-[var(--color-muted)]">
+          Nada desde que o CRM foi publicado pela última vez. Para testar, coloque uma conversa numa lista ou
+          etiqueta no celular: ela aparece aqui em poucos segundos, com o que o CRM fez. Se não aparecer, o aviso
+          não chegou ao CRM — veja a chave das etiquetas acima.
+        </p>
+      ) : (
+        <ul className="mt-1.5 flex flex-col gap-1">
+          {recebidas.map((r, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="shrink-0 tabular-nums text-[var(--color-muted)]">{horario(r.quando)}</span>
+              <span className="min-w-0">
+                <span className="font-medium">{r.contato}</span>{" "}
+                <span className="text-[var(--color-muted)]">{r.acao === "add" ? "→ colocado em" : "→ tirado de"}</span>{" "}
+                <span className="font-medium">{corrigirNomeEtiqueta(r.etiqueta)}</span>
+                {": "}
+                <span className={r.moveu ? "text-[var(--color-accent)]" : "text-[var(--color-muted)]"}>{r.resultado}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  );
 }
 
 /**
@@ -100,7 +140,9 @@ export function LabelMapping({
 }) {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [porConta, setPorConta] = useState<Record<string, Etiqueta[]>>({});
-  const [saudePorConta, setSaudePorConta] = useState<Record<string, { saude: Saude; eventos: EventoConexao[] }>>({});
+  const [saudePorConta, setSaudePorConta] = useState<
+    Record<string, { saude: Saude; eventos: EventoConexao[]; recebidas: Etiquetagem[] }>
+  >({});
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregado, setCarregado] = useState(false);
@@ -127,7 +169,10 @@ export function LabelMapping({
             );
           }
           setPorConta((p) => ({ ...p, [conta.id]: data.etiquetas }));
-          setSaudePorConta((p) => ({ ...p, [conta.id]: { saude: data.saude, eventos: data.eventos ?? [] } }));
+          setSaudePorConta((p) => ({
+            ...p,
+            [conta.id]: { saude: data.saude, eventos: data.eventos ?? [], recebidas: data.recebidas ?? [] },
+          }));
         } catch {
           setErro("Não consegui falar com o servidor.");
         }
@@ -143,6 +188,17 @@ export function LabelMapping({
       .then((s: Estagio[]) => setEstagios(s))
       .catch(() => {});
     void carregar(false);
+  }, [carregar]);
+
+  // Etiquetagem chegando do celular: o painel "O que chegou do celular" e as
+  // listas novas aparecem sem recarregar a página.
+  useEffect(() => {
+    const aoMudar = (e: Event) => {
+      const motivo = (e as CustomEvent<DetalheMudou>).detail?.motivo;
+      if (motivo === "etiqueta" || motivo === "conexao" || motivo === "conferencia") void carregar(false);
+    };
+    window.addEventListener(EVENTO_MUDOU, aoMudar);
+    return () => window.removeEventListener(EVENTO_MUDOU, aoMudar);
   }, [carregar]);
 
   async function mapear(contaId: string, labelId: string, valor: string) {
@@ -221,6 +277,12 @@ export function LabelMapping({
       setErro("Não consegui tirar a etiqueta.");
       void carregar(false, contaId);
     }
+  }
+
+  /** Estágio de mesmo nome, para etiqueta que ainda não faz nada. */
+  function sugestaoDe(etiqueta: Etiqueta): Estagio | null {
+    if (etiqueta.stageId || etiqueta.ignoreContact || etiqueta.isSeller) return null;
+    return estagioDeMesmoNome(etiqueta.name, estagios);
   }
 
   async function sincronizar(contaId: string) {
@@ -323,7 +385,16 @@ export function LabelMapping({
                           </option>
                         ))}
                       </select>
-
+                      {sugestaoDe(etiqueta) && (
+                        // Lista com o nome de um estágio, mas ainda sem ação:
+                        // é quase sempre o motivo de "pus na lista e não moveu".
+                        <button
+                          onClick={() => void mapear(conta.id, etiqueta.labelId, sugestaoDe(etiqueta)!.id)}
+                          className="self-start rounded-full bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] px-2 py-0.5 text-[11px] font-medium"
+                        >
+                          Mover para “{sugestaoDe(etiqueta)!.name}”
+                        </button>
+                      )}
                     </div>
                     <button
                       onClick={() => void tirar(conta.id, etiqueta)}
@@ -343,6 +414,7 @@ export function LabelMapping({
                 {filtros.map((f) => corrigirNomeEtiqueta(f.name)).join(", ")}.
               </p>
             )}
+            <RecebidasDoCelular recebidas={saudePorConta[conta.id]?.recebidas ?? []} />
           </div>
         );
       })}

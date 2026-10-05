@@ -143,3 +143,20 @@ test("leitura forçada: cada resposta da Evolution vira o diagnóstico certo", a
   // Erro da própria Evolution, com resposta dela: outro problema.
   assert.equal(classificarFalha("Evolution API respondeu 500", 500, '{"status":500}').estado, "erro");
 });
+
+test("lista nova com o nome de um estágio já nasce ligada a ele", async () => {
+  const { estagioDeMesmoNome } = await import("../lib/etiquetas-nomes");
+  const estagios = [
+    { id: "1", name: "Novo lead" },
+    { id: "2", name: "Qualificado" },
+    { id: "3", name: "Negociação" },
+  ];
+  assert.equal(estagioDeMesmoNome("Qualificado", estagios)?.id, "2");
+  assert.equal(estagioDeMesmoNome("  qualificado ", estagios)?.id, "2", "maiúsculas e espaços não importam");
+  assert.equal(estagioDeMesmoNome("✅ Qualificado", estagios)?.id, "2", "emoji não importa");
+  // O evento do celular traz o acento; a lista da Evolution, não. Os dois casam.
+  assert.equal(estagioDeMesmoNome("Negociação", estagios)?.id, "3");
+  assert.equal(estagioDeMesmoNome("Negociao", estagios)?.id, "3");
+  assert.equal(estagioDeMesmoNome("Follow up", estagios), null, "sem estágio de mesmo nome: não liga");
+  assert.equal(estagioDeMesmoNome("Não lidas", [{ id: "x", name: "Não lidas" }]), null, "lista automática nunca");
+});

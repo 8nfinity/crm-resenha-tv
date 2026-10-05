@@ -12,6 +12,7 @@ import {
 } from "@/lib/labels";
 import { avisarMudanca } from "@/lib/eventos";
 import { eventosRecentes } from "@/lib/eventos-conexao";
+import { etiquetagensRecentes } from "@/lib/etiquetagens-recebidas";
 import { ignorarQuemJaTemAEtiqueta } from "@/lib/ignorar";
 
 export const runtime = "nodejs";
@@ -91,6 +92,8 @@ export async function GET(
       verificadoEm: conta.labelKeyCheckedAt,
     },
     eventos,
+    // O que chegou do celular desde que o servidor subiu, e o que o CRM fez.
+    recebidas: etiquetagensRecentes(id),
     // Etiquetas só existem no WhatsApp Business. Sem nenhuma, a tela precisa
     // explicar isso em vez de mostrar uma lista vazia sem contexto.
     vazio: etiquetas.length === 0,

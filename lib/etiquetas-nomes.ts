@@ -50,3 +50,23 @@ export function nomeParaGuardar(atual: string | null | undefined, vindo: string)
   if (atual && nomeComoAEvolutionGuarda(atual) === nomeComoAEvolutionGuarda(vindo)) return atual;
   return corrigirNomeEtiqueta(vindo.trim());
 }
+
+/** Nome provisório de etiqueta que chegou antes do próprio nome. */
+export function nomeProvisorio(labelId: string): string {
+  return `Etiqueta ${labelId}`;
+}
+
+/**
+ * O estágio do funil com o mesmo nome da etiqueta ou lista ("Qualificado" ↔
+ * "Qualificado"), sem ligar para maiúsculas, espaços, acentos ou emojis.
+ *
+ * A comparação usa o nome como a Evolution guarda, dos DOIS lados: a lista
+ * dela tira os acentos ("Negociao"), o evento do celular não ("Negociação") —
+ * assim os dois casam com o estágio "Negociação".
+ */
+export function estagioDeMesmoNome<T extends { name: string }>(nome: string, estagios: T[]): T | null {
+  const chave = (s: string) => nomeComoAEvolutionGuarda(s).toLowerCase();
+  const alvo = chave(nome);
+  if (!alvo || ehFiltroAutomatico(nome)) return null;
+  return estagios.find((e) => chave(e.name) === alvo) ?? null;
+}

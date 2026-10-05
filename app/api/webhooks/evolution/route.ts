@@ -4,7 +4,14 @@ import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
 import { ingestLiveMessage, upsertContact } from "@/lib/ingest";
 import { isPersonJid } from "@/lib/evolution/parse";
-import { aplicarEtiqueta, registrarEdicaoDeEtiqueta, removerEtiqueta, sincronizarEtiquetas } from "@/lib/labels";
+import {
+  aplicarEtiqueta,
+  registrarEdicaoDeEtiqueta,
+  removerEtiqueta,
+  sincronizarEtiquetas,
+  type ResultadoEtiqueta,
+} from "@/lib/labels";
+import { anotarEtiquetagem } from "@/lib/etiquetagens-recebidas";
 import { avisarMudanca } from "@/lib/eventos";
 import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
 import type { EvolutionMessage } from "@/lib/evolution/types";
@@ -205,17 +212,36 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
     return;
   }
 
+  if (tipo !== "add" && tipo !== "remove") return;
+
   // Remoção: só a etiqueta de "ignorar" tem efeito (o contato volta a
   // aparecer). Tirar uma etiqueta de estágio não move o lead — ver labels.ts.
-  if (tipo === "remove") {
-    await removerEtiqueta(accountId, chatId, labelId);
-  } else if (tipo === "add") {
-    const r = await aplicarEtiqueta(accountId, chatId, labelId);
-    if (r.acao === "movido") console.log(`Etiqueta moveu lead para "${r.estagio}"`);
-    if (r.acao === "atendente") console.log(`Atendimento registrado: "${r.atendente}"`);
-  } else {
-    return;
+  let r: ResultadoEtiqueta;
+  try {
+    r = tipo === "remove" ? await removerEtiqueta(accountId, chatId, labelId) : await aplicarEtiqueta(accountId, chatId, labelId);
+  } catch (error) {
+    // Vai para o painel de conferência e sobe: a rota pede o reenvio.
+    anotarEtiquetagem(accountId, {
+      acao: tipo,
+      contato: chatId.split("@")[0],
+      etiqueta: `Etiqueta ${labelId}`,
+      resultado: `Falhou (a Evolution vai mandar de novo): ${(error as Error).message.slice(0, 160)}`,
+      moveu: false,
+    });
+    throw error;
   }
+
+  // Painel "o que chegou do celular" na tela de etiquetas.
+  anotarEtiquetagem(accountId, {
+    acao: tipo,
+    contato: r.contato ?? chatId.split("@")[0],
+    etiqueta: r.etiqueta ?? `Etiqueta ${labelId}`,
+    resultado:
+      r.acao === "movido" ? `Moveu para ${r.estagio}` : r.acao === "atendente" ? `Registrou: ${r.atendente} atendeu` : r.motivo,
+    moveu: r.acao === "movido",
+  });
+  if (r.acao === "movido") console.log(`Etiqueta moveu lead para "${r.estagio}"`);
+  if (r.acao === "atendente") console.log(`Atendimento registrado: "${r.atendente}"`);
 
   // Toda etiqueta muda o histórico do lead (e às vezes o estágio): as telas
   // abertas se atualizam.
