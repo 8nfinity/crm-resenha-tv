@@ -6,6 +6,7 @@ import { varrerTudo } from "@/lib/sincronizacao";
 import { emailConfigurado } from "@/lib/email";
 import { enviarLembretes, enviarResumoDiario } from "@/lib/avisos";
 import { atualizarEtiquetasDosNumeros } from "@/lib/labels";
+import { conferirEtiquetas } from "@/lib/conferencia-etiquetas";
 
 /**
  * Rotinas que o próprio servidor executa — sem depender de cron externo.
@@ -39,6 +40,12 @@ export function iniciarRotinasDoServidor() {
     // LÊ: o CRM nunca escreve nas etiquetas do WhatsApp (ver lib/labels.ts).
     setTimeout(() => void atualizarEtiquetasDosNumeros().catch(() => {}), 60_000).unref();
     setInterval(() => void atualizarEtiquetasDosNumeros().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
+
+    // Etiquetagens cujo aviso se perdeu (CRM reiniciando numa publicação,
+    // webhook fora): compara com o que a Evolution guarda e aplica a diferença.
+    // A primeira volta depois de subir recupera o que chegou durante a troca.
+    setTimeout(() => void conferirEtiquetas().catch(() => {}), 120_000).unref();
+    setInterval(() => void conferirEtiquetas().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
   }
 
   // Avisos de atividades (notificação no aparelho e, se configurado, e-mail):

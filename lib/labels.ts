@@ -567,8 +567,14 @@ export function naFilaDeEtiquetas<T>(accountId: string, tarefa: () => Promise<T>
  *    frente ou para trás — é você dizendo onde o lead está.
  *  - "mapeamento": você acabou de ligar a etiqueta a um estágio e o CRM está
  *    aplicando em quem JÁ estava com ela.
+ *  - "conferencia": a conferência periódica achou na Evolution uma etiqueta
+ *    cujo aviso nunca chegou ao CRM (ver conferencia-etiquetas.ts). Não se
+ *    sabe quando ela foi posta: só para a frente, como no mapeamento.
  */
-export type OrigemEtiqueta = "celular" | "mapeamento";
+export type OrigemEtiqueta = "celular" | "mapeamento" | "conferencia";
+
+/** Complemento do histórico para o que a conferência recuperou. */
+const RECUPERADA = "etiqueta recuperada: o aviso do celular não tinha chegado";
 
 /**
  * Processa uma etiquetagem.
@@ -636,17 +642,25 @@ async function aplicar(
       return { acao: "ignorado", motivo: "aviso repetido — essa etiqueta já tinha sido aplicada nesta conversa" };
     }
   }
-  // Pelo mapeamento, ou na cópia do estado ao parear, não se sabe quando a
-  // etiqueta foi posta: o lead só anda para a frente.
-  const soParaFrente = origem === "mapeamento" || copiaDoEstado;
+  // A conferência decide fora da fila: o aviso de verdade pode ter chegado
+  // enquanto ela esperava a vez. Se o histórico já tem, não há o que recuperar.
+  if (origem === "conferencia" && (await ultimaAcao(contato.id, labelId)) === "add") {
+    return { acao: "ignorado", motivo: "o aviso chegou antes da conferência" };
+  }
+  // Pelo mapeamento, pela conferência ou na cópia do estado ao parear, não se
+  // sabe quando a etiqueta foi posta: o lead só anda para a frente.
+  const soParaFrente = origem === "mapeamento" || origem === "conferencia" || copiaDoEstado;
   // No mapeamento, quem já está com a etiqueta já tem a linha no histórico:
-  // só ganha outra se algo acontecer.
-  const registrarSempre = origem === "celular";
+  // só ganha outra se algo acontecer. Na conferência a linha é justamente o
+  // que faltava (e é ela que impede de recuperar a mesma etiqueta de novo).
+  const registrarSempre = origem === "celular" || origem === "conferencia";
+  const comOrigem = (detalhe: string | null) =>
+    origem === "conferencia" ? (detalhe ? `${detalhe} (${RECUPERADA})` : `Etiqueta registrada (${RECUPERADA})`) : detalhe;
 
   // Etiqueta de "ignorar": o contato some do CRM (e não volta enquanto
   // estiver com ela). Vale mais que qualquer outra ação.
   if (etiqueta.ignoreContact) {
-    await registrar(contato.id, labelId, etiqueta, "add", "Contato passou a ser ignorado pelo CRM");
+    await registrar(contato.id, labelId, etiqueta, "add", comOrigem("Contato passou a ser ignorado pelo CRM"));
     await ignorarContato(accountId, contato.waJid);
     return { acao: "ignorado", motivo: "contato marcado para ignorar" };
   }
@@ -654,7 +668,7 @@ async function aplicar(
   // Contato ignorado não volta para o funil por causa de outra etiqueta —
   // mas a etiqueta fica no histórico dele.
   if (contato.ignoredAt) {
-    if (registrarSempre) await registrar(contato.id, labelId, etiqueta, "add", null);
+    if (registrarSempre) await registrar(contato.id, labelId, etiqueta, "add", comOrigem(null));
     return { acao: "ignorado", motivo: "contato está ignorado" };
   }
 
@@ -663,13 +677,13 @@ async function aplicar(
   if (etiqueta.isSeller) {
     const atendente = nomeDoAtendente(etiqueta);
     const anterior = await atendenteAnterior(contato.id);
-    await registrar(contato.id, labelId, etiqueta, "add", textoDoAtendimento(anterior, atendente));
+    await registrar(contato.id, labelId, etiqueta, "add", comOrigem(textoDoAtendimento(anterior, atendente)));
     return { acao: "atendente", atendente };
   }
 
   const estagio = etiqueta.stageId ? await prisma.stage.findUnique({ where: { id: etiqueta.stageId } }) : null;
   if (!estagio) {
-    if (registrarSempre) await registrar(contato.id, labelId, etiqueta, "add", null);
+    if (registrarSempre) await registrar(contato.id, labelId, etiqueta, "add", comOrigem(null));
     return {
       acao: "ignorado",
       motivo: "essa etiqueta/lista não está ligada a nenhum estágio — escolha o estágio dela na lista abaixo",
@@ -692,7 +706,7 @@ async function aplicar(
           : null;
     if (motivo) {
       if (registrarSempre) {
-        await registrar(contato.id, labelId, etiqueta, "add", `Etiqueta já estava na conversa; ${motivo}`);
+        await registrar(contato.id, labelId, etiqueta, "add", comOrigem(`Etiqueta já estava na conversa; ${motivo}`));
       }
       return { acao: "ignorado", motivo };
     }
@@ -732,7 +746,7 @@ async function aplicar(
       labelId,
       etiqueta,
       "add",
-      origem === "mapeamento" ? `${detalhe} (a conversa já estava com a etiqueta quando ela foi ligada ao estágio)` : detalhe,
+      origem === "mapeamento" ? `${detalhe} (a conversa já estava com a etiqueta quando ela foi ligada ao estágio)` : comOrigem(detalhe),
     );
   }
 

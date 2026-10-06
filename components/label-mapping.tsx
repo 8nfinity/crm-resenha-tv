@@ -64,6 +64,14 @@ function RecebidasDoCelular({ recebidas }: { recebidas: Etiquetagem[] }) {
                 <span className="font-medium">{corrigirNomeEtiqueta(r.etiqueta)}</span>
                 {": "}
                 <span className={r.moveu ? "text-[var(--color-accent)]" : "text-[var(--color-muted)]"}>{r.resultado}</span>
+                {r.recuperada && (
+                  <span
+                    className="ml-1 text-[var(--color-warm)]"
+                    title="O aviso do celular não tinha chegado; a conferência de 5 em 5 minutos achou a etiqueta na Evolution"
+                  >
+                    · recuperado pela conferência
+                  </span>
+                )}
               </span>
             </li>
           ))}

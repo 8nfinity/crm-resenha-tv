@@ -145,3 +145,66 @@ test("lista nova com o nome de um estágio já nasce ligada a ele", async () => 
   assert.equal(estagioDeMesmoNome("🔥", comFollow), null, "nome só de emoji não casa com nada");
   assert.equal(estagioDeMesmoNome("Não lidas", [{ id: "x", name: "Não lidas" }]), null, "lista automática nunca");
 });
+
+test("conferência das etiquetas: aplica só o que a Evolution tem e o histórico do CRM não", async () => {
+  const { decidirConferencia, idsDasEtiquetas } = await import("../lib/conferencia-etiquetas");
+  const PN = "5551999990001@s.whatsapp.net";
+  const LID = "200000000000001@lid";
+  const acionaveis = new Map([
+    ["5", { ignorar: false }], // Qualificado
+    ["9", { ignorar: true }], // Ignorar contato
+  ]);
+  const contatos = [{ id: "c1", waJid: PN, lid: LID }];
+  const conversa = (jid: string, etiquetas: string[], recente = false) => ({ jid, etiquetas, recente });
+
+  // Aviso perdido: a Evolution tem, o histórico não → aplica.
+  assert.deepEqual(
+    decidirConferencia({ conversas: [conversa(LID, ["5"])], acionaveis, contatos, ultimos: new Map() }),
+    [{ tipo: "aplicar", chatId: LID, labelId: "5" }],
+  );
+  // Já registrada (o aviso chegou) → nada. Retirada registrada e posta de novo → aplica.
+  assert.deepEqual(
+    decidirConferencia({ conversas: [conversa(LID, ["5"])], acionaveis, contatos, ultimos: new Map([["c1:5", "add"]]) }),
+    [],
+  );
+  assert.equal(
+    decidirConferencia({ conversas: [conversa(LID, ["5"])], acionaveis, contatos, ultimos: new Map([["c1:5", "remove"]]) }).length,
+    1,
+  );
+  // Etiqueta que não faz nada no CRM (lista "Favoritos", sem estágio) fica de fora.
+  assert.deepEqual(decidirConferencia({ conversas: [conversa(LID, ["2"])], acionaveis, contatos, ultimos: new Map() }), []);
+  // Conversa mexida agora há pouco: o aviso pode estar a caminho.
+  assert.deepEqual(decidirConferencia({ conversas: [conversa(LID, ["5"], true)], acionaveis, contatos, ultimos: new Map() }), []);
+  // A mesma pessoa pelo telefone e pelo LID com a mesma etiqueta: aplica uma vez só.
+  assert.equal(
+    decidirConferencia({ conversas: [conversa(PN, ["5"]), conversa(LID, ["5"])], acionaveis, contatos, ultimos: new Map() }).length,
+    1,
+  );
+  // Conversa que o CRM nunca viu: aplica (a etiqueta traz para o funil).
+  assert.deepEqual(
+    decidirConferencia({ conversas: [conversa("300000000000009@lid", ["5"])], acionaveis, contatos: [], ultimos: new Map() }),
+    [{ tipo: "aplicar", chatId: "300000000000009@lid", labelId: "5" }],
+  );
+
+  // Retirada perdida da etiqueta de "ignorar" → retira (o contato volta).
+  assert.deepEqual(
+    decidirConferencia({ conversas: [conversa(LID, [])], acionaveis, contatos, ultimos: new Map([["c1:9", "add"]]) }),
+    [{ tipo: "retirar", chatId: PN, labelId: "9" }],
+  );
+  // ...mas não se ela ainda está numa das conversas da pessoa, nem sem a conversa na Evolution.
+  assert.deepEqual(
+    decidirConferencia({ conversas: [conversa(PN, []), conversa(LID, ["9"])], acionaveis, contatos, ultimos: new Map([["c1:9", "add"]]) }),
+    [],
+  );
+  assert.deepEqual(decidirConferencia({ conversas: [], acionaveis, contatos, ultimos: new Map([["c1:9", "add"]]) }), []);
+  // Retirada de etiqueta de estágio não move ninguém: a conferência não mexe.
+  assert.deepEqual(
+    decidirConferencia({ conversas: [conversa(LID, [])], acionaveis, contatos, ultimos: new Map([["c1:5", "add"]]) }),
+    [],
+  );
+
+  // A coluna da Evolution: lista de texto ou número; qualquer outra coisa é vazio.
+  assert.deepEqual(idsDasEtiquetas(["5", 7]), ["5", "7"]);
+  assert.deepEqual(idsDasEtiquetas(null), []);
+  assert.deepEqual(idsDasEtiquetas({}), []);
+});

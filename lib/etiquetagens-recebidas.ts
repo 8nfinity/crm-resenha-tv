@@ -21,6 +21,8 @@ export type Etiquetagem = {
   resultado: string;
   /** O lead andou no funil (ou entrou nele). */
   moveu: boolean;
+  /** O aviso não tinha chegado: a conferência periódica achou a etiqueta na Evolution. */
+  recuperada?: boolean;
 };
 
 const LIMITE = 25;
