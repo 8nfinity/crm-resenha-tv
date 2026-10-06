@@ -10,6 +10,7 @@ import { ignorarContato, quemEstaComAEtiqueta, voltarAMostrar } from "@/lib/igno
 import { corrigirNomeEtiqueta, estagioDeMesmoNome, nomeParaGuardar, nomeProvisorio } from "@/lib/etiquetas-nomes";
 import { avisarMudanca } from "@/lib/eventos";
 import { marcarLidConferido, unificarEmSegundoPlano } from "@/lib/sincronizacao";
+import { completarPerfil } from "@/lib/perfil-contato";
 import { MINUTO } from "@/lib/saude-etiquetas";
 import { limparEventosAntigos, ultimoQrCode } from "@/lib/eventos-conexao";
 
@@ -490,7 +491,15 @@ function depoisDeMover(
   void emFila(
     "etiquetas:depois",
     async () => {
-      if (novo) await trazerConversaRecente(conta.instanceName, contato, dealId, chatId);
+      if (novo) {
+        await trazerConversaRecente(conta.instanceName, contato, dealId, chatId);
+        // Lead que entrou pela etiqueta sem nome nem foto: a Evolution costuma saber.
+        const atual = await prisma.contact.findUnique({
+          where: { id: contato.id },
+          select: { id: true, waJid: true, lid: true, savedName: true, pushName: true, profilePicUrl: true },
+        });
+        if (atual) await completarPerfil(conta.instanceName, atual).catch(() => false);
+      }
       await recalculateScore(dealId);
       avisarMudanca({ dealIds: [dealId], motivo: "etiqueta" });
     },

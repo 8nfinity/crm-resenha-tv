@@ -135,3 +135,24 @@ test("uma etiquetagem presa não para a fila: as seguintes andam depois do limit
   assert.equal(await seguinte, "ok");
   assert.deepEqual(feitos, ["seguinte"]);
 });
+
+test("lead sem nome: o que serve como nome e o número digitado no card", async () => {
+  const { nomeUtilizavel, telefoneDigitado } = await import("../lib/perfil-contato");
+  assert.equal(nomeUtilizavel("Helena Kieling"), "Helena Kieling");
+  assert.equal(nomeUtilizavel("  Mãe "), "Mãe");
+  // Lixo que o WhatsApp devolve como nome.
+  assert.equal(nomeUtilizavel("$"), null);
+  assert.equal(nomeUtilizavel("24777733476556"), null, "o próprio código");
+  assert.equal(nomeUtilizavel("+55 51 8540-9366"), null, "número não é nome");
+  assert.equal(nomeUtilizavel("x"), null);
+  assert.equal(nomeUtilizavel(null), null);
+
+  assert.equal(telefoneDigitado("(51) 98540-9366"), "5551985409366@s.whatsapp.net", "sem o 55: Brasil");
+  assert.equal(telefoneDigitado("51 8540-9366"), "555185409366@s.whatsapp.net", "celular antigo, sem o 9");
+  assert.equal(telefoneDigitado("+55 51 98540-9366"), "5551985409366@s.whatsapp.net");
+  assert.equal(telefoneDigitado("5551985409366"), "5551985409366@s.whatsapp.net", "com o 55, sem +");
+  assert.equal(telefoneDigitado("+1 415 555 0123"), "14155550123@s.whatsapp.net", "com +, vale o país digitado");
+  assert.equal(telefoneDigitado("415 555 0123 99"), null, "sem + e sem cara de número brasileiro");
+  assert.equal(telefoneDigitado("1234"), null);
+  assert.equal(telefoneDigitado("abc"), null);
+});

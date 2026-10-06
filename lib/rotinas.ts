@@ -7,6 +7,7 @@ import { emailConfigurado } from "@/lib/email";
 import { enviarLembretes, enviarResumoDiario } from "@/lib/avisos";
 import { atualizarEtiquetasDosNumeros } from "@/lib/labels";
 import { conferirEtiquetas } from "@/lib/conferencia-etiquetas";
+import { completarPerfisDosLeads } from "@/lib/perfil-contato";
 
 /**
  * Rotinas que o próprio servidor executa — sem depender de cron externo.
@@ -46,6 +47,10 @@ export function iniciarRotinasDoServidor() {
     // A primeira volta depois de subir recupera o que chegou durante a troca.
     setTimeout(() => void conferirEtiquetas().catch(() => {}), 120_000).unref();
     setInterval(() => void conferirEtiquetas().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
+
+    // Leads "Sem nome": o nome da agenda e a foto que a Evolution conhece.
+    setTimeout(() => void completarPerfisDosLeads().catch(() => {}), 180_000).unref();
+    setInterval(() => void completarPerfisDosLeads().catch(() => {}), INTERVALO_ETIQUETAS_MS).unref();
   }
 
   // Avisos de atividades (notificação no aparelho e, se configurado, e-mail):

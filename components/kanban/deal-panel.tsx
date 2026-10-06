@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Send, Trash2, Tag, UserRound, StickyNote, Combine, Loader2 } from "lucide-react";
+import { X, Send, Trash2, Tag, UserRound, StickyNote, Combine, Loader2, Pencil, Check } from "lucide-react";
 import { AtividadesLead, type AtividadeDoLead } from "@/components/atividades-lead";
 import { dataHora } from "@/lib/atividades";
 import { useEhAdmin } from "@/components/sessao";
@@ -41,6 +41,65 @@ type EventoEtiqueta = {
   detail: string | null;
   createdAt: string;
 };
+
+/** Campo de uma linha com salvar/cancelar (Enter salva, Esc cancela). */
+function EdicaoRapida({
+  valorInicial,
+  placeholder,
+  ajuda,
+  onSalvar,
+  onCancelar,
+}: {
+  valorInicial: string;
+  placeholder: string;
+  ajuda?: string;
+  onSalvar: (valor: string) => Promise<void>;
+  onCancelar: () => void;
+}) {
+  const [valor, setValor] = useState(valorInicial);
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async () => {
+    setSalvando(true);
+    await onSalvar(valor);
+    setSalvando(false);
+  };
+  return (
+    <div className="my-1">
+      <div className="flex items-center gap-1">
+        <input
+          autoFocus
+          value={valor}
+          placeholder={placeholder}
+          onChange={(e) => setValor(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void salvar();
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              onCancelar();
+            }
+          }}
+          className="min-w-0 flex-1 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+        />
+        <button
+          onClick={() => void salvar()}
+          disabled={salvando}
+          className="rounded-full p-1.5 text-[var(--color-accent)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+          aria-label="Salvar"
+        >
+          {salvando ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+        </button>
+        <button
+          onClick={onCancelar}
+          className="rounded-full p-1.5 text-[var(--color-muted)] hover:bg-[var(--color-surface-2)]"
+          aria-label="Cancelar"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      {ajuda && <p className="mt-1 text-[11px] text-[var(--color-muted)]">{ajuda}</p>}
+    </div>
+  );
+}
 
 /** Lead que pode ser a mesma pessoa (ver /api/deals/[id]/juntar). */
 type OpcaoDeJuncao = {
@@ -211,6 +270,31 @@ export function DealPanel({
   const [confirmando, setConfirmando] = useState(false);
   const [removendo, setRemovendo] = useState(false);
   const [juntandoCom, setJuntandoCom] = useState(false);
+  const [editando, setEditando] = useState<"nome" | "telefone" | null>(null);
+  const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+
+  /** Você diz quem é o lead: nome e, se o WhatsApp escondeu, o número. */
+  async function salvarContato(dados: { nome?: string; telefone?: string }) {
+    setErroEdicao(null);
+    const res = await fetch(`/api/deals/${dealId}/contato`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    });
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErroEdicao(r.error ?? "Não consegui salvar.");
+      return;
+    }
+    setEditando(null);
+    // O número já tinha outro card: os dois viraram um só, que é o que fica.
+    if (r.dealId && r.dealId !== dealId) {
+      onRemoved?.(dealId);
+      onClose();
+      return;
+    }
+    void load();
+  }
 
   async function load() {
     const res = await fetch(`/api/deals/${dealId}`);
@@ -259,7 +343,8 @@ export function DealPanel({
 
   // Esc fecha o painel — é o reflexo de quem usa CRM o dia todo.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Num campo de edição, o Esc cancela só a edição.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !(e.target instanceof HTMLInputElement) && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -331,17 +416,57 @@ export function DealPanel({
               )}
 
               <div className="min-w-0 flex-1">
-                <h2 className="truncate font-semibold">{deal.displayName}</h2>
-                <p className="select-all text-xs tabular-nums text-[var(--color-muted)]">
-                  {deal.contact.phone ?? (
-                    <span
-                      className="italic"
-                      title="O WhatsApp só informou o código interno desta pessoa. O número aparece quando ela mandar mensagem."
+                {editando === "nome" ? (
+                  <EdicaoRapida
+                    valorInicial={deal.displayName.startsWith("Sem nome") ? "" : deal.displayName}
+                    placeholder="Nome do lead"
+                    onSalvar={(v) => salvarContato({ nome: v })}
+                    onCancelar={() => setEditando(null)}
+                  />
+                ) : (
+                  <h2 className="flex items-center gap-1.5 font-semibold">
+                    <span className="truncate">{deal.displayName}</span>
+                    <button
+                      onClick={() => setEditando("nome")}
+                      className="shrink-0 rounded-full p-1 text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                      aria-label="Editar nome"
+                      title="Dar um nome a este lead"
                     >
-                      Número ainda não informado pelo WhatsApp
-                    </span>
-                  )}
-                </p>
+                      <Pencil className="size-3" />
+                    </button>
+                  </h2>
+                )}
+                {editando === "telefone" ? (
+                  <EdicaoRapida
+                    valorInicial=""
+                    placeholder="DDD + número, ex.: (51) 98540-9366"
+                    ajuda="As mensagens e etiquetas desse número passam a cair neste card. Se o número já tiver um card, os dois viram um só."
+                    onSalvar={(v) => salvarContato({ telefone: v })}
+                    onCancelar={() => setEditando(null)}
+                  />
+                ) : (
+                  <p className="select-all text-xs tabular-nums text-[var(--color-muted)]">
+                    {deal.contact.phone ?? (
+                      <>
+                        <span
+                          className="italic"
+                          title="O WhatsApp só informou o código interno desta pessoa. O número aparece sozinho quando ela mandar mensagem."
+                        >
+                          Número ainda não informado pelo WhatsApp
+                        </span>
+                        {admin && deal.contact.waJid.endsWith("@lid") && (
+                          <button
+                            onClick={() => setEditando("telefone")}
+                            className="ml-1.5 select-none font-medium text-[var(--color-accent)] hover:underline"
+                          >
+                            Informar número
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </p>
+                )}
+                {erroEdicao && <p className="mt-1 text-xs text-[var(--color-hot)]">{erroEdicao}</p>}
                 <span
                   className="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px]"
                   style={{

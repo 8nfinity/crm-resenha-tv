@@ -455,6 +455,23 @@ export const evolution = {
   },
 
   /**
+   * O contato como a Evolution guarda — o nome da sua agenda (ou o que a
+   * pessoa usa no WhatsApp) e a foto. Só leitura; null se ela não conhece.
+   */
+  async contatoNaEvolution(
+    instanceName: string,
+    jid: string,
+  ): Promise<{ pushName: string | null; profilePicUrl: string | null } | null> {
+    const data = await request<EvolutionContact[] | Paginated<EvolutionContact>>(`/chat/findContacts/${instanceName}`, {
+      method: "POST",
+      body: { where: { remoteJid: jid } },
+      esperaMs: ESPERA_RAPIDA_MS,
+    });
+    const c = unwrapList(data).find((x) => (x.remoteJid ?? x.id) === jid) ?? null;
+    return c ? { pushName: c.pushName ?? null, profilePicUrl: c.profilePicUrl ?? null } : null;
+  },
+
+  /**
    * A foto de perfil de alguém, pelo telefone ou pelo LID — só leitura, como o
    * WhatsApp Web faz ao abrir uma conversa. Null se a pessoa não tem foto ou a
    * privacidade dela esconde.
