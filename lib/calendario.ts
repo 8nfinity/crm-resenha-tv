@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { contactName } from "@/lib/queries";
 import { numerosDeFollowUp } from "@/lib/follow-ups";
+import { chaveDoTipo } from "@/lib/atividades";
 
 /**
  * Atividades para o calendário.
@@ -13,6 +14,12 @@ import { numerosDeFollowUp } from "@/lib/follow-ups";
 export type AtividadeCalendario = {
   id: string;
   type: string;
+  /** "FOLLOW_UP" ou "k:<id>" (tipo criado por você) — ver chaveDoTipo. */
+  tipo: string;
+  /** Nome do tipo criado por você, quando a atividade tem um. */
+  tipoNome: string | null;
+  /** Cor do tipo criado por você; nula nos tipos fixos (a tela usa a cor fixa). */
+  tipoCor: string | null;
   title: string | null;
   dueAt: string | null;
   doneAt: string | null;
@@ -41,6 +48,8 @@ export async function atividadesEntre(inicio: Date, fim: Date): Promise<Atividad
     select: {
       id: true,
       type: true,
+      kindId: true,
+      kind: { select: { name: true, color: true } },
       title: true,
       dueAt: true,
       doneAt: true,
@@ -61,6 +70,9 @@ export async function atividadesEntre(inicio: Date, fim: Date): Promise<Atividad
   return linhas.map((a) => ({
     id: a.id,
     type: a.type,
+    tipo: chaveDoTipo(a),
+    tipoNome: a.kind?.name ?? null,
+    tipoCor: a.kind?.color ?? null,
     title: a.title,
     dueAt: a.dueAt?.toISOString() ?? null,
     doneAt: a.doneAt?.toISOString() ?? null,

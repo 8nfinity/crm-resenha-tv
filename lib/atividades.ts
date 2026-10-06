@@ -19,6 +19,58 @@ export function rotuloTipo(tipo: string): string {
   return TIPOS_ATIVIDADE[tipo as TipoAtividade] ?? tipo;
 }
 
+/** Cor de cada tipo fixo — como as "agendas" do Google: bate o olho e sabe o que é. */
+export const COR_TIPO: Record<TipoAtividade, string> = {
+  FOLLOW_UP: "#2fe38c",
+  MEETING: "#5eb8ff",
+  CALL: "#a78bfa",
+  PROPOSAL: "#f2d417",
+  OTHER: "#94a3b8",
+};
+
+/** Tipo criado por você ("Avaliação", "Retorno"). */
+export type TipoProprio = { id: string; name: string; color: string };
+
+/**
+ * Uma chave só para os tipos fixos e os seus: "FOLLOW_UP" ou "k:<id>".
+ * Na atividade, o tipo próprio fica em `kindId` (com `type` = OTHER).
+ */
+export function chaveDoTipo(a: { type: string; kindId?: string | null }): string {
+  return a.kindId ? `k:${a.kindId}` : a.type;
+}
+
+/** O que gravar para uma chave: o tipo fixo, ou OTHER + o tipo próprio. */
+export function tipoDaChave(chave: string): { type: TipoAtividade; kindId: string | null } {
+  if (chave.startsWith("k:")) return { type: "OTHER", kindId: chave.slice(2) };
+  return { type: (chave in TIPOS_ATIVIDADE ? chave : "OTHER") as TipoAtividade, kindId: null };
+}
+
+/** Todas as opções na ordem dos botões: os fixos (menos "Outro"), os seus, e "Outro" por último. */
+export function opcoesDeTipo(proprios: TipoProprio[]): { chave: string; nome: string; cor: string; proprio: boolean }[] {
+  const fixos = (Object.keys(TIPOS_ATIVIDADE) as TipoAtividade[]).map((t) => ({
+    chave: t as string,
+    nome: TIPOS_ATIVIDADE[t] as string,
+    cor: COR_TIPO[t],
+    proprio: false,
+  }));
+  return [
+    ...fixos.filter((f) => f.chave !== "OTHER"),
+    ...proprios.map((p) => ({ chave: `k:${p.id}`, nome: p.name, cor: p.color, proprio: true })),
+    ...fixos.filter((f) => f.chave === "OTHER"),
+  ];
+}
+
+/** Nome do tipo de uma chave; tipo próprio que foi apagado volta a ser "Outro". */
+export function rotuloDaChave(chave: string, proprios: TipoProprio[]): string {
+  if (chave.startsWith("k:")) return proprios.find((p) => `k:${p.id}` === chave)?.name ?? TIPOS_ATIVIDADE.OTHER;
+  return rotuloTipo(chave);
+}
+
+export function corDaChave(chave: string, proprios: TipoProprio[]): string {
+  if (chave.startsWith("k:")) return proprios.find((p) => `k:${p.id}` === chave)?.color ?? COR_TIPO.OTHER;
+  return COR_TIPO[chave as TipoAtividade] ?? COR_TIPO.OTHER;
+}
+
 /** "29/09/2026 às 14:32" */
 export function dataHora(iso: string | Date): string {
   const d = new Date(iso);
@@ -107,12 +159,21 @@ export function ordinalFollowUp(n: number): string {
   return `${n}º follow-up`;
 }
 
-/** Tipo da atividade, com o número quando é follow-up: "2º follow-up", "Reunião". */
-export function rotuloTipoNumerado(tipo: string, numero?: number | null): string {
+/**
+ * Tipo da atividade, com o número quando é follow-up: "2º follow-up", "Reunião".
+ * `nomeProprio`: o nome do tipo criado por você, quando a atividade tem um.
+ */
+export function rotuloTipoNumerado(tipo: string, numero?: number | null, nomeProprio?: string | null): string {
+  if (nomeProprio) return nomeProprio;
   return tipo === "FOLLOW_UP" && numero ? ordinalFollowUp(numero) : rotuloTipo(tipo);
 }
 
 /** Nome da atividade para listas: o título, ou o tipo numerado. */
-export function nomeDaAtividade(a: { title: string | null; type: string; numero?: number | null }): string {
-  return a.title?.trim() || rotuloTipoNumerado(a.type, a.numero);
+export function nomeDaAtividade(a: {
+  title: string | null;
+  type: string;
+  numero?: number | null;
+  tipoNome?: string | null;
+}): string {
+  return a.title?.trim() || rotuloTipoNumerado(a.type, a.numero, a.tipoNome);
 }

@@ -25,9 +25,13 @@ import {
   nomeDaAtividade,
   ordinalFollowUp,
   situacao,
-  TIPOS_ATIVIDADE,
+  COR_TIPO,
+  corDaChave,
+  opcoesDeTipo,
+  tipoDaChave,
   type TipoAtividade,
 } from "@/lib/atividades";
+import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
 import { DealPanel } from "@/components/kanban/deal-panel";
 import { cn } from "@/lib/utils";
 
@@ -47,14 +51,11 @@ const HORA_PX = 48;
 /** Atividade não tem duração; na grade ela ocupa um bloco de 1 hora. */
 const DURACAO_MIN = 60;
 
-const COR_TIPO: Record<TipoAtividade, string> = {
-  FOLLOW_UP: "#2fe38c",
-  MEETING: "#5eb8ff",
-  CALL: "#a78bfa",
-  PROPOSAL: "#f2d417",
-  OTHER: "#94a3b8",
-};
-const corDo = (tipo: string) => COR_TIPO[tipo as TipoAtividade] ?? COR_TIPO.OTHER;
+/** Tipo para gravar, sem mandar kindId vazio nos tipos fixos. */
+const semNulo = (t: { type: string; kindId: string | null }) => (t.kindId ? t : { type: t.type });
+
+/** Cor da atividade: a do tipo criado por você, ou a fixa do tipo. */
+const corDo = (a: { type: string; tipoCor?: string | null }) => a.tipoCor ?? COR_TIPO[a.type as TipoAtividade] ?? COR_TIPO.OTHER;
 
 const NOMES_VISAO: Record<Visao, string> = { dia: "Dia", semana: "Semana", mes: "Mês", agenda: "Programação" };
 const DIAS_CURTOS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
@@ -122,7 +123,9 @@ export function Calendario({
   const [atividades, setAtividades] = useState(iniciais);
   useEffect(() => setAtividades(iniciais), [iniciais]);
 
-  const [tipos, setTipos] = useState<Set<string>>(new Set(Object.keys(TIPOS_ATIVIDADE)));
+  // Tipos escondidos no filtro (os novos aparecem sozinhos).
+  const [ocultos, setOcultos] = useState<Set<string>>(new Set());
+  const { proprios } = useTiposProprios();
   const [mostrarFeitas, setMostrarFeitas] = useState(true);
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [criar, setCriar] = useState<{ data: string; hora: string } | null>(null);
@@ -142,8 +145,8 @@ export function Calendario({
   }
 
   const visiveis = useMemo(
-    () => atividades.filter((a) => tipos.has(a.type) && (mostrarFeitas || !a.doneAt)),
-    [atividades, tipos, mostrarFeitas],
+    () => atividades.filter((a) => !ocultos.has(a.tipo) && (mostrarFeitas || !a.doneAt)),
+    [atividades, ocultos, mostrarFeitas],
   );
   const porDia = useMemo(() => {
     const m = new Map<string, AtividadeCalendario[]>();
@@ -191,24 +194,24 @@ export function Calendario({
         <div>
           <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Tipos</p>
           <ul className="flex flex-col gap-1">
-            {(Object.keys(TIPOS_ATIVIDADE) as TipoAtividade[]).map((t) => (
-              <li key={t}>
+            {opcoesDeTipo(proprios).map((o) => (
+              <li key={o.chave}>
                 <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-[var(--color-surface-2)]">
                   <input
                     type="checkbox"
-                    checked={tipos.has(t)}
+                    checked={!ocultos.has(o.chave)}
                     onChange={() =>
-                      setTipos((s) => {
+                      setOcultos((s) => {
                         const n = new Set(s);
-                        if (n.has(t)) n.delete(t);
-                        else n.add(t);
+                        if (n.has(o.chave)) n.delete(o.chave);
+                        else n.add(o.chave);
                         return n;
                       })
                     }
                     className="size-4 rounded"
-                    style={{ accentColor: COR_TIPO[t] }}
+                    style={{ accentColor: o.cor }}
                   />
-                  {TIPOS_ATIVIDADE[t]}
+                  {o.nome}
                 </label>
               </li>
             ))}
@@ -492,7 +495,7 @@ function Chip({ a, onAbrir }: { a: AtividadeCalendario; onAbrir: (id: string) =>
     >
       <span
         className={cn("size-2 shrink-0 rounded-full", s === "atrasada" && "ring-2 ring-[var(--color-hot)]")}
-        style={{ backgroundColor: corDo(a.type) }}
+        style={{ backgroundColor: corDo(a) }}
       />
       {horarioNaGrade(a) && (
         <span className="shrink-0 tabular-nums text-[var(--color-muted)]">{hora(horarioNaGrade(a)!)}</span>
@@ -630,7 +633,7 @@ function VisaoGrade({
                 ))}
 
                 {blocos.map(({ a, inicio, colunas, coluna }) => {
-                  const cor = corDo(a.type);
+                  const cor = corDo(a);
                   const s = situacao(a);
                   return (
                     <button
@@ -724,7 +727,7 @@ function VisaoAgenda({
                   >
                     {a.doneAt && <Check className="size-3.5" strokeWidth={3} />}
                   </button>
-                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: corDo(a.type) }} />
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: corDo(a) }} />
                   <span className="w-14 shrink-0 text-sm tabular-nums text-[var(--color-muted)]">
                     {a.dueAt ? hora(a.dueAt) : "—"}
                   </span>
@@ -795,11 +798,11 @@ function Detalhe({
       </div>
 
       <div className="flex gap-3">
-        <span className="mt-1.5 size-3.5 shrink-0 rounded" style={{ backgroundColor: corDo(a.type) }} />
+        <span className="mt-1.5 size-3.5 shrink-0 rounded" style={{ backgroundColor: corDo(a) }} />
         <div className="min-w-0">
           <h2 className={cn("text-xl font-bold", a.doneAt && "line-through opacity-70")}>{nomeDaAtividade(a)}</h2>
           <p className="mt-0.5 text-sm text-[var(--color-muted)]">
-            {a.numero ? <span className="font-semibold text-[var(--color-accent)]">{ordinalFollowUp(a.numero)}</span> : rotuloTipo(a.type)}
+            {a.numero ? <span className="font-semibold text-[var(--color-accent)]">{ordinalFollowUp(a.numero)}</span> : (a.tipoNome ?? rotuloTipo(a.type))}
             {s === "atrasada" && <span className="font-semibold text-[var(--color-hot)]"> · Atrasada</span>}
             {s === "hoje" && <span className="font-semibold text-[var(--color-yellow)]"> · Hoje</span>}
             {s === "feita" && <span className="font-semibold text-[var(--color-accent)]"> · Feita</span>}
@@ -871,7 +874,8 @@ function CriarAtividade({
   onCriado: () => void;
 }) {
   const [titulo, setTitulo] = useState("");
-  const [tipo, setTipo] = useState<TipoAtividade>("FOLLOW_UP");
+  const [tipo, setTipo] = useState<string>("FOLLOW_UP");
+  const { proprios, recarregar } = useTiposProprios();
   const [data, setData] = useState(inicial.data);
   const [horaStr, setHoraStr] = useState(inicial.hora);
   const [busca, setBusca] = useState("");
@@ -892,7 +896,7 @@ function CriarAtividade({
     const res = await fetch(`/api/deals/${lead.id}/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: tipo, title: titulo.trim() || undefined, dueAt }),
+      body: JSON.stringify({ ...semNulo(tipoDaChave(tipo)), title: titulo.trim() || undefined, dueAt }),
     }).catch(() => null);
     setSalvando(false);
     if (!res?.ok) return setErro("Não deu para salvar. Tente de novo.");
@@ -918,22 +922,8 @@ function CriarAtividade({
           className="w-full border-b-2 border-[var(--color-border)] bg-transparent pb-2 text-lg outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
         />
 
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {(Object.keys(TIPOS_ATIVIDADE) as TipoAtividade[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTipo(t)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors",
-                tipo === t ? "font-semibold text-[var(--color-on-ink)]" : "border text-[var(--color-muted)] hover:text-[var(--color-text)]",
-              )}
-              style={tipo === t ? { backgroundColor: COR_TIPO[t] } : undefined}
-            >
-              {tipo !== t && <span className="size-2 rounded-full" style={{ backgroundColor: COR_TIPO[t] }} />}
-              {TIPOS_ATIVIDADE[t]}
-            </button>
-          ))}
+        <div className="mt-4">
+          <SeletorDeTipo valor={tipo} onChange={setTipo} proprios={proprios} onMudouTipos={recarregar} estilo="cor" />
         </div>
 
         <div className="mt-4 flex gap-2">

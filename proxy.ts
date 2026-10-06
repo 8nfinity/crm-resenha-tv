@@ -53,7 +53,12 @@ function exigeAdministrador(request: NextRequest): boolean {
   // Situação e teste dos avisos por e-mail.
   if (sob(c, "/api/avisos-email")) return true;
   // Estrutura: colunas do funil, campos próprios, conteúdo do playbook.
-  if (!leitura && (sob(c, "/api/stages") || sob(c, "/api/custom-fields") || sob(c, "/api/playbook"))) return true;
+  if (
+    !leitura &&
+    (sob(c, "/api/stages") || sob(c, "/api/custom-fields") || sob(c, "/api/playbook") || sob(c, "/api/tipos-atividade"))
+  ) {
+    return true;
+  }
   // Apagar um lead de vez reescreve as métricas; arquivar continua liberado.
   if (request.method === "DELETE" && /^\/api\/deals\/[^/]+$/.test(c) && request.nextUrl.searchParams.get("permanente") === "true") {
     return true;

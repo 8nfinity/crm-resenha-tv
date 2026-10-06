@@ -120,6 +120,7 @@ function horaCurta(d: Date): string {
 
 const INCLUI_ATIVIDADE = {
   createdBy: { select: SELECIONA_PESSOA },
+  kind: { select: { name: true } },
   deal: {
     select: {
       id: true,
@@ -136,6 +137,8 @@ type AtividadeComLead = {
   dueAt: Date | null;
   createdById: string | null;
   createdBy: Pessoa | null;
+  /** Tipo criado por você ("Avaliação"), quando tem. */
+  kind?: { name: string } | null;
   /** Número do follow-up no lead (1º, 2º…), preenchido depois da busca. */
   numero?: number;
   deal: {
@@ -152,7 +155,7 @@ function nomeDoLead(a: AtividadeComLead): string {
 function descricao(a: AtividadeComLead): string {
   const titulo = a.title?.trim();
   if (titulo) return a.numero ? `${ordinalFollowUp(a.numero)}: ${titulo}` : titulo;
-  return rotuloTipoNumerado(a.type, a.numero);
+  return rotuloTipoNumerado(a.type, a.numero, a.kind?.name);
 }
 
 /** Preenche o número de cada follow-up (1º, 2º…) contando todos os do lead. */

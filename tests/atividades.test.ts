@@ -57,3 +57,22 @@ test("follow-ups numerados pela ordem em que acontecem: 1º, 2º, 3º…", async
   assert.equal(nomeDaAtividade({ title: null, type: "FOLLOW_UP", numero: 2 }), "2º follow-up");
   assert.equal(nomeDaAtividade({ title: "Mandar proposta", type: "FOLLOW_UP", numero: 2 }), "Mandar proposta");
 });
+
+test("tipos próprios: chave única, ordem dos botões e o que gravar", async () => {
+  const { opcoesDeTipo, tipoDaChave, chaveDoTipo, rotuloDaChave, corDaChave, rotuloTipoNumerado } = await import("../lib/atividades");
+  const proprios = [{ id: "a1", name: "Avaliação", color: "#f97316" }];
+  // Fixos, depois os seus, e "Outro" por último.
+  assert.deepEqual(
+    opcoesDeTipo(proprios).map((o) => o.nome),
+    ["Follow-up", "Reunião", "Ligação", "Proposta", "Avaliação", "Outro"],
+  );
+  assert.deepEqual(tipoDaChave("k:a1"), { type: "OTHER", kindId: "a1" }, "tipo seu grava OTHER + o id");
+  assert.deepEqual(tipoDaChave("MEETING"), { type: "MEETING", kindId: null });
+  assert.equal(chaveDoTipo({ type: "OTHER", kindId: "a1" }), "k:a1");
+  assert.equal(chaveDoTipo({ type: "CALL", kindId: null }), "CALL");
+  assert.equal(rotuloDaChave("k:a1", proprios), "Avaliação");
+  assert.equal(rotuloDaChave("k:apagado", proprios), "Outro", "tipo apagado volta a ser Outro");
+  assert.equal(corDaChave("k:a1", proprios), "#f97316");
+  assert.equal(rotuloTipoNumerado("OTHER", null, "Avaliação"), "Avaliação");
+  assert.equal(rotuloTipoNumerado("FOLLOW_UP", 2), "2º follow-up");
+});

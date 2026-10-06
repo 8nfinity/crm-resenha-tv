@@ -217,7 +217,7 @@ export const historicoContato = {
         },
         stage: true,
         notes: { orderBy: { createdAt: "desc" } },
-        activities: { orderBy: { createdAt: "desc" } },
+        activities: { orderBy: { createdAt: "desc" }, include: { kind: { select: { name: true } } } },
       },
     });
 
@@ -245,7 +245,7 @@ export const historicoContato = {
         deal.activities
           .map(
             (a) =>
-              `- ${numeros.has(a.id) ? ordinalFollowUp(numeros.get(a.id)!) : a.type}${a.title ? `: ${a.title}` : ""} — ${
+              `- ${numeros.has(a.id) ? ordinalFollowUp(numeros.get(a.id)!) : (a.kind?.name ?? a.type)}${a.title ? `: ${a.title}` : ""} — ${
                 a.doneAt ? `feito há ${daysSince(a.doneAt)}d` : "em aberto"
               }`,
           )

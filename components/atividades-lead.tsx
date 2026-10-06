@@ -7,18 +7,22 @@ import {
   diaSemanaHora,
   juntarDataHora,
   numerarFollowUps,
+  chaveDoTipo,
   ordinalFollowUp,
-  rotuloTipo,
+  rotuloDaChave,
   situacao,
   sugestaoDePrazo,
-  TIPOS_ATIVIDADE,
-  type TipoAtividade,
+  tipoDaChave,
+  type TipoProprio,
 } from "@/lib/atividades";
+import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
 import { cn } from "@/lib/utils";
 
 export type AtividadeDoLead = {
   id: string;
   type: string;
+  /** Tipo criado por você, quando tem. */
+  kindId?: string | null;
   title: string | null;
   dueAt: string | null;
   doneAt: string | null;
@@ -42,7 +46,8 @@ export function AtividadesLead({
   onMudou: () => void;
 }) {
   const sugestao = sugestaoDePrazo();
-  const [tipo, setTipo] = useState<TipoAtividade>("FOLLOW_UP");
+  const [tipo, setTipo] = useState<string>("FOLLOW_UP");
+  const { proprios, recarregar } = useTiposProprios();
   const [titulo, setTitulo] = useState("");
   const [data, setData] = useState(sugestao.data);
   const [horaStr, setHoraStr] = useState(sugestao.hora);
@@ -61,7 +66,10 @@ export function AtividadesLead({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: tipo,
+        ...(() => {
+          const { type, kindId } = tipoDaChave(tipo);
+          return kindId ? { type, kindId } : { type };
+        })(),
         title: titulo.trim() || undefined,
         ...(jaFeita ? { doneAt: new Date().toISOString() } : { dueAt }),
       }),
@@ -119,22 +127,7 @@ export function AtividadesLead({
   return (
     <div className="flex flex-col gap-4">
       <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-        <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(TIPOS_ATIVIDADE) as TipoAtividade[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTipo(t)}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-xs transition-colors",
-                tipo === t
-                  ? "bg-[var(--color-ink)] font-semibold text-[var(--color-on-ink)]"
-                  : "border text-[var(--color-muted)] hover:text-[var(--color-text)]",
-              )}
-            >
-              {TIPOS_ATIVIDADE[t]}
-            </button>
-          ))}
-        </div>
+        <SeletorDeTipo valor={tipo} onChange={setTipo} proprios={proprios} onMudouTipos={recarregar} />
 
         <input
           value={titulo}
@@ -197,14 +190,14 @@ export function AtividadesLead({
 
       <Lista titulo="A fazer" vazio="Nada agendado para este lead.">
         {aFazer.map((a) => (
-          <Item key={a.id} a={a} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: true })} onApagar={() => void apagar(a.id)} />
+          <Item key={a.id} a={a} proprios={proprios} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: true })} onApagar={() => void apagar(a.id)} />
         ))}
       </Lista>
 
       {feitas.length > 0 && (
         <Lista titulo="Feitas">
           {feitas.map((a) => (
-            <Item key={a.id} a={a} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: false })} onApagar={() => void apagar(a.id)} />
+            <Item key={a.id} a={a} proprios={proprios} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: false })} onApagar={() => void apagar(a.id)} />
           ))}
         </Lista>
       )}
@@ -245,11 +238,13 @@ const ROTULO_SITUACAO = {
 
 function Item({
   a,
+  proprios,
   numero,
   onAlternar,
   onApagar,
 }: {
   a: AtividadeDoLead;
+  proprios: TipoProprio[];
   /** Número do follow-up (1º, 2º…); só para follow-ups. */
   numero?: number;
   onAlternar: () => void;
@@ -278,11 +273,11 @@ function Item({
         <div className="flex flex-wrap items-center gap-1.5">
           {numero && <NumeroFollowUp n={numero} />}
           <span className={cn("text-sm font-semibold", feita && "text-[var(--color-muted)] line-through")}>
-            {a.title || (numero ? "Follow-up" : rotuloTipo(a.type))}
+            {a.title || (numero ? "Follow-up" : rotuloDaChave(chaveDoTipo(a), proprios))}
           </span>
           {a.title && !numero && (
             <span className="rounded-full border px-1.5 text-[10px] text-[var(--color-muted)]">
-              {rotuloTipo(a.type)}
+              {rotuloDaChave(chaveDoTipo(a), proprios)}
             </span>
           )}
           {!feita && (

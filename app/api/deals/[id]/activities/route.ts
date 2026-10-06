@@ -7,6 +7,8 @@ import { usuarioAtual } from "@/lib/auth/usuario";
 
 const bodySchema = z.object({
   type: z.enum(["FOLLOW_UP", "MEETING", "CALL", "PROPOSAL", "OTHER"]),
+  /** Tipo criado por você (ver /api/tipos-atividade). Com ele, o tipo gravado é OTHER. */
+  kindId: z.string().min(1).optional(),
   title: z.string().trim().max(200).optional(),
   notes: z.string().trim().max(5000).optional(),
   dueAt: z.iso.datetime().optional(),
@@ -31,14 +33,19 @@ export async function POST(
     );
   }
 
-  const { type, title, notes, dueAt, doneAt } = parsed.data;
+  const { type, kindId, title, notes, dueAt, doneAt } = parsed.data;
+  if (kindId && !(await prisma.activityKind.findUnique({ where: { id: kindId }, select: { id: true } }))) {
+    return NextResponse.json({ error: "Esse tipo não existe mais" }, { status: 400 });
+  }
   // Quem marcou recebe o lembrete por e-mail quando o lead não tem vendedor.
-  const autor = await usuarioAtual();
+  // Sem sessão legível (chamada fora de uma requisição do navegador), cria sem autor.
+  const autor = await usuarioAtual().catch(() => null);
 
   const activity = await prisma.activity.create({
     data: {
       dealId: id,
-      type: type as ActivityType,
+      type: (kindId ? "OTHER" : type) as ActivityType,
+      kindId: kindId ?? null,
       title,
       notes,
       dueAt: dueAt ? new Date(dueAt) : null,

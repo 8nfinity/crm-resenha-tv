@@ -93,7 +93,7 @@ export async function agendaDeHoje(): Promise<AgendaHoje> {
         deal: { archivedAt: null },
       },
       relationLoadStrategy: "join",
-      include: { deal: { include: INCLUDE } },
+      include: { deal: { include: INCLUDE }, kind: { select: { name: true } } },
       orderBy: { dueAt: "asc" },
     }),
 
@@ -141,7 +141,7 @@ export async function agendaDeHoje(): Promise<AgendaHoje> {
     const venceu = a.dueAt!;
     const dias = daysSince(venceu);
     const numero = numeros.get(a.id);
-    const tipo = numero ? ordinalFollowUp(numero) : (ROTULO_ATIVIDADE[a.type] ?? "Tarefa");
+    const tipo = numero ? ordinalFollowUp(numero) : (a.kind?.name ?? ROTULO_ATIVIDADE[a.type] ?? "Tarefa");
     const rotulo = a.title ? (numero ? `${tipo}: ${a.title}` : a.title) : tipo;
 
     if (venceu < agora && dias >= 1) {

@@ -320,12 +320,32 @@ model Activity {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
+  /// Tipo criado por você ("Avaliação", "Retorno"). Com ele, `type` fica
+  /// OTHER: as métricas por tipo continuam iguais e contam isto como "Outro".
+  kindId    String?
+
   deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
   createdBy User? @relation("CriadorDaAtividade", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Apagar o tipo não apaga a atividade: ela volta a ser "Outro".
+  kind ActivityKind? @relation(fields: [kindId], references: [id], onDelete: SetNull)
 
+  @@index([kindId])
   @@index([dealId, createdAt])
   @@index([type, doneAt])
   @@index([dueAt])
+}
+
+/// Tipo de atividade criado por você, além dos fixos (Follow-up, Reunião,
+/// Ligação, Proposta, Outro): aparece como mais um botão ao agendar, com a
+/// cor dele no calendário.
+model ActivityKind {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#94a3b8")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  activities Activity[]
 }
 
 /// Anotação livre no card.
