@@ -80,8 +80,25 @@ sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
 
 #### 3a. Serviço da Evolution API
 
-1. **New → Docker Image** → `evoapicloud/evolution-api:v2.3.7` (a mesma versão
-   que roda hoje; confira a tag no Docker Hub).
+> **Use a imagem corrigida deste repositório, não a oficial pura.** A
+> Evolution 2.3.3 a 2.3.7 tem um defeito que faz as etiquetas e listas
+> **pararem de chegar ~5 minutos depois de conectar** (as mensagens
+> continuam): ela lê do arquivo a chave das etiquetas com
+> `AppStateSyncKeyData.create()`, que a deixa vazia; até o cache de memória
+> vencer (5 min) funciona. A correção oficial
+> ([PR #2685](https://github.com/evolution-foundation/evolution-api/pull/2685))
+> ainda não saiu em nenhuma versão. A pasta `infra/evolution-railway` monta a
+> 2.3.7 oficial com essa troca aplicada.
+>
+> No serviço da Evolution na Railway: **Settings → Source → Connect Repo**
+> `8nfinity/crm-biomech`; **Root Directory** `/infra/evolution-railway`;
+> **Config-as-code → Railway Config File** `/infra/evolution-railway/railway.json`.
+> Variáveis e volume ficam como estão. No log do build deve aparecer
+> "Correção da chave das etiquetas aplicada em N arquivos". Ela só é
+> reconstruída quando essa pasta muda (publicar o CRM não reinicia a Evolution).
+
+1. **New → GitHub Repo** → `8nfinity/crm-biomech`, com a Root Directory e o
+   Config File acima (é a Evolution 2.3.7 oficial + a correção).
 2. **Variables** — as mesmas do `.env` da Evolution que roda no seu PC:
 
    | Variável | Valor |
@@ -114,10 +131,9 @@ sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
    etiquetas que não chegam é a Evolution que reiniciou sem o volume.
 
    > O CRM **nunca escreve** nas etiquetas do WhatsApp. Uma versão antiga
-   > "conferia a chave" retirando uma etiqueta inexistente de uma conversa;
-   > isso grava uma alteração nos dados da conta e as etiquetas paravam de
-   > chegar minutos depois de conectar. Se o número foi conectado antes dessa
-   > correção (05/10/2026), desconecte ("Só desconectar") e conecte de novo.
+   > "conferia a chave" retirando uma etiqueta inexistente de uma conversa,
+   > o que grava uma alteração nos dados da conta — saiu. Etiquetas que param
+   > ~5 minutos depois de conectar são o defeito da Evolution do aviso acima.
 4. **Settings → Networking → Generate Domain** (porta `8080`).
 
 #### 3b. Serviço do CRM

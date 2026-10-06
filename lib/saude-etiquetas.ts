@@ -10,9 +10,11 @@
  * é onde isso aparece.
  *
  * O CRM já conferiu essa chave à força, retirando uma etiqueta inexistente de
- * uma conversa. Isso ESCREVE nos dados da conta do WhatsApp e foi o que fez as
- * etiquetas pararem de chegar minutos depois de conectar — saiu. Os tipos
+ * uma conversa. Isso ESCREVE nos dados da conta do WhatsApp — saiu. Os tipos
  * "chave_*" abaixo ficam só para as linhas antigas da linha do tempo.
+ *
+ * Etiquetas que param ~5 min depois de conectar são outro caso: defeito da
+ * Evolution 2.3.3–2.3.7 corrigido na imagem de infra/evolution-railway.
  */
 
 export const MINUTO = 60_000;

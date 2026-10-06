@@ -28,10 +28,11 @@ import { limparEventosAntigos, ultimoQrCode } from "@/lib/eventos-conexao";
  * E o CRM NUNCA escreve nas etiquetas do WhatsApp — nem para testar. Uma
  * "leitura forçada" antiga retirava uma etiqueta inexistente da conversa
  * "Mensagem para mim": por dentro, isso grava uma alteração de verdade nos
- * dados da conta, que vai para o celular e para todos os aparelhos. Em
- * 05/10/2026 as etiquetas pararam de chegar 4 segundos depois de uma dessas
- * leituras (as mensagens continuaram), e era a mesma "parada depois de uns
- * minutos" de antes: a leitura rodava ~5 min depois de conectar.
+ * dados da conta, que vai para o celular e para todos os aparelhos.
+ *
+ * As etiquetas que paravam de chegar ~5 min depois de conectar NÃO eram
+ * isso: é um defeito da Evolution 2.3.3–2.3.7, que estraga a chave das
+ * etiquetas quando o cache de 5 min vence (ver infra/evolution-railway).
  */
 
 /**
