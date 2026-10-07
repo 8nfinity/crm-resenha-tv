@@ -15,6 +15,8 @@ import {
 import { anotarEtiquetagem } from "@/lib/etiquetagens-recebidas";
 import { avisarMudanca } from "@/lib/eventos";
 import { registrarEventoDeConexao } from "@/lib/eventos-conexao";
+import { receberEtiquetagem } from "@/lib/recebimento-etiquetas";
+import { emFila } from "@/lib/fila";
 import type { EvolutionMessage } from "@/lib/evolution/types";
 
 export const runtime = "nodejs";
@@ -86,32 +88,34 @@ export async function POST(request: Request) {
         break;
       case "contacts.upsert":
       case "contacts.update":
-        await handleContacts(conta.id, payload.data);
+        // Ao reconectar, chega a agenda inteira (milhares de contatos) num
+        // aviso só. Esperar gravar tudo passava dos 30 s que a Evolution
+        // espera, e ela reenviava a agenda inteira de novo.
+        void emFila(`contatos:${conta.id}`, () => handleContacts(conta.id, payload.data)).catch((error) =>
+          console.error("Erro gravando contatos do webhook", error),
+        );
         break;
       case "connection.update":
         await handleConnection(conta.id, payload.instance, payload.data);
         break;
+      // Etiquetas: respondem na hora e são processadas na fila logo em
+      // seguida (ver lib/recebimento-etiquetas.ts).
       case "labels.association":
-        await handleLabelAssociation(conta.id, payload.data);
+        handleLabelAssociation(conta.id, payload.data);
         break;
       case "labels.edit":
-        await handleLabelEdit(conta.id, payload.data);
+        handleLabelEdit(conta.id, payload.data);
         break;
       default:
         // Eventos que não assinamos chegam mesmo assim em algumas versões.
         break;
     }
   } catch (error) {
+    // Nunca devolve erro: a Evolution reenviaria o aviso (até 10 vezes), e um
+    // bug nosso viraria uma tempestade de reenvios. O que se perde aqui as
+    // rotinas recuperam — a varredura traz as mensagens, a conferência
+    // periódica traz as etiquetas.
     console.error(`Erro processando webhook ${payload.event}`, error);
-    // Etiqueta não tem varredura de segurança como as mensagens: o evento
-    // perdido é um lead que não andou no funil. Pede para a Evolution mandar
-    // de novo (ela tenta algumas vezes, com intervalo crescente) — e
-    // aplicarEtiqueta reconhece o reenvio. Os outros eventos nunca devolvem
-    // erro: a varredura recupera as mensagens, e um bug nosso viraria uma
-    // tempestade de retentativas.
-    if (event.startsWith("labels.")) {
-      return NextResponse.json({ error: "falhou, mande de novo" }, { status: 503 });
-    }
   }
 
   return NextResponse.json({ ok: true });
@@ -201,7 +205,7 @@ async function handleContacts(accountId: string, data: unknown) {
  *
  * O payload da Evolution: { type: "add" | "remove", chatId, labelId }
  */
-async function handleLabelAssociation(accountId: string, data: unknown) {
+function handleLabelAssociation(accountId: string, data: unknown) {
   const d = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
 
   const tipo = String(d.type ?? "");
@@ -215,23 +219,25 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
 
   if (tipo !== "add" && tipo !== "remove") return;
 
+  // Uma de cada vez, na ordem de chegada (na fila das etiquetas): 50
+  // conversas etiquetadas de uma vez viram 50 avisos simultâneos, e juntos
+  // eles estouravam as conexões com o banco (ver lib/fila.ts).
+  receberEtiquetagem({ accountId, tipo, chatId, labelId }, () => processarEtiquetagem(accountId, tipo, chatId, labelId));
+}
+
+async function processarEtiquetagem(accountId: string, tipo: "add" | "remove", chatId: string, labelId: string) {
   // Remoção: só a etiqueta de "ignorar" tem efeito (o contato volta a
   // aparecer). Tirar uma etiqueta de estágio não move o lead — ver labels.ts.
   let r: ResultadoEtiqueta;
   try {
-    // Uma de cada vez, na ordem de chegada: 50 conversas etiquetadas de uma
-    // vez viram 50 avisos simultâneos, e juntos eles estouravam as conexões
-    // com o banco (ver lib/fila.ts).
-    r = await naFilaDeEtiquetas(accountId, () =>
-      tipo === "remove" ? removerEtiqueta(accountId, chatId, labelId) : aplicarEtiqueta(accountId, chatId, labelId),
-    );
+    r = tipo === "remove" ? await removerEtiqueta(accountId, chatId, labelId) : await aplicarEtiqueta(accountId, chatId, labelId);
   } catch (error) {
-    // Vai para o painel de conferência e sobe: a rota pede o reenvio.
+    // Vai para o painel de conferência; a conferência periódica recupera.
     anotarEtiquetagem(accountId, {
       acao: tipo,
       contato: chatId.split("@")[0],
       etiqueta: `Etiqueta ${labelId}`,
-      resultado: `Falhou (a Evolution vai mandar de novo): ${(error as Error).message.slice(0, 160)}`,
+      resultado: `Falhou (a conferência periódica recupera): ${(error as Error).message.slice(0, 160)}`,
       moveu: false,
     });
     throw error;
@@ -260,26 +266,26 @@ async function handleLabelAssociation(accountId: string, data: unknown) {
  * O payload da Evolution: { id, name, color, deleted, predefinedId } — a
  * etiqueta como o WhatsApp mandou, com o nome ainda com acento.
  */
-async function handleLabelEdit(accountId: string, data: unknown) {
-  for (const item of asArray<Record<string, unknown>>(data)) {
-    const labelId = item.id ?? item.labelId;
-    if (labelId == null || labelId === "") {
-      // Formato que não conhecemos: relê a lista inteira, como antes.
-      await sincronizarEtiquetas(accountId);
-      continue;
-    }
-    // Na mesma fila das etiquetagens: a lista criada entra antes das
-    // conversas colocadas nela logo em seguida.
-    await naFilaDeEtiquetas(accountId, () =>
-      registrarEdicaoDeEtiqueta(accountId, {
+function handleLabelEdit(accountId: string, data: unknown) {
+  // Na mesma fila das etiquetagens: a lista criada entra antes das conversas
+  // colocadas nela logo em seguida.
+  void naFilaDeEtiquetas(accountId, async () => {
+    for (const item of asArray<Record<string, unknown>>(data)) {
+      const labelId = item.id ?? item.labelId;
+      if (labelId == null || labelId === "") {
+        // Formato que não conhecemos: relê a lista inteira, como antes.
+        await sincronizarEtiquetas(accountId);
+        continue;
+      }
+      await registrarEdicaoDeEtiqueta(accountId, {
         labelId: String(labelId),
         name: typeof item.name === "string" ? item.name : null,
         color: item.color != null ? String(item.color) : null,
         deleted: item.deleted === true,
-      }),
-    );
-  }
-  avisarMudanca({ dealIds: [], motivo: "etiqueta" });
+      });
+    }
+    avisarMudanca({ dealIds: [], motivo: "etiqueta" });
+  }).catch((error) => console.error("Erro processando edição de etiqueta", error));
 }
 
 async function handleConnection(accountId: string, instanceName: string, data: unknown) {
