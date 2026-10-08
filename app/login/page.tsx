@@ -26,7 +26,7 @@ export default async function LoginPage({
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center">
           <Image
-            src="/brand/selo.png"
+            src="/brand/resenha-selo.png"
             alt="Resenha TV"
             width={112}
             height={112}

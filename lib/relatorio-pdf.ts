@@ -116,7 +116,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const [fonte, logo] = await Promise.all([
     carregarFontes(doc),
-    base64De("/brand/selo.png").catch(() => null),
+    base64De("/brand/resenha-selo.png").catch(() => null),
   ]);
   const semibold = fonte === FONTE ? "semibold" : "bold";
 

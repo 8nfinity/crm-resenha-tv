@@ -45,7 +45,7 @@ export function TopNav({ usuario }: { usuario: Usuario | null }) {
           {/* Halo laranja atrás do selo, como uma luz refletida no vidro. */}
           <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/30 blur-md transition-opacity group-hover:opacity-100 sm:opacity-60" />
           <Image
-            src="/brand/selo.png"
+            src="/brand/resenha-selo.png"
             alt="Resenha TV"
             width={44}
             height={44}

@@ -8,7 +8,8 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const RAIZ = process.cwd();
-const PASTAS = ["app", "components", "lib"];
+// public/ também: no `next start`, imagem nova ou trocada só aparece depois do build.
+const PASTAS = ["app", "components", "lib", "public"];
 const ARQUIVOS = [
   "package.json",
   "next.config.ts",

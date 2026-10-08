@@ -20,7 +20,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(dados.title || "CRM Resenha TV", {
       body: dados.body || "",
-      icon: "/brand/app-192.png",
+      icon: "/brand/resenha-app-192.png",
       tag: dados.tag,
       // Mesma tag (ex.: o mesmo lembrete de novo) substitui e avisa de novo.
       renotify: Boolean(dados.tag),

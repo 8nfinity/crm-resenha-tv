@@ -15,7 +15,7 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "CRM Resenha TV",
   description: "Funil de vendas da Resenha TV, conectado ao WhatsApp",
-  icons: { icon: "/brand/marca.png", apple: "/brand/apple-180.png" },
+  icons: { icon: "/brand/resenha-marca.png", apple: "/brand/resenha-apple-180.png" },
   // Instalado na Tela de Início do iPhone, abre como aplicativo (sem a barra
   // do Safari) — e é assim que o iPhone recebe as notificações.
   appleWebApp: { capable: true, title: "CRM Resenha TV", statusBarStyle: "black-translucent" },
