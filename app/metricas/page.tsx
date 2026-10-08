@@ -230,7 +230,7 @@ function Gauge({ valor, rotulo, total }: { valor: number; rotulo: string; total:
       <svg viewBox="0 0 100 58" className="mt-2 w-full" aria-hidden>
         <defs>
           <linearGradient id="gauge-fill" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="#12623c" />
+            <stop offset="0%" stopColor="#8a3a0c" />
             <stop offset="100%" stopColor="var(--color-accent)" />
           </linearGradient>
         </defs>
@@ -305,8 +305,8 @@ function FunilEscuro({
                     style={{
                       height: `${Math.max(h, e.chegaram > 0 ? 8 : 0)}%`,
                       background: e.isLost
-                        ? "rgb(255 122 89 / 0.55)"
-                        : "linear-gradient(to top, #0b3d25, var(--color-accent))",
+                        ? "rgb(255 59 69 / 0.55)"
+                        : "linear-gradient(to top, #5c280a, var(--color-accent))",
                     }}
                   />
                   <span className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] tabular-nums opacity-0 transition-opacity group-hover:opacity-100">

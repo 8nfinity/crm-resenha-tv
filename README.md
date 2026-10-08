@@ -91,13 +91,13 @@ sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
 > 2.3.7 oficial com essa troca aplicada.
 >
 > No serviço da Evolution na Railway: **Settings → Source → Connect Repo**
-> `8nfinity/crm-biomech`; **Root Directory** `/infra/evolution-railway`;
+> `8nfinity/crm-resenha-tv`; **Root Directory** `/infra/evolution-railway`;
 > **Config-as-code → Railway Config File** `/infra/evolution-railway/railway.json`.
 > Variáveis e volume ficam como estão. No log do build deve aparecer
 > "Correção da chave das etiquetas aplicada em N arquivos". Ela só é
 > reconstruída quando essa pasta muda (publicar o CRM não reinicia a Evolution).
 
-1. **New → GitHub Repo** → `8nfinity/crm-biomech`, com a Root Directory e o
+1. **New → GitHub Repo** → `8nfinity/crm-resenha-tv`, com a Root Directory e o
    Config File acima (é a Evolution 2.3.7 oficial + a correção).
 2. **Variables** — as mesmas do `.env` da Evolution que roda no seu PC:
 
@@ -138,7 +138,7 @@ sozinhas) e o recálculo diário de scores rodar dentro do próprio CRM.
 
 #### 3b. Serviço do CRM
 
-1. **New → GitHub Repo** → `8nfinity/crm-biomech`. O `railway.json` do repositório
+1. **New → GitHub Repo** → `8nfinity/crm-resenha-tv`. O `railway.json` do repositório
    já diz tudo: build com `npm run build`, migrations (`npm run db:migrate`)
    antes de cada versão entrar no ar, e verificação de saúde em `/api/saude`
    (a versão nova só substitui a antiga se alcançar o banco).

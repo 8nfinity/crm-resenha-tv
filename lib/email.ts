@@ -15,7 +15,7 @@
  * Variáveis:
  *   BREVO_API_KEY    chave do Brevo (começa com "xkeysib-")
  *   RESEND_API_KEY   chave da Resend (começa com "re_")
- *   EMAIL_REMETENTE  quem envia: "CRM Biomech <seuemail@gmail.com>"
+ *   EMAIL_REMETENTE  quem envia: "CRM Resenha TV <seuemail@gmail.com>"
  */
 
 export type Email = {
@@ -43,11 +43,11 @@ export function remetente(): string | null {
   return process.env.EMAIL_REMETENTE?.trim() || null;
 }
 
-/** "CRM Biomech <avisos@x.com>" → { nome, email }. Só o e-mail também vale. */
+/** "CRM Resenha TV <avisos@x.com>" → { nome, email }. Só o e-mail também vale. */
 export function separarRemetente(texto: string): { nome: string; email: string } {
   const m = texto.match(/^\s*"?([^"<]*?)"?\s*<\s*([^>\s]+)\s*>\s*$/);
-  if (m) return { nome: m[1].trim() || "CRM Biomech", email: m[2] };
-  return { nome: "CRM Biomech", email: texto.trim() };
+  if (m) return { nome: m[1].trim() || "CRM Resenha TV", email: m[2] };
+  return { nome: "CRM Resenha TV", email: texto.trim() };
 }
 
 type Resultado = { ok: true } | { ok: false; erro: string };
@@ -144,7 +144,8 @@ export function escaparHtml(texto: string): string {
 }
 
 /**
- * Moldura do e-mail na identidade Biomech: fundo verde-escuro, faixa amarela,
+ * Moldura do e-mail na identidade Resenha TV: fundo preto quente, faixa com as
+ * barras de cor da TV (laranja nos leitores que não desenham degradê),
  * Montserrat quando o leitor de e-mail tiver (senão, a fonte sem serifa dele).
  * Tudo em estilo inline: a maioria dos leitores ignora <style>.
  */
@@ -159,20 +160,20 @@ export function moldura({
 }): string {
   const fonte = "Montserrat, 'Segoe UI', Helvetica, Arial, sans-serif";
   const botaoHtml = botao
-    ? `<tr><td style="padding:8px 32px 28px"><a href="${escaparHtml(botao.url)}" style="display:inline-block;background:#f2d417;color:#0b1d14;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;font-family:${fonte};font-size:14px">${escaparHtml(botao.texto)}</a></td></tr>`
+    ? `<tr><td style="padding:8px 32px 28px"><a href="${escaparHtml(botao.url)}" style="display:inline-block;background:#f7882f;color:#1a0d03;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;font-family:${fonte};font-size:14px">${escaparHtml(botao.texto)}</a></td></tr>`
     : "";
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(titulo)}</title></head>
-<body style="margin:0;padding:0;background:#030b07">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#030b07;padding:24px 12px">
+<body style="margin:0;padding:0;background:#0a0705">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0705;padding:24px 12px">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#0b1d14;border-radius:20px;overflow:hidden;border:1px solid #1d3a2b">
-<tr><td style="height:5px;background:#f2d417;font-size:0;line-height:0">&nbsp;</td></tr>
-<tr><td style="padding:26px 32px 6px;font-family:${fonte};color:#2fe38c;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase">Instituto Biomech · CRM</td></tr>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#1a120c;border-radius:20px;overflow:hidden;border:1px solid #3a2818">
+<tr><td style="height:5px;font-size:0;line-height:0;background:#f7882f;background-image:linear-gradient(90deg,#f4efe6 0 14.28%,#ffd629 0 28.57%,#3ec7d6 0 42.85%,#46c22d 0 57.14%,#e0389a 0 71.42%,#ff2e3b 0 85.71%,#3d5bd8 0)">&nbsp;</td></tr>
+<tr><td style="padding:26px 32px 6px;font-family:${fonte};color:#f7882f;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase">Resenha TV · CRM</td></tr>
 <tr><td style="padding:0 32px 14px;font-family:${fonte};color:#ffffff;font-size:22px;font-weight:700;line-height:1.3">${escaparHtml(titulo)}</td></tr>
-<tr><td style="padding:0 32px 18px;font-family:${fonte};color:#d6e4dc;font-size:14px;line-height:1.6">${corpoHtml}</td></tr>
+<tr><td style="padding:0 32px 18px;font-family:${fonte};color:#eadfd2;font-size:14px;line-height:1.6">${corpoHtml}</td></tr>
 ${botaoHtml}
-<tr><td style="padding:16px 32px 22px;border-top:1px solid #1d3a2b;font-family:${fonte};color:#7f9a8c;font-size:11px;line-height:1.5">Você recebe este aviso porque os e-mails de atividades estão ligados na sua conta do CRM. Para desligar: Configurações → Minha conta.</td></tr>
+<tr><td style="padding:16px 32px 22px;border-top:1px solid #3a2818;font-family:${fonte};color:#a8968a;font-size:11px;line-height:1.5">Você recebe este aviso porque os e-mails de atividades estão ligados na sua conta do CRM. Para desligar: Configurações → Minha conta.</td></tr>
 </table>
 </td></tr>
 </table>

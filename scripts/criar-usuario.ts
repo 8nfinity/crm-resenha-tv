@@ -32,7 +32,7 @@ function perguntarSenha(texto: string): Promise<string> {
 }
 
 async function main() {
-  console.log("\nCriar acesso ao CRM Biomech\n");
+  console.log("\nCriar acesso ao CRM Resenha TV\n");
   const name = await perguntar("Nome: ");
   const email = (await perguntar("E-mail: ")).toLowerCase();
   const escolha = (await perguntar("Papel — [m]aster, [a]dministrador ou [v]endedor (m): ")).toLowerCase();

@@ -112,7 +112,7 @@ export function descreverAparelho(ua: string | null | undefined): string {
 /** Quem assina os envios: o endereço público do CRM (ou um e-mail, rodando local). */
 function assunto(): string {
   const url = urlPublica();
-  return url.startsWith("https://") ? url : "mailto:crm-biomech@example.com";
+  return url.startsWith("https://") ? url : "mailto:crm-resenha-tv@example.com";
 }
 
 /**

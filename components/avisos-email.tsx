@@ -129,7 +129,7 @@ export function AvisosEmailAdmin() {
             <li>Em Segurança → IPs autorizados, desative o bloqueio de IPs desconhecidos (a Railway muda de IP).</li>
             <li>
               Na Railway, no serviço do CRM, adicione <code>BREVO_API_KEY</code> (a chave) e{" "}
-              <code>EMAIL_REMETENTE</code> — por exemplo <code>CRM Biomech &lt;seuemail@gmail.com&gt;</code>.
+              <code>EMAIL_REMETENTE</code> — por exemplo <code>CRM Resenha TV &lt;seuemail@gmail.com&gt;</code>.
             </li>
           </ol>
           <p className="mt-1">Com domínio próprio, também dá para usar a Resend (<code>RESEND_API_KEY</code>).</p>

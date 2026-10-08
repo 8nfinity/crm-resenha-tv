@@ -273,7 +273,7 @@ function emailDeLembrete(pessoa: Pessoa, itens: AtividadeComLead[]) {
       : `Lembrete: ${itens.length} atividades chegando`;
 
   const linhas = itens.map((a) => ({
-    html: `<tr><td style="padding:10px 0;border-bottom:1px solid #1d3a2b"><strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<br><span style="color:#f2d417">${escaparHtml(quando(a.dueAt!))}</span></td></tr>`,
+    html: `<tr><td style="padding:10px 0;border-bottom:1px solid #3a2818"><strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<br><span style="color:#ffd629">${escaparHtml(quando(a.dueAt!))}</span></td></tr>`,
     texto: `- ${descricao(a)} · ${nomeDoLead(a)} — ${quando(a.dueAt!)}`,
   }));
 
@@ -388,20 +388,20 @@ function emailDeResumo(pessoa: Pessoa, deHoje: AtividadeComLead[], atrasadas: At
       const momento = comDia ? quando(a.dueAt!) : horaCurta(a.dueAt!);
       const vendedor = time && a.createdBy ? ` · marcada por ${a.createdBy.name}` : "";
       return {
-        html: `<tr><td style="padding:8px 0;border-bottom:1px solid #1d3a2b"><span style="color:${cor};font-weight:700">${escaparHtml(momento)}</span> · <strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<span style="color:#7f9a8c">${escaparHtml(vendedor)}</span></td></tr>`,
+        html: `<tr><td style="padding:8px 0;border-bottom:1px solid #3a2818"><span style="color:${cor};font-weight:700">${escaparHtml(momento)}</span> · <strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<span style="color:#a8968a">${escaparHtml(vendedor)}</span></td></tr>`,
         texto: `- ${momento} · ${descricao(a)} · ${nomeDoLead(a)}${vendedor}`,
       };
     };
     const linhas = mostrar.map(linha);
     const mais = resto > 0 ? `e mais ${resto}…` : "";
     return {
-      html: `<p style="margin:18px 0 4px;color:${cor};font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1px">${titulo} (${itens.length})</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${linhas.map((l) => l.html).join("")}</table>${mais ? `<p style="color:#7f9a8c;font-size:12px">${mais}</p>` : ""}`,
+      html: `<p style="margin:18px 0 4px;color:${cor};font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1px">${titulo} (${itens.length})</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${linhas.map((l) => l.html).join("")}</table>${mais ? `<p style="color:#a8968a;font-size:12px">${mais}</p>` : ""}`,
       texto: `${titulo} (${itens.length}):\n${linhas.map((l) => l.texto).join("\n")}${mais ? `\n${mais}` : ""}`,
     };
   };
 
-  const hoje = bloco("Para hoje", "#2fe38c", deHoje, false);
-  const atrasos = bloco("Atrasadas", "#ff7a59", atrasadas, true);
+  const hoje = bloco("Para hoje", "#f7882f", deHoje, false);
+  const atrasos = bloco("Atrasadas", "#ff3b45", atrasadas, true);
   const url = `${urlPublica()}/hoje`;
   const quem = time ? "do time" : "suas";
   const resumo = resumoCurto(deHoje.length, atrasadas.length);
@@ -425,7 +425,7 @@ export async function enviarEmailDeTeste(pessoa: { name: string; email: string }
   const url = urlPublica();
   return enviarEmail({
     para: pessoa.email,
-    assunto: "Teste de aviso do CRM Biomech",
+    assunto: "Teste de aviso do CRM Resenha TV",
     html: moldura({
       titulo: "Os avisos por e-mail estão funcionando",
       corpoHtml: `Olá, ${escaparHtml(pessoa.name.split(" ")[0])}. Se este e-mail chegou, o CRM já consegue mandar os lembretes ${minutosAntes()} minutos antes de cada atividade e o resumo do dia às ${horaDoResumo()}h.`,

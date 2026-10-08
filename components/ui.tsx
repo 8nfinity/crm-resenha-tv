@@ -27,10 +27,10 @@ export function PageHeader({
               key={i}
               className={cn(
                 // Texto com leve degradê (luz vindo de cima), como nos títulos
-                // da Apple. A última linha em verde, como o "BIOMECH" do material.
+                // da Apple. A última linha em laranja, como a moldura da TV da logo.
                 "block bg-clip-text pb-[0.06em] text-transparent",
                 linhas.length > 1 && i === linhas.length - 1
-                  ? "bg-gradient-to-r from-[var(--color-accent)] via-[#7ff0b4] to-[#d6ffe8]"
+                  ? "bg-gradient-to-r from-[var(--color-accent)] via-[#ffb067] to-[#ffe2c4]"
                   : "bg-gradient-to-b from-white to-white/70",
               )}
             >
@@ -38,7 +38,7 @@ export function PageHeader({
             </span>
           ))}
         </h1>
-        <span className="mt-4 block h-[3px] w-24 rounded-full bg-[var(--color-yellow)]" />
+        <span className="barras-tv mt-4 block h-[4px] w-28 rounded-full" />
         {subtitle && (
           <p className="mt-3 text-sm text-[var(--color-muted)]">{subtitle}</p>
         )}

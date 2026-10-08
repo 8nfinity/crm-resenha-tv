@@ -5,7 +5,7 @@ import { FormLogin } from "@/components/form-login";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Entrar · CRM Biomech" };
+export const metadata = { title: "Entrar · CRM Resenha TV" };
 
 export default async function LoginPage({
   searchParams,
@@ -27,17 +27,17 @@ export default async function LoginPage({
         <div className="flex flex-col items-center text-center">
           <Image
             src="/brand/selo.png"
-            alt="Instituto Biomech"
+            alt="Resenha TV"
             width={112}
             height={112}
             priority
-            className="size-28 rounded-full ring-1 ring-[var(--color-line)]/40"
+            className="size-28 rounded-full ring-1 ring-[var(--color-line)]/50"
           />
           <h1 className="display mt-5 text-3xl leading-none">
             <span className="block">CRM</span>
-            <span className="block text-[var(--color-accent)]">Biomech</span>
+            <span className="block text-[var(--color-accent)]">Resenha TV</span>
           </h1>
-          <span className="mt-4 block h-[3px] w-16 rounded-full bg-[var(--color-yellow)]" />
+          <span className="barras-tv mt-4 block h-[4px] w-24 rounded-full" />
         </div>
 
         <section className="card mt-8 p-6">
@@ -59,7 +59,7 @@ export default async function LoginPage({
         </section>
 
         <p className="mt-6 text-center text-xs text-[var(--color-muted)]">
-          Instituto Biomech · Avaliação biomecânica e fisioterapia
+          Resenha TV · @resenha.tv
         </p>
       </div>
     </div>

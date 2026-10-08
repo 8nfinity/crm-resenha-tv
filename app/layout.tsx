@@ -5,7 +5,7 @@ import { usuarioAtual } from "@/lib/auth/usuario";
 import { SessaoProvider } from "@/components/sessao";
 import "./globals.css";
 
-// A mesma família geométrica e pesada dos materiais da Biomech: títulos em
+// Geométrica e pesada como o "RESENHA TV" da logo: títulos em
 // caixa alta 900, números grandes das métricas em 700.
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -13,16 +13,16 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "CRM Biomech",
-  description: "Funil de vendas do Instituto Biomech, conectado ao WhatsApp",
+  title: "CRM Resenha TV",
+  description: "Funil de vendas da Resenha TV, conectado ao WhatsApp",
   icons: { icon: "/brand/marca.png", apple: "/brand/apple-180.png" },
   // Instalado na Tela de Início do iPhone, abre como aplicativo (sem a barra
   // do Safari) — e é assim que o iPhone recebe as notificações.
-  appleWebApp: { capable: true, title: "CRM Biomech", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "CRM Resenha TV", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1d14",
+  themeColor: "#0a0705",
 };
 
 export default async function RootLayout({

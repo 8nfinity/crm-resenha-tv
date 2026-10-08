@@ -1,5 +1,5 @@
 /*
- * Service worker do CRM Biomech: mostra as notificações das atividades mesmo
+ * Service worker do CRM Resenha TV: mostra as notificações das atividades mesmo
  * com o CRM fechado, e abre a tela certa quando a pessoa toca nelas.
  *
  * Não guarda páginas em cache (o CRM precisa estar online para funcionar):
@@ -18,7 +18,7 @@ self.addEventListener("push", (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(dados.title || "CRM Biomech", {
+    self.registration.showNotification(dados.title || "CRM Resenha TV", {
       body: dados.body || "",
       icon: "/brand/app-192.png",
       tag: dados.tag,

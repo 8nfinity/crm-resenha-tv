@@ -45,7 +45,7 @@ export function FormLogin({ destino }: { destino: string }) {
           autoFocus
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="voce@biomech.com.br"
+          placeholder="voce@resenha.tv"
           className={campo}
         />
       </label>

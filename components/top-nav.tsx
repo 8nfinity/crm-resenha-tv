@@ -42,11 +42,11 @@ export function TopNav({ usuario }: { usuario: Usuario | null }) {
     <header className="relative z-30 flex shrink-0 items-center gap-3 px-4 pt-4 sm:gap-4 sm:px-8 sm:pt-5">
       <Link href="/hoje" className="group flex shrink-0 items-center gap-2.5">
         <span className="relative grid size-11 place-items-center rounded-full">
-          {/* Halo verde atrás do selo, como uma luz refletida no vidro. */}
+          {/* Halo laranja atrás do selo, como uma luz refletida no vidro. */}
           <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/30 blur-md transition-opacity group-hover:opacity-100 sm:opacity-60" />
           <Image
             src="/brand/selo.png"
-            alt="Instituto Biomech"
+            alt="Resenha TV"
             width={44}
             height={44}
             priority
@@ -54,7 +54,7 @@ export function TopNav({ usuario }: { usuario: Usuario | null }) {
           />
         </span>
         <span className="hidden leading-none sm:block">
-          <span className="display block text-lg text-[var(--color-accent)]">Biomech</span>
+          <span className="display block text-lg text-[var(--color-accent)]">Resenha TV</span>
           <span className="block text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--color-muted)]">
             CRM
           </span>

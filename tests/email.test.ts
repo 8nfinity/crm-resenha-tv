@@ -33,7 +33,7 @@ const EMAIL = { para: "vendedor@exemplo.com", assunto: "Lembrete", html: "<p>oi<
 test("remetente: separa nome e e-mail", () => {
   assert.deepEqual(separarRemetente("CRM Biomech <moises@gmail.com>"), { nome: "CRM Biomech", email: "moises@gmail.com" });
   assert.deepEqual(separarRemetente('"Instituto Biomech" <a@b.com>'), { nome: "Instituto Biomech", email: "a@b.com" });
-  assert.deepEqual(separarRemetente("moises@gmail.com"), { nome: "CRM Biomech", email: "moises@gmail.com" });
+  assert.deepEqual(separarRemetente("moises@gmail.com"), { nome: "CRM Resenha TV", email: "moises@gmail.com" });
 });
 
 test("sem chave nenhuma, os avisos ficam desligados e o erro explica o que falta", async () => {

@@ -9,7 +9,7 @@ import { descreverPeriodo, rotuloJanela } from "@/lib/periodo";
 import { formatarMinutos, SILENCIO_QUE_ABRE_CONVERSA_H } from "@/lib/tempo-resposta";
 
 /**
- * Relatório de métricas em PDF, na identidade visual Biomech.
+ * Relatório de métricas em PDF, na identidade visual Resenha TV.
  *
  * Roda no navegador (só no clique): os números são exatamente os da tela, sem
  * uma segunda consulta que poderia trazer valores ligeiramente diferentes.
@@ -28,19 +28,29 @@ export type DadosRelatorio = {
 type RGB = [number, number, number];
 
 const COR = {
-  fundo: [5, 15, 10] as RGB,
-  grade: [11, 30, 20] as RGB,
-  card: [10, 26, 18] as RGB,
-  card2: [16, 38, 26] as RGB,
-  borda: [28, 61, 43] as RGB,
-  verde: [47, 227, 140] as RGB,
-  verdeEscuro: [11, 61, 37] as RGB,
-  amarelo: [242, 212, 23] as RGB,
-  texto: [234, 252, 241] as RGB,
-  suave: [141, 181, 160] as RGB,
-  quente: [255, 122, 89] as RGB,
-  sobreVerde: [4, 19, 11] as RGB,
+  fundo: [10, 7, 5] as RGB,
+  grade: [26, 18, 12] as RGB,
+  card: [22, 15, 10] as RGB,
+  card2: [34, 23, 15] as RGB,
+  borda: [66, 44, 27] as RGB,
+  destaque: [247, 136, 47] as RGB,
+  destaqueEscuro: [92, 40, 10] as RGB,
+  amarelo: [255, 214, 41] as RGB,
+  texto: [253, 247, 239] as RGB,
+  suave: [185, 169, 152] as RGB,
+  quente: [255, 59, 69] as RGB,
+  sobreDestaque: [26, 13, 3] as RGB,
 };
+
+const BARRAS_TV: RGB[] = [
+  [244, 239, 230],
+  [255, 214, 41],
+  [62, 199, 214],
+  [70, 194, 45],
+  [224, 56, 154],
+  [255, 46, 59],
+  [61, 91, 216],
+];
 
 const FONTE = "Montserrat";
 const MARGEM = 36;
@@ -153,10 +163,10 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
 
   function card(x: number, cy: number, w: number, h: number, fundo: RGB = COR.card) {
     preencher(fundo);
-    tracar(COR.verde);
+    tracar(COR.destaque);
     doc.setLineWidth(0.8);
     doc.roundedRect(x, cy, w, h, 12, 12, "FD");
-    // O triângulo amarelo no canto, assinatura dos cards da Biomech.
+    // O triângulo amarelo no canto, como a barra amarela da tela da TV.
     preencher(COR.amarelo);
     doc.triangle(x + w, cy + h - 18, x + w, cy + h, x + w - 18, cy + h, "F");
   }
@@ -227,7 +237,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
       doc.roundedRect(bx, areaTopo, bw, areaAltura, 4, 4, "F");
       const bh = it.valor > 0 ? Math.max((it.valor / max) * areaAltura, 5) : 0;
       if (bh > 0) {
-        preencher(it.destaque ?? COR.verde);
+        preencher(it.destaque ?? COR.destaque);
         doc.roundedRect(bx, areaTopo + areaAltura - bh, bw, bh, 4, 4, "F");
       }
       letra("bold", 8);
@@ -252,8 +262,8 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
       cellPadding: { top: 6, bottom: 6, left: 8, right: 8 },
     },
     headStyles: {
-      fillColor: COR.verde,
-      textColor: COR.sobreVerde,
+      fillColor: COR.destaque,
+      textColor: COR.sobreDestaque,
       fontStyle: "bold" as const,
       fontSize: 7.5,
     },
@@ -280,8 +290,8 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
   letra("bold", 22);
   cor(COR.texto);
   doc.text("RELATÓRIO DE MÉTRICAS", tx, y + 24);
-  cor(COR.verde);
-  doc.text("BIOMECH", tx, y + 50);
+  cor(COR.destaque);
+  doc.text("RESENHA TV", tx, y + 50);
 
   const agora = new Date();
   const dataStr = agora.toLocaleDateString("pt-BR", {
@@ -295,11 +305,14 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
   letra("normal", 8);
   cor(COR.suave);
   doc.text(`Gerado em ${dataStr}`, L - MARGEM, y + 34, { align: "right" });
-  doc.text("Instituto Biomech · CRM", L - MARGEM, y + 46, { align: "right" });
+  doc.text("Resenha TV · CRM", L - MARGEM, y + 46, { align: "right" });
 
   y += 72;
-  preencher(COR.amarelo);
-  doc.rect(MARGEM, y, 70, 3, "F");
+  // As barras de cor da tela da TV, a assinatura da Resenha TV.
+  BARRAS_TV.forEach((c, i) => {
+    preencher(c);
+    doc.rect(MARGEM + i * 12, y, 12, 3, "F");
+  });
   y += 18;
 
   // ── Resumo do funil ────────────────────────────────────────────────────────
@@ -307,7 +320,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
   secao("Resumo do período");
   indicadores([
     { rotulo: "Novos leads", valor: String(funil.novos), legenda: "entraram no funil" },
-    { rotulo: "Ganhos", valor: String(funil.ganhos), legenda: "negócios fechados", tom: COR.verde },
+    { rotulo: "Ganhos", valor: String(funil.ganhos), legenda: "negócios fechados", tom: COR.destaque },
     { rotulo: "Perdidos", valor: String(funil.perdidos), legenda: "saíram do funil" },
     { rotulo: "Conversão geral", valor: pct(funil.conversaoGeral), legenda: "ganhos ÷ novos leads" },
   ]);
@@ -326,7 +339,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
         j.dias === 1
           ? "desde 00:00"
           : `≈ ${(j.feitos / j.dias).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por dia`,
-      tom: COR.verde,
+      tom: COR.destaque,
     })),
   );
   indicadores([
@@ -371,7 +384,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
         rotulo: "Primeira resposta",
         valor: formatarMinutos(p.medianaMin),
         legenda: `mediana de ${p.respondidas} respostas`,
-        tom: COR.verde,
+        tom: COR.destaque,
       },
       { rotulo: "Em até 5 minutos", valor: pct(p.ate5Min), legenda: `em até 1 h: ${pct(p.ate1h)}` },
       {
@@ -420,7 +433,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
           formatarMinutos(v.duranteConversa.medianaMin),
         ]),
         columnStyles: {
-          1: { halign: "right", textColor: COR.verde, fontStyle: "bold" },
+          1: { halign: "right", textColor: COR.destaque, fontStyle: "bold" },
           2: { halign: "right" },
           3: { halign: "right" },
           4: { halign: "right" },
@@ -444,7 +457,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
   indicadores([
     { rotulo: "Entraram", valor: String(funil.novos) },
     { rotulo: "Em andamento agora", valor: String(ativos) },
-    { rotulo: "Ganhos", valor: String(funil.ganhos), tom: COR.verde },
+    { rotulo: "Ganhos", valor: String(funil.ganhos), tom: COR.destaque },
   ]);
 
   if (funil.estagios.length > 0) {
@@ -511,11 +524,11 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
       doc.roundedRect(trilhoX, ly + 2, trilhoW, 9, 4.5, 4.5, "F");
       const v = Math.min(Math.max(e.conversao ?? 0, 0), 1);
       if (v > 0) {
-        preencher(COR.verde);
+        preencher(COR.destaque);
         doc.roundedRect(trilhoX, ly + 2, Math.max(trilhoW * v, 9), 9, 4.5, 4.5, "F");
       }
       letra("bold", 8.5);
-      cor(COR.verde);
+      cor(COR.destaque);
       doc.text(pct(e.conversao), trilhoX + trilhoW + 12, ly + 10);
       letra("normal", 6.5);
       cor(COR.suave);
@@ -555,7 +568,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
       ]),
       columnStyles: {
         1: { halign: "right" },
-        2: { halign: "right", textColor: COR.verde },
+        2: { halign: "right", textColor: COR.destaque },
         3: { halign: "right" },
         4: { halign: "right", textColor: COR.suave },
       },
@@ -592,7 +605,7 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
       head: [["Tipo", "Feitas no período", "Em aberto"]],
       body: atividades.porTipo.map((t) => [t.label, String(t.feitas), String(t.abertas)]),
       columnStyles: {
-        1: { halign: "right", textColor: COR.verde },
+        1: { halign: "right", textColor: COR.destaque },
         2: { halign: "right", textColor: COR.suave },
       },
     });
@@ -608,16 +621,16 @@ export async function montarRelatorioPdf({ funil, atividades, resposta, followUp
     doc.setLineWidth(0.5);
     doc.line(MARGEM, A - 34, L - MARGEM, A - 34);
     letra("semibold", 7);
-    cor(COR.verde);
-    doc.text("INSTITUTO BIOMECH", MARGEM, A - 20);
+    cor(COR.destaque);
+    doc.text("RESENHA TV", MARGEM, A - 20);
     letra("normal", 7);
     cor(COR.suave);
-    doc.text("Avaliação biomecânica e fisioterapia · CRM", MARGEM + 84, A - 20);
+    doc.text("@resenha.tv · CRM", MARGEM + 52, A - 20);
     doc.text(`página ${pg} de ${paginas}`, L - MARGEM, A - 20, { align: "right" });
   }
 
   return {
     doc,
-    nomeArquivo: `metricas-biomech-${funil.dias}dias-${agora.toISOString().slice(0, 10)}.pdf`,
+    nomeArquivo: `metricas-resenha-tv-${funil.dias}dias-${agora.toISOString().slice(0, 10)}.pdf`,
   };
 }
