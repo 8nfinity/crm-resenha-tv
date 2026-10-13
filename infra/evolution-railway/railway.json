@@ -6,7 +6,6 @@
     "watchPatterns": ["infra/evolution-railway/**"]
   },
   "deploy": {
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 5
+    "restartPolicyType": "ALWAYS"
   }
 }
