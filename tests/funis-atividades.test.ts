@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sinalDoLead } from "../lib/atividades";
-import { FILTROS_LISTA_PADRAO, filtrarLista, type FiltrosLista, type ItemDaLista } from "../lib/lista-atividades";
+import {
+  FILTROS_LISTA_PADRAO,
+  filtrarLeadsSemAtividade,
+  filtrarLista,
+  type FiltrosLista,
+  type ItemDaLista,
+  type LeadSemAtividade,
+} from "../lib/lista-atividades";
 import { copiaDecideOEstagio } from "../lib/mesclar-contatos";
 import { escolherFunil } from "../lib/funis";
 
@@ -97,6 +104,35 @@ test("lista: tipo, responsável, funil e busca por telefone", () => {
   assert.deepEqual(f({ funil: "f1" }), ["a", "c"]);
   assert.deepEqual(f({ busca: "98540" }), ["a"]);
   assert.deepEqual(f({ busca: "bia" }), ["b"]);
+});
+
+test("lista: 'Sem atividade' troca atividades por leads, filtrando funil e busca", () => {
+  assert.deepEqual(filtrar({ periodo: "sem-atividade" }), []);
+
+  const lead = (id: string, p: Partial<LeadSemAtividade>): LeadSemAtividade => ({
+    id,
+    nome: id,
+    telefone: null,
+    funilId: "f1",
+    funilNome: "Captação",
+    coluna: "Novo lead",
+    colunaCor: "#94a3b8",
+    ultimaConversa: null,
+    ...p,
+  });
+  const leads = [
+    lead("Ana", { ultimaConversa: iso(10), telefone: "+55 51 98540-9366" }),
+    lead("Bia", { ultimaConversa: iso(14), funilId: "f2" }),
+    lead("Caio", {}),
+  ];
+  const f = (p: Partial<FiltrosLista>) =>
+    filtrarLeadsSemAtividade(leads, { ...FILTROS_LISTA_PADRAO, periodo: "sem-atividade", ...p }).map((l) => l.id);
+  // Quem conversou por último primeiro; sem conversa nenhuma no fim.
+  assert.deepEqual(f({}), ["Bia", "Ana", "Caio"]);
+  assert.deepEqual(f({ funil: "f1" }), ["Ana", "Caio"]);
+  assert.deepEqual(f({ busca: "9366" }), ["Ana"]);
+  // Tipo e responsável são de atividade: não escondem leads.
+  assert.deepEqual(f({ tipos: ["CALL"], responsavel: "u1" }), ["Bia", "Ana", "Caio"]);
 });
 
 // ─── Vários funis ────────────────────────────────────────────────────────────

@@ -133,7 +133,8 @@ export function DealCardView({
 
         <span className="ml-auto flex items-center gap-2">
           {value && <span className="text-xs font-semibold text-[var(--color-text)]">{value}</span>}
-          <SinalDeAtividades deal={deal} agora={agora} />
+          {/* Negócio fechado (Ganho/Perdido) não precisa de próximo passo. */}
+          {!deal.fechado && <SinalDeAtividades deal={deal} agora={agora} />}
         </span>
       </div>
     </div>

@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  TriangleAlert,
   User,
   X,
 } from "lucide-react";
@@ -38,9 +39,11 @@ import { DealPanel } from "@/components/kanban/deal-panel";
 import {
   FILTROS_LISTA_PADRAO,
   PERIODOS_LISTA,
+  filtrarLeadsSemAtividade,
   filtrarLista,
   filtrosExtrasAtivos,
   type FiltrosLista,
+  type LeadSemAtividade,
 } from "@/lib/lista-atividades";
 import { cn } from "@/lib/utils";
 
@@ -143,6 +146,7 @@ export function Calendario({
   leads,
   responsaveis,
   funis,
+  leadsSemAtividade,
 }: {
   visao: Visao;
   dataIso: string;
@@ -151,6 +155,8 @@ export function Calendario({
   leads: { id: string; nome: string }[];
   responsaveis: { id: string; nome: string }[];
   funis: { id: string; nome: string }[];
+  /** Só na Lista: os leads sem nada marcado (o ⚠️ do funil). */
+  leadsSemAtividade: LeadSemAtividade[];
 }) {
   const router = useRouter();
   const ref = deChave(dataIso);
@@ -158,12 +164,11 @@ export function Calendario({
   const [atividades, setAtividades] = useState(iniciais);
   useEffect(() => setAtividades(iniciais), [iniciais]);
 
-  // Tipos escondidos no filtro (os novos aparecem sozinhos).
-  const [ocultos, setOcultos] = useState<Set<string>>(new Set());
   const { proprios } = useTiposProprios();
   const [mostrarFeitas, setMostrarFeitas] = useState(true);
   const [detalheId, setDetalheId] = useState<string | null>(null);
-  const [criar, setCriar] = useState<{ data: string; hora: string } | null>(null);
+  // `lead`: já escolhido (o "Agendar" de um lead sem atividade).
+  const [criar, setCriar] = useState<{ data: string; hora: string; lead?: { id: string; nome: string } } | null>(null);
   const [leadAberto, setLeadAberto] = useState<string | null>(null);
 
   // "Agora" só depois de montar: no servidor a hora é outra e o React
@@ -175,7 +180,7 @@ export function Calendario({
     return () => clearInterval(t);
   }, []);
 
-  // Filtros da Lista (e responsável/funil, que valem no calendário também).
+  // Filtros da Lista — tipo, responsável e funil valem no calendário também.
   // Guardados neste navegador; lidos só depois de montar, para o desenho do
   // servidor e o da tela baterem.
   const [filtros, setFiltrosEstado] = useState<FiltrosLista>(FILTROS_LISTA_PADRAO);
@@ -204,12 +209,12 @@ export function Calendario({
     () =>
       atividades.filter(
         (a) =>
-          !ocultos.has(a.tipo) &&
+          (filtros.tipos.length === 0 || filtros.tipos.includes(a.tipo)) &&
           (mostrarFeitas || !a.doneAt) &&
           (filtros.responsavel === "-" ? a.responsavel === null : !filtros.responsavel || a.responsavel?.id === filtros.responsavel) &&
           (!filtros.funil || a.deal.funilId === filtros.funil),
       ),
-    [atividades, ocultos, mostrarFeitas, filtros.responsavel, filtros.funil],
+    [atividades, mostrarFeitas, filtros.tipos, filtros.responsavel, filtros.funil],
   );
   const porDia = useMemo(() => {
     const m = new Map<string, AtividadeCalendario[]>();
@@ -254,46 +259,6 @@ export function Calendario({
 
         <MiniMes ref_={ref} hojeChave={hojeChave} porDia={porDia} onEscolher={(d) => ir(visao === "mes" ? "dia" : visao, d)} />
 
-        <div>
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Tipos</p>
-          <ul className="flex flex-col gap-1">
-            {opcoesDeTipo(proprios).map((o) => (
-              <li key={o.chave}>
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-[var(--color-surface-2)]">
-                  <input
-                    type="checkbox"
-                    checked={!ocultos.has(o.chave)}
-                    onChange={() =>
-                      setOcultos((s) => {
-                        const n = new Set(s);
-                        if (n.has(o.chave)) n.delete(o.chave);
-                        else n.add(o.chave);
-                        return n;
-                      })
-                    }
-                    className="size-4 rounded"
-                    style={{ accentColor: o.cor }}
-                  />
-                  {o.nome}
-                </label>
-              </li>
-            ))}
-            <li className="mt-1 border-t pt-2">
-              <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-[var(--color-surface-2)]">
-                <input
-                  type="checkbox"
-                  checked={mostrarFeitas}
-                  onChange={() => setMostrarFeitas((v) => !v)}
-                  className="size-4 rounded accent-[var(--color-muted)]"
-                />
-                Mostrar concluídas
-              </label>
-            </li>
-          </ul>
-        </div>
-
-        <FiltrosDePessoaEFunil filtros={filtros} onChange={setFiltros} responsaveis={responsaveis} funis={funis} vertical />
-
         <div className="rounded-2xl border border-[var(--color-border)] p-3 text-xs">
           <p className="flex justify-between">
             <span className="text-[var(--color-muted)]">A fazer hoje</span>
@@ -318,6 +283,8 @@ export function Calendario({
             funis={funis}
             proprios={proprios}
             alternador={<AlternarModo lista onCalendario={() => ir(ultimaVisaoCal, ref)} onLista={() => {}} />}
+            leadsSemAtividade={leadsSemAtividade}
+            onAgendar={(lead) => setCriar({ data: chaveDia(agora ?? ref), hora: "09:00", lead })}
             onCriar={() => setCriar({ data: chaveDia(agora ?? ref), hora: "09:00" })}
             onAbrir={setDetalheId}
             onAbrirLead={setLeadAberto}
@@ -366,6 +333,23 @@ export function Calendario({
           </div>
         </div>
 
+        {/* Filtros do calendário: os mesmos da Lista, em qualquer tamanho de tela. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5">
+          <BarraDeTipos tipos={opcoesDeTipo(proprios)} escolhidos={filtros.tipos} onChange={(tipos) => setFiltros({ ...filtros, tipos })} />
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <FiltrosDePessoaEFunil filtros={filtros} onChange={setFiltros} responsaveis={responsaveis} funis={funis} />
+            <label className="flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)]">
+              <input
+                type="checkbox"
+                checked={mostrarFeitas}
+                onChange={() => setMostrarFeitas((v) => !v)}
+                className="size-4 rounded accent-[var(--color-accent)]"
+              />
+              Concluídas
+            </label>
+          </div>
+        </div>
+
         {visao === "mes" && (
           <VisaoMes
             ref_={ref}
@@ -408,6 +392,7 @@ export function Calendario({
       {criar && (
         <CriarAtividade
           inicial={criar}
+          leadInicial={criar.lead ?? null}
           leads={leads}
           onFechar={() => setCriar(null)}
           onCriado={() => {
@@ -858,29 +843,78 @@ function AlternarModo({ lista, onLista, onCalendario }: { lista: boolean; onList
   );
 }
 
+/**
+ * Os tipos como botões coloridos, no molde do Pipedrive: "Tudo" ou um ou mais
+ * tipos escolhidos. Os mesmos na Lista e no calendário.
+ */
+function BarraDeTipos({
+  tipos,
+  escolhidos,
+  onChange,
+}: {
+  tipos: { chave: string; nome: string; cor: string }[];
+  escolhidos: string[];
+  onChange: (tipos: string[]) => void;
+}) {
+  const alternar = (chave: string) =>
+    onChange(escolhidos.includes(chave) ? escolhidos.filter((t) => t !== chave) : [...escolhidos, chave]);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <button
+        onClick={() => onChange([])}
+        className={cn(
+          "rounded-full px-3 py-1 text-xs font-semibold",
+          escolhidos.length === 0 ? "bolha text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
+        )}
+      >
+        Tudo
+      </button>
+      {tipos.map((o) => {
+        const ativo = escolhidos.includes(o.chave);
+        return (
+          <button
+            key={o.chave}
+            onClick={() => alternar(o.chave)}
+            aria-pressed={ativo}
+            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors"
+            style={
+              ativo
+                ? { borderColor: o.cor, backgroundColor: `color-mix(in srgb, ${o.cor} 22%, transparent)`, color: "var(--color-text)" }
+                : { color: "var(--color-muted)" }
+            }
+          >
+            <span className="size-2 rounded-full" style={{ backgroundColor: o.cor }} />
+            {o.nome}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Responsável e funil: valem na lista e no calendário. */
 function FiltrosDePessoaEFunil({
   filtros,
   onChange,
   responsaveis,
   funis,
-  vertical = false,
+  comResponsavel = true,
 }: {
   filtros: FiltrosLista;
   onChange: (f: FiltrosLista) => void;
   responsaveis: { id: string; nome: string }[];
   funis: { id: string; nome: string }[];
-  vertical?: boolean;
+  /** Na lista de leads sem atividade não há de quem filtrar. */
+  comResponsavel?: boolean;
 }) {
   const estilo = (ativo: boolean) =>
     cn(
       "rounded-full px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]",
       ativo ? "bolha font-semibold text-white" : "border bg-transparent text-[var(--color-muted)]",
-      vertical && "w-full",
     );
   return (
-    <div className={cn("flex gap-2", vertical ? "flex-col" : "flex-wrap items-center")}>
-      {vertical && <p className="text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Filtros</p>}
+    <div className="flex flex-wrap items-center gap-2">
+      {comResponsavel && (
       <select
         value={filtros.responsavel}
         onChange={(e) => onChange({ ...filtros, responsavel: e.target.value })}
@@ -895,6 +929,7 @@ function FiltrosDePessoaEFunil({
         ))}
         <option value="-">Sem responsável</option>
       </select>
+      )}
       {funis.length > 1 && (
         <select
           value={filtros.funil}
@@ -939,11 +974,15 @@ function VisaoLista({
   funis,
   proprios,
   alternador,
+  leadsSemAtividade,
+  onAgendar,
   onCriar,
   onAbrir,
   onAbrirLead,
   onAlternar,
 }: {
+  leadsSemAtividade: LeadSemAtividade[];
+  onAgendar: (lead: { id: string; nome: string }) => void;
   atividades: AtividadeCalendario[];
   agora: Date | null;
   filtros: FiltrosLista;
@@ -964,10 +1003,13 @@ function VisaoLista({
     [atividades, filtros, agora],
   );
   const set = (p: Partial<FiltrosLista>) => onFiltros({ ...filtros, ...p });
-  const tipos = opcoesDeTipo(proprios);
-  const alternarTipo = (chave: string) =>
-    set({ tipos: filtros.tipos.includes(chave) ? filtros.tipos.filter((t) => t !== chave) : [...filtros.tipos, chave] });
   const extras = filtrosExtrasAtivos(filtros);
+  // "⚠️ Sem atividade" troca a tabela: em vez de atividades, os leads sem nada marcado.
+  const semAtividade = filtros.periodo === "sem-atividade";
+  const leads = useMemo(
+    () => (semAtividade ? filtrarLeadsSemAtividade(leadsSemAtividade, filtros) : []),
+    [semAtividade, leadsSemAtividade, filtros],
+  );
   const variosFunis = funis.length > 1;
 
   return (
@@ -975,8 +1017,8 @@ function VisaoLista({
       {/* Linha 1: modo, título, criar */}
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
         {alternador}
-        <h1 className="ml-1 text-lg font-bold sm:text-xl">Atividades</h1>
-        <span className="text-sm tabular-nums text-[var(--color-muted)]">{agora ? linhas.length : "…"}</span>
+        <h1 className="ml-1 text-lg font-bold sm:text-xl">{semAtividade ? "Leads sem atividade" : "Atividades"}</h1>
+        <span className="text-sm tabular-nums text-[var(--color-muted)]">{semAtividade ? leads.length : agora ? linhas.length : "…"}</span>
         <button
           onClick={onCriar}
           className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-4 py-1.5 text-sm font-semibold text-[var(--color-on-ink)]"
@@ -987,36 +1029,9 @@ function VisaoLista({
 
       {/* Linha 2: tipos (como os botões do Pipedrive) e período */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => set({ tipos: [] })}
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold",
-              filtros.tipos.length === 0 ? "bolha text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
-            )}
-          >
-            Tudo
-          </button>
-          {tipos.map((o) => {
-            const ativo = filtros.tipos.includes(o.chave);
-            return (
-              <button
-                key={o.chave}
-                onClick={() => alternarTipo(o.chave)}
-                aria-pressed={ativo}
-                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors"
-                style={
-                  ativo
-                    ? { borderColor: o.cor, backgroundColor: `color-mix(in srgb, ${o.cor} 22%, transparent)`, color: "var(--color-text)" }
-                    : { color: "var(--color-muted)" }
-                }
-              >
-                <span className="size-2 rounded-full" style={{ backgroundColor: o.cor }} />
-                {o.nome}
-              </button>
-            );
-          })}
-        </div>
+        {!semAtividade && (
+          <BarraDeTipos tipos={opcoesDeTipo(proprios)} escolhidos={filtros.tipos} onChange={(tipos) => set({ tipos })} />
+        )}
 
         <div className="flex flex-wrap items-center gap-1 lg:ml-auto">
           {PERIODOS_LISTA.map((p) => (
@@ -1049,11 +1064,17 @@ function VisaoLista({
           <input
             value={filtros.busca}
             onChange={(e) => set({ busca: e.target.value })}
-            placeholder="Buscar assunto, lead ou telefone…"
+            placeholder={semAtividade ? "Buscar lead ou telefone…" : "Buscar assunto, lead ou telefone…"}
             className="w-64 rounded-full border bg-transparent py-1.5 pl-8 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
           />
         </div>
-        <FiltrosDePessoaEFunil filtros={filtros} onChange={onFiltros} responsaveis={responsaveis} funis={funis} />
+        <FiltrosDePessoaEFunil
+          filtros={filtros}
+          onChange={onFiltros}
+          responsaveis={responsaveis}
+          funis={funis}
+          comResponsavel={!semAtividade}
+        />
         {extras > 0 && (
           <button
             onClick={() => onFiltros({ ...filtros, tipos: [], responsavel: "", funil: "", busca: "" })}
@@ -1064,7 +1085,10 @@ function VisaoLista({
         )}
       </div>
 
-      {/* Tabela */}
+      {semAtividade ? (
+        <TabelaSemAtividade leads={leads} variosFunis={variosFunis} agora={agora} onAbrirLead={onAbrirLead} onAgendar={onAgendar} />
+      ) : (
+      /* Tabela */
       <div className="scroll-thin min-h-0 flex-1 overflow-auto">
         <table className="w-full min-w-[56rem] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-[var(--color-solido)]">
@@ -1141,6 +1165,79 @@ function VisaoLista({
           </tbody>
         </table>
       </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Leads sem nenhuma atividade em aberto — o ⚠️ amarelo do funil. Cada um com
+ * "Agendar", que abre a criação de atividade já com o lead escolhido.
+ */
+function TabelaSemAtividade({
+  leads,
+  variosFunis,
+  agora,
+  onAbrirLead,
+  onAgendar,
+}: {
+  leads: LeadSemAtividade[];
+  variosFunis: boolean;
+  agora: Date | null;
+  onAbrirLead: (dealId: string) => void;
+  onAgendar: (lead: { id: string; nome: string }) => void;
+}) {
+  return (
+    <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+      <table className="w-full min-w-[48rem] border-collapse text-sm">
+        <thead className="sticky top-0 z-10 bg-[var(--color-solido)]">
+          <tr className="text-left text-xs font-semibold text-[var(--color-muted)]">
+            <th className="px-4 py-2.5">Lead</th>
+            <th className="px-3 py-2.5">Coluna</th>
+            <th className="px-3 py-2.5">Última conversa</th>
+            <th className="px-3 py-2.5">Telefone</th>
+            <th className="px-3 py-2.5" />
+          </tr>
+        </thead>
+        <tbody>
+          {leads.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-4 py-12 text-center text-sm text-[var(--color-muted)]">
+                Todo lead tem um próximo passo marcado. 👏
+              </td>
+            </tr>
+          )}
+          {leads.map((l) => (
+            <tr key={l.id} className="border-t transition-colors hover:bg-[var(--color-surface-2)]">
+              <td className="max-w-[16rem] px-4 py-2">
+                <button onClick={() => onAbrirLead(l.id)} className="flex max-w-full items-center gap-2 text-left">
+                  <TriangleAlert className="size-4 shrink-0 text-[var(--color-warm)]" />
+                  <span className="truncate font-semibold hover:underline">{l.nome}</span>
+                </button>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">
+                <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                  <span className="size-2 rounded-full" style={{ backgroundColor: l.colunaCor }} />
+                  {variosFunis && <span>{l.funilNome} ·</span>}
+                  {l.coluna}
+                </span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 tabular-nums text-[var(--color-muted)]">
+                {l.ultimaConversa ? prazoCurto(l.ultimaConversa, agora) : "—"}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 tabular-nums text-[var(--color-muted)]">{l.telefone ?? "—"}</td>
+              <td className="px-3 py-2 text-right">
+                <button
+                  onClick={() => onAgendar({ id: l.id, nome: l.nome })}
+                  className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  <Plus className="size-3.5" /> Agendar
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1257,11 +1354,14 @@ function Linha({ icone: Icone, titulo, children }: { icone: typeof Clock; titulo
 
 function CriarAtividade({
   inicial,
+  leadInicial = null,
   leads,
   onFechar,
   onCriado,
 }: {
   inicial: { data: string; hora: string };
+  /** Lead já escolhido (o "Agendar" de um lead sem atividade). */
+  leadInicial?: { id: string; nome: string } | null;
   leads: { id: string; nome: string }[];
   onFechar: () => void;
   onCriado: () => void;
@@ -1272,7 +1372,7 @@ function CriarAtividade({
   const [data, setData] = useState(inicial.data);
   const [horaStr, setHoraStr] = useState(inicial.hora);
   const [busca, setBusca] = useState("");
-  const [lead, setLead] = useState<{ id: string; nome: string } | null>(null);
+  const [lead, setLead] = useState<{ id: string; nome: string } | null>(leadInicial);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 

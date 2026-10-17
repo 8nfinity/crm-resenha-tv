@@ -37,6 +37,8 @@ export type DealCard = {
   atrasadas: number;
   /** O ícone calculado no servidor; a tela recalcula pelo relógio depois de abrir. */
   sinal: SinalAtividades;
+  /** Em Ganho ou Perdido: negócio fechado, sem ícone de atividade. */
+  fechado: boolean;
   /** Valores dos campos que voce definiu, indexados pelo id do campo. */
   customValues: Record<string, string | number | null>;
 };

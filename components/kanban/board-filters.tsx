@@ -78,7 +78,9 @@ export function aplicarFiltros(deals: DealCard[], f: Filtros, agora: Date | null
     if (f.parados !== null && d.daysInStage < f.parados) return false;
     if (f.contaId && d.account.id !== f.contaId) return false;
     if (f.atividade !== "todas") {
-      // O mesmo cálculo do ícone do card: o filtro acha exatamente o que a tela mostra.
+      // O mesmo cálculo do ícone do card: o filtro acha exatamente o que a tela
+      // mostra — e card fechado (Ganho/Perdido) não tem ícone.
+      if (d.fechado) return false;
       const sinal = agora ? sinalDoLead(d.proximaAtividade, agora) : d.sinal;
       if (sinal !== f.atividade) return false;
     }

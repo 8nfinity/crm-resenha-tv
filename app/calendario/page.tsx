@@ -3,6 +3,7 @@ import {
   atividadesParaLista,
   contarAtrasadas,
   leadsParaAgendar,
+  leadsSemAtividade,
   responsaveis,
 } from "@/lib/calendario";
 import { listarFunis } from "@/lib/funis";
@@ -45,12 +46,13 @@ export default async function CalendarioPage({
   fimAgenda.setDate(fimAgenda.getDate() + 61);
   const fim = fimAgenda > fimMes ? fimAgenda : fimMes;
 
-  const [atividades, atrasadas, leads, usuarios, funis] = await Promise.all([
+  const [atividades, atrasadas, leads, usuarios, funis, semAtividade] = await Promise.all([
     visao === "lista" ? atividadesParaLista() : atividadesEntre(inicio, fim),
     contarAtrasadas(),
     leadsParaAgendar(),
     responsaveis(),
     listarFunis(),
+    visao === "lista" ? leadsSemAtividade() : Promise.resolve([]),
   ]);
 
   return (
@@ -62,6 +64,7 @@ export default async function CalendarioPage({
       leads={leads}
       responsaveis={usuarios}
       funis={funis.map((f) => ({ id: f.id, nome: f.name }))}
+      leadsSemAtividade={semAtividade}
     />
   );
 }

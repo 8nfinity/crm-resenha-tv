@@ -15,7 +15,9 @@ export type Periodo =
   | "esta-semana"
   | "proxima-semana"
   | "concluidas"
-  | "periodo";
+  | "periodo"
+  /** Não é período: a lista passa a mostrar os LEADS sem nada marcado. */
+  | "sem-atividade";
 
 export const PERIODOS_LISTA: { valor: Periodo; rotulo: string }[] = [
   { valor: "para-fazer", rotulo: "Para fazer" },
@@ -26,6 +28,7 @@ export const PERIODOS_LISTA: { valor: Periodo; rotulo: string }[] = [
   { valor: "proxima-semana", rotulo: "Próxima semana" },
   { valor: "concluidas", rotulo: "Concluídas" },
   { valor: "periodo", rotulo: "Período…" },
+  { valor: "sem-atividade", rotulo: "⚠️ Sem atividade" },
 ];
 
 export type FiltrosLista = {
@@ -67,6 +70,7 @@ const somarDias = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth()
 const segunda = (d: Date) => somarDias(d, -((d.getDay() + 6) % 7));
 
 function noPeriodo(a: ItemDaLista, f: FiltrosLista, agora: Date): boolean {
+  if (f.periodo === "sem-atividade") return false;
   if (f.periodo === "concluidas") return a.doneAt !== null;
   if (f.periodo === "periodo") {
     const instante = a.dueAt ?? a.doneAt;
@@ -135,3 +139,34 @@ export function filtrarLista<T extends ItemDaLista>(itens: T[], f: FiltrosLista,
 export function filtrosExtrasAtivos(f: FiltrosLista): number {
   return (f.tipos.length > 0 ? 1 : 0) + (f.responsavel ? 1 : 0) + (f.funil ? 1 : 0) + (f.busca.trim() ? 1 : 0);
 }
+
+/**
+ * O ícone amarelo do funil, em lista: leads sem nenhuma atividade em aberto.
+ * Só funil e busca valem aqui (tipo e responsável são de atividade).
+ */
+export type LeadSemAtividade = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  funilId: string;
+  funilNome: string;
+  coluna: string;
+  colunaCor: string;
+  /** Última mensagem (dele ou sua). */
+  ultimaConversa: string | null;
+};
+
+export function filtrarLeadsSemAtividade(leads: LeadSemAtividade[], f: FiltrosLista): LeadSemAtividade[] {
+  const termo = f.busca.trim().toLowerCase();
+  const digitos = termo.replace(/D/g, "");
+  return leads
+    .filter((l) => !f.funil || l.funilId === f.funil)
+    .filter((l) => {
+      if (!termo) return true;
+      const fone = digitos.length >= 3 && (l.telefone ?? "").replace(/D/g, "").includes(digitos);
+      return l.nome.toLowerCase().includes(termo) || fone;
+    })
+    // Quem conversou por último primeiro: é quem está esfriando sem próximo passo.
+    .sort((a, b) => (b.ultimaConversa ?? "").localeCompare(a.ultimaConversa ?? ""));
+}
+

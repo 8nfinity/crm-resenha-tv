@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { contactName } from "@/lib/queries";
 import { formatPhone } from "@/lib/evolution/parse";
+import type { LeadSemAtividade } from "@/lib/lista-atividades";
 import { numerosDeFollowUp } from "@/lib/follow-ups";
 import { chaveDoTipo } from "@/lib/atividades";
 
@@ -155,4 +156,32 @@ export async function contarAtrasadas(): Promise<number> {
   return prisma.activity.count({
     where: { doneAt: null, dueAt: { lt: new Date() }, deal: { archivedAt: null } },
   });
+}
+
+/**
+ * Leads em andamento sem nenhuma atividade em aberto — o ⚠️ amarelo do funil.
+ * Ganho e Perdido ficam de fora: negócio fechado não precisa de próximo passo.
+ */
+export async function leadsSemAtividade(): Promise<LeadSemAtividade[]> {
+  const deals = await prisma.deal.findMany({
+    where: { archivedAt: null, activities: { none: { doneAt: null } }, stage: { isWon: false, isLost: false } },
+    relationLoadStrategy: "join",
+    select: {
+      id: true,
+      title: true,
+      lastInteractionAt: true,
+      stage: { select: { name: true, color: true, pipeline: { select: { id: true, name: true } } } },
+      contact: { select: { savedName: true, pushName: true, phone: true, waJid: true } },
+    },
+  });
+  return deals.map((d) => ({
+    id: d.id,
+    nome: d.title ?? contactName(d.contact),
+    telefone: formatPhone(d.contact.phone),
+    funilId: d.stage.pipeline.id,
+    funilNome: d.stage.pipeline.name,
+    coluna: d.stage.name,
+    colunaCor: d.stage.color,
+    ultimaConversa: d.lastInteractionAt?.toISOString() ?? null,
+  }));
 }

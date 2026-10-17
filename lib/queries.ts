@@ -113,6 +113,7 @@ export async function getDealCards(campos?: Campo[], pipelineId?: string): Promi
         lastInteractionAt: true,
         enteredStageAt: true,
         customValues: true,
+        stage: { select: { isWon: true, isLost: true } },
         contact: {
           select: {
             id: true,
@@ -200,6 +201,7 @@ export async function getDealCards(campos?: Campo[], pipelineId?: string): Promi
       proximaAtividade,
       atrasadas: atividades?.atrasadas ?? 0,
       sinal: sinalDoLead(proximaAtividade, agora),
+      fechado: deal.stage.isWon || deal.stage.isLost,
       customValues: lerValores(deal.customValues, camposFinal),
     };
   });
