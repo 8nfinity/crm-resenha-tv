@@ -20,7 +20,7 @@ type FunilPipedrive = { id: number; nome: string; etapas: { id: number; nome: st
 type ColunaCrm = { id: string; name: string; pipeline: { id: string; name: string } };
 
 const campo =
-  "w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]";
+  "w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]";
 
 /**
  * Conectar o Pipedrive: colar o token, escolher o funil e a etapa de lá onde
@@ -137,7 +137,7 @@ export function PipedriveConfig() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 rounded-md bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] px-3 py-2 text-sm">
         <CheckCircle2 className="size-4 shrink-0 text-[var(--color-accent)]" />
         <span>
           Conectado{status.empresa ? <> à <b>{status.empresa}</b></> : null}

@@ -53,7 +53,7 @@ function ContatosIgnorados({ versao }: { versao: number }) {
   }
 
   return (
-    <div className="rounded-2xl border p-3">
+    <div className="rounded-md border p-3">
       <p className="flex items-center gap-2 text-sm font-semibold">
         <EyeOff className="size-4 text-[var(--color-muted)]" />
         Contatos ignorados
@@ -75,7 +75,7 @@ function ContatosIgnorados({ versao }: { versao: number }) {
       ) : (
         <ul className="scroll-thin mt-3 flex max-h-72 flex-col gap-1.5 overflow-y-auto">
           {lista.map((c) => (
-            <li key={c.id} className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-2)] px-3 py-2">
+            <li key={c.id} className="flex items-center gap-3 rounded-md bg-[var(--color-surface-2)] px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{c.nome}</p>
                 <p className="truncate text-[11px] text-[var(--color-muted)]">

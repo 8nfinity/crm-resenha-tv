@@ -126,14 +126,14 @@ export function AtividadesLead({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+      <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
         <SeletorDeTipo valor={tipo} onChange={setTipo} proprios={proprios} onMudouTipos={recarregar} />
 
         <input
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
           placeholder="O que fazer? (ex.: mandar proposta da avaliação 2)"
-          className="mt-3 w-full rounded-xl bg-[var(--color-surface)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+          className="mt-3 w-full rounded-md bg-[var(--color-surface)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
         />
 
         <div className="mt-2 flex gap-2">
@@ -145,7 +145,7 @@ export function AtividadesLead({
               type="date"
               value={data}
               onChange={(e) => setData(e.target.value)}
-              className="w-full rounded-xl bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+              className="w-full rounded-md bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
             />
           </label>
           <label className="w-28">
@@ -156,7 +156,7 @@ export function AtividadesLead({
               type="time"
               value={horaStr}
               onChange={(e) => setHoraStr(e.target.value)}
-              className="w-full rounded-xl bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+              className="w-full rounded-md bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
             />
           </label>
         </div>
@@ -254,7 +254,7 @@ function Item({
   const feita = s === "feita";
 
   return (
-    <li className="group flex items-start gap-3 rounded-2xl bg-[var(--color-surface-2)] p-3">
+    <li className="group flex items-start gap-3 rounded-md bg-[var(--color-surface-2)] p-3">
       <button
         onClick={onAlternar}
         aria-label={feita ? "Reabrir" : "Marcar como feita"}

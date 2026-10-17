@@ -117,14 +117,14 @@ export function BoardFilters({
   const camposFiltraveis = campos.filter((c) => c.type === "SELECT");
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 pb-4 sm:px-8">
+    <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-6">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
         <input
           value={filtros.busca}
           onChange={(e) => set({ busca: e.target.value })}
           placeholder="Buscar por nome, telefone ou mensagem…"
-          className="w-72 rounded-full bg-[var(--color-surface)] py-2 pl-9 pr-4 text-sm shadow-[var(--shadow-card)] backdrop-blur-2xl outline-none placeholder:text-[var(--color-muted)] focus:ring-2 focus:ring-[var(--color-ink)]"
+          className="w-64 rounded-md border bg-[var(--color-surface)] py-1.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
         />
       </div>
 
@@ -191,7 +191,7 @@ export function BoardFilters({
         <>
           <button
             onClick={() => onChange(FILTROS_VAZIOS)}
-            className="inline-flex items-center gap-1 rounded-full border px-3.5 py-2 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
+            className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
           >
             <X className="size-3.5" />
             Limpar
@@ -221,10 +221,10 @@ function Seletor({
       value={valor}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--color-ink)]",
+        "rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]",
         ativo
-          ? "bolha font-semibold text-white"
-          : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-[var(--shadow-card)] backdrop-blur-2xl",
+          ? "bolha border-transparent font-semibold text-white"
+          : "bg-[var(--color-surface)] text-[var(--color-muted)]",
       )}
     >
       {opcoes.map((o) => (

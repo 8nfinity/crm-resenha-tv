@@ -83,7 +83,7 @@ export function StageEditor() {
   return (
     <div className="flex flex-col gap-2">
       {erro && (
-        <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
+        <p className="rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
           {erro}
         </p>
       )}
@@ -109,7 +109,7 @@ export function StageEditor() {
                 void renomear(s.id, e.target.value.trim());
               }
             }}
-            className="flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+            className="flex-1 rounded-md bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           />
           <span className="w-16 shrink-0 text-right text-xs tabular-nums text-[var(--color-muted)]">
             {s._count.deals} {s._count.deals === 1 ? "lead" : "leads"}
@@ -131,7 +131,7 @@ export function StageEditor() {
           onChange={(e) => setNovo((n) => ({ ...n, [funil.id]: e.target.value }))}
           onKeyDown={(e) => e.key === "Enter" && void criar(funil.id)}
           placeholder={funis.length > 1 ? `Nova coluna em ${funil.name}…` : "Nome do novo estágio…"}
-          className="flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
+          className="flex-1 rounded-md bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
         />
         <button
           onClick={() => void criar(funil.id)}

@@ -40,7 +40,7 @@ export function PreferenciaAvisos() {
   if (ligado === null || !configurado) return null;
 
   return (
-    <div className="mt-4 flex items-start gap-3 rounded-2xl bg-[var(--color-surface-2)] p-3">
+    <div className="mt-4 flex items-start gap-3 rounded-md bg-[var(--color-surface-2)] p-3">
       {ligado ? (
         <Bell className="mt-0.5 size-4 shrink-0 text-[var(--color-accent)]" />
       ) : (
@@ -111,7 +111,7 @@ export function AvisosEmailAdmin() {
   return (
     <div className="flex flex-col gap-3">
       {s.configurado ? (
-        <p className="flex items-center gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
+        <p className="flex items-center gap-2 rounded-md bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
           <Mail className="size-4 shrink-0 text-[var(--color-accent)]" />
           <span>
             Ligado{s.servico ? ` (via ${s.servico})` : ""}. Remetente: <strong>{s.remetente}</strong>. Lembrete {s.minutosAntes} min antes de cada
@@ -119,7 +119,7 @@ export function AvisosEmailAdmin() {
           </span>
         </p>
       ) : (
-        <div className="rounded-2xl bg-[color-mix(in_srgb,var(--color-warm)_12%,transparent)] px-3 py-2 text-xs leading-relaxed">
+        <div className="rounded-md bg-[color-mix(in_srgb,var(--color-warm)_12%,transparent)] px-3 py-2 text-xs leading-relaxed">
           <p className="font-semibold">Ainda não configurado.</p>
           <p className="mt-1">Sem domínio próprio, use o Brevo (grátis, 300 e-mails por dia):</p>
           <ol className="mt-1 list-decimal pl-4">

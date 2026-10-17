@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
-import { TopNav } from "@/components/top-nav";
+import { BarraTopo, MenuLateral } from "@/components/top-nav";
 import { usuarioAtual } from "@/lib/auth/usuario";
 import { SessaoProvider } from "@/components/sessao";
 import "./globals.css";
@@ -34,12 +34,18 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" className={montserrat.variable}>
       <body className="flex h-screen flex-col overflow-hidden">
-        {/* Luz de fundo que o vidro das superfícies refrata. */}
-        <div className="aurora" aria-hidden />
-        <TopNav usuario={usuario} />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <SessaoProvider papel={usuario?.role ?? null}>{children}</SessaoProvider>
-        </main>
+        {/* As barras de cor da TV no topo do app: a assinatura da Resenha TV. */}
+        <div className="barras-tv h-[3px] shrink-0" aria-hidden />
+        {/* Layout do Pipedrive: menu lateral, e à direita a barra de topo e a tela. */}
+        <div className="flex min-h-0 flex-1">
+          <MenuLateral usuario={usuario} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <BarraTopo usuario={usuario} />
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <SessaoProvider papel={usuario?.role ?? null}>{children}</SessaoProvider>
+            </main>
+          </div>
+        </div>
       </body>
     </html>
   );

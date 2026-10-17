@@ -32,7 +32,7 @@ export function FormLogin({ destino }: { destino: string }) {
   }
 
   const campo =
-    "w-full rounded-xl bg-[var(--color-surface-2)] px-4 py-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-2 focus:ring-[var(--color-accent)]";
+    "w-full rounded-md bg-[var(--color-surface-2)] px-4 py-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-2 focus:ring-[var(--color-accent)]";
 
   return (
     <form onSubmit={entrar} className="flex flex-col gap-4">
@@ -73,7 +73,7 @@ export function FormLogin({ destino }: { destino: string }) {
       </label>
 
       {erro && (
-        <p role="alert" className="rounded-xl bg-[color-mix(in_srgb,var(--color-hot)_14%,transparent)] px-3 py-2 text-sm text-[var(--color-hot)]">
+        <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--color-hot)_14%,transparent)] px-3 py-2 text-sm text-[var(--color-hot)]">
           {erro}
         </p>
       )}

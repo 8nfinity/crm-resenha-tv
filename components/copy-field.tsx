@@ -26,7 +26,7 @@ export function CopyField({
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <code className="scroll-thin flex-1 overflow-x-auto whitespace-nowrap rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-xs">
+      <code className="scroll-thin flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-xs">
         {value}
       </code>
       <button

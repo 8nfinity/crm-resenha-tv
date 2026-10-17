@@ -290,12 +290,12 @@ export function LabelMapping({
   return (
     <div className="flex flex-col gap-4">
       {aviso && (
-        <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
+        <p className="rounded-md bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
           {aviso}
         </p>
       )}
       {erro && (
-        <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
+        <p className="rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
           {erro}
         </p>
       )}
@@ -310,7 +310,7 @@ export function LabelMapping({
         const semAcao = etiquetas.filter((e) => !e.stageId && !e.ignoreContact && !e.isSeller).length;
 
         return (
-          <div key={conta.id} className="rounded-2xl border p-3">
+          <div key={conta.id} className="rounded-md border p-3">
             <div className="mb-3 flex items-center gap-2">
               <p className="flex-1 text-sm font-medium">
                 {conta.label ?? "Conta"}
@@ -341,7 +341,7 @@ export function LabelMapping({
             ) : (
               <>
               {semAcao > 0 && (
-                <p className="mb-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-warm)_14%,transparent)] px-3 py-2 text-xs">
+                <p className="mb-2 rounded-md bg-[color-mix(in_srgb,var(--color-warm)_14%,transparent)] px-3 py-2 text-xs">
                   {semAcao === 1
                     ? "1 etiqueta/lista ainda não move ninguém"
                     : `${semAcao} etiquetas/listas ainda não movem ninguém`}{" "}
@@ -372,7 +372,7 @@ export function LabelMapping({
                               : (etiqueta.stageId ?? "")
                         }
                         onChange={(e) => void mapear(conta.id, etiqueta.labelId, e.target.value)}
-                        className="w-60 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        className="w-60 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                       >
                         <option value="">Não move o lead</option>
                         <option value={IGNORAR}>🚫 Ignorar contato (some do CRM)</option>

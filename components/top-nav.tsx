@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
@@ -11,6 +11,7 @@ import {
   KanbanSquare,
   LogOut,
   MessageCircle,
+  Search,
   Settings,
   Sun,
 } from "lucide-react";
@@ -30,60 +31,103 @@ const NAV = [
   { href: "/configuracoes", label: "Configurações", icone: Settings },
 ];
 
-export function TopNav({ usuario }: { usuario: Usuario | null }) {
+/** Nome de cada tela na barra de topo, como o Pipedrive mostra "Negócios". */
+const TITULOS: Record<string, string> = {
+  "/hoje": "Agenda de hoje",
+  "/calendario": "Atividades",
+  "/funil": "Funil de vendas",
+  "/metricas": "Métricas",
+  "/playbook": "Playbook",
+  "/conexao": "Conexão com o WhatsApp",
+  "/configuracoes": "Configurações",
+};
+
+/**
+ * Menu lateral preto e estreito, no molde do Pipedrive: a TV da Resenha no
+ * alto e um ícone com nome curto por tela; a atual ganha o laranja e um
+ * traço à esquerda.
+ */
+export function MenuLateral({ usuario }: { usuario: Usuario | null }) {
   const pathname = usePathname();
   const ativo = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
-  // A tela de login é só o formulário; o "Ao vivo" também não roda ali,
-  // porque sem sessão o canal de avisos recusaria a conexão.
+  // A tela de login é só o formulário.
   if (pathname === "/login" || !usuario) return null;
 
   return (
-    <header className="relative z-30 flex shrink-0 items-center gap-3 px-4 pt-4 sm:gap-4 sm:px-8 sm:pt-5">
-      <Link href="/hoje" className="group flex shrink-0 items-center gap-2.5">
-        <span className="relative grid size-11 place-items-center rounded-full">
-          {/* Halo laranja atrás do selo, como uma luz refletida no vidro. */}
-          <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/30 blur-md transition-opacity group-hover:opacity-100 sm:opacity-60" />
-          <Image
-            src="/brand/resenha-selo.png"
-            alt="Resenha TV"
-            width={44}
-            height={44}
-            priority
-            className="relative size-11 rounded-full ring-1 ring-white/15"
-          />
-        </span>
-        <span className="hidden leading-none sm:block">
-          <span className="display block text-lg text-[var(--color-accent)]">Resenha TV</span>
-          <span className="block text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--color-muted)]">
-            CRM
-          </span>
-        </span>
+    <aside className="z-30 flex w-[76px] shrink-0 flex-col items-center gap-1 bg-black py-3">
+      <Link href="/hoje" className="mb-3 grid place-items-center" title="Resenha TV · CRM">
+        <Image
+          src="/brand/resenha-selo.png"
+          alt="Resenha TV"
+          width={44}
+          height={44}
+          priority
+          className="size-11 rounded-full ring-1 ring-white/15 transition-transform hover:scale-105"
+        />
       </Link>
 
-      {/* Barra de vidro flutuante; o item atual ganha a "bolha" de vidro. */}
-      <nav className="glass no-scrollbar relative mx-auto flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-full p-1.5">
+      <nav className="no-scrollbar flex w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto">
         {NAV.filter(({ href }) => href !== "/conexao" || ehAdministrador(usuario.role)).map(({ href, label, icone: Icone }) => (
           <Link
             key={href}
             href={href}
             title={label}
             className={cn(
-              "flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm transition-all duration-300 lg:px-4",
+              "relative flex w-[64px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition-colors",
               ativo(href)
-                ? "bolha font-semibold text-white"
+                ? "bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] text-[var(--color-text)]"
                 : "text-[var(--color-muted)] hover:bg-white/[0.06] hover:text-[var(--color-text)]",
             )}
           >
-            <Icone className={cn("size-4", ativo(href) && "text-[var(--color-accent)]")} strokeWidth={ativo(href) ? 2.4 : 2} />
-            <span className="hidden lg:inline">{label}</span>
+            {ativo(href) && <span className="absolute -left-1.5 top-2 bottom-2 w-[3px] rounded-full bg-[var(--color-accent)]" />}
+            <Icone className={cn("size-5", ativo(href) && "text-[var(--color-accent)]")} strokeWidth={ativo(href) ? 2.4 : 2} />
+            <span className="max-w-full truncate">{label}</span>
           </Link>
         ))}
       </nav>
+    </aside>
+  );
+}
 
-      <AoVivo />
+/**
+ * Barra de topo: o nome da tela, a busca de leads (vai para o funil já
+ * filtrado), o "Ao vivo" e o usuário.
+ */
+export function BarraTopo({ usuario }: { usuario: Usuario | null }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [busca, setBusca] = useState("");
 
-      <MenuUsuario usuario={usuario} />
+  if (pathname === "/login" || !usuario) return null;
+  const titulo = Object.entries(TITULOS).find(([h]) => pathname === h || pathname.startsWith(`${h}/`))?.[1] ?? "";
+
+  return (
+    <header className="z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-[var(--color-panel)] px-4 sm:px-6">
+      <h1 className="truncate text-base font-bold sm:text-lg">{titulo}</h1>
+
+      <form
+        className="relative mx-auto hidden w-full max-w-md md:block"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const termo = busca.trim();
+          if (termo) router.push(`/funil?busca=${encodeURIComponent(termo)}`);
+        }}
+      >
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-muted)]" />
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar lead por nome ou telefone…"
+          aria-label="Buscar lead"
+          className="w-full rounded-md border bg-[var(--color-surface)] py-1.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
+        />
+      </form>
+
+      <div className="ml-auto flex shrink-0 items-center gap-3 md:ml-0">
+        <AoVivo />
+        <MenuUsuario usuario={usuario} />
+      </div>
     </header>
   );
 }
@@ -121,13 +165,13 @@ function MenuUsuario({ usuario }: { usuario: Usuario }) {
       <button
         onClick={() => setAberto((a) => !a)}
         aria-label={`Conta de ${usuario.name}`}
-        className="grid size-11 place-items-center rounded-full bg-gradient-to-br from-[var(--color-accent)]/35 to-white/[0.04] text-sm font-bold shadow-[inset_0_1px_0_rgb(255_255_255/0.3),inset_0_0_0_1px_rgb(255_255_255/0.12)] backdrop-blur-xl transition-transform hover:scale-105"
+        className="grid size-9 place-items-center rounded-full bg-[var(--color-accent)] text-xs font-bold text-[var(--color-on-ink)] transition-transform hover:scale-105"
       >
         {iniciais || "?"}
       </button>
 
       {aberto && (
-        <div className="glass-forte absolute right-0 top-full z-40 mt-2 w-64 rounded-3xl p-2">
+        <div className="glass-forte absolute right-0 top-full z-40 mt-2 w-64 rounded-lg p-2">
           <div className="px-3 py-2">
             <p className="truncate text-sm font-semibold">{usuario.name}</p>
             <p className="truncate text-xs text-[var(--color-muted)]">{usuario.email}</p>
@@ -139,7 +183,7 @@ function MenuUsuario({ usuario }: { usuario: Usuario }) {
           <Link
             href="/configuracoes#conta"
             onClick={() => setAberto(false)}
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-[var(--color-surface-2)]"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-[var(--color-surface-2)]"
           >
             <Settings className="size-4" />
             Minha conta e configurações
@@ -147,7 +191,7 @@ function MenuUsuario({ usuario }: { usuario: Usuario }) {
           <button
             onClick={() => void sair()}
             disabled={saindo}
-            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-[var(--color-hot)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-hot)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
           >
             <LogOut className="size-4" />
             {saindo ? "Saindo…" : "Sair"}

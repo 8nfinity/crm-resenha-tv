@@ -153,7 +153,7 @@ export function SeletorDeTipo({
             }}
             placeholder="Nome (ex.: Avaliação)"
             maxLength={40}
-            className="w-40 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+            className="w-40 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           />
           {CORES.map((c) => (
             <button

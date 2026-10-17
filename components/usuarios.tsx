@@ -27,7 +27,7 @@ async function enviar(url: string, method: string, corpo: unknown): Promise<stri
 }
 
 const campo =
-  "w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]";
+  "w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]";
 
 // ─── Minha conta ─────────────────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ export function GerenciarUsuarios({ meuId, meuPapel }: { meuId: string; meuPapel
 
   return (
     <div>
-      <form onSubmit={criar} className="grid gap-2 rounded-2xl border border-[var(--color-border)] p-3 sm:grid-cols-2">
+      <form onSubmit={criar} className="grid gap-2 rounded-md border border-[var(--color-border)] p-3 sm:grid-cols-2">
         <p className="text-[11px] font-extrabold uppercase tracking-wide text-[var(--color-muted)] sm:col-span-2">Novo acesso</p>
         <input required value={novo.name} onChange={(e) => setNovo({ ...novo, name: e.target.value })} placeholder="Nome (ex.: Henrique)" className={campo} />
         <input required type="email" value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} placeholder="E-mail" className={campo} />
@@ -147,7 +147,7 @@ export function GerenciarUsuarios({ meuId, meuPapel }: { meuId: string; meuPapel
       <ul className="mt-3 flex flex-col gap-2">
         {lista === null && <li className="text-sm text-[var(--color-muted)]">Carregando…</li>}
         {lista?.map((u) => (
-          <li key={u.id} className={cn("rounded-2xl bg-[var(--color-surface-2)] p-3", !u.active && "opacity-55")}>
+          <li key={u.id} className={cn("rounded-md bg-[var(--color-surface-2)] p-3", !u.active && "opacity-55")}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{u.name}</span>
               {u.id === meuId && <span className="text-[10px] text-[var(--color-muted)]">(você)</span>}

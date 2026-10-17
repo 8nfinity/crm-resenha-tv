@@ -18,7 +18,6 @@ export default async function HojePage() {
   return (
     <div className="scroll-thin flex flex-1 flex-col overflow-y-auto pb-10">
       <PageHeader
-        title={"Agenda\nde hoje"}
         subtitle={
           <span className="capitalize">
             {data}

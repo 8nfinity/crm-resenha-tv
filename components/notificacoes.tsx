@@ -192,7 +192,7 @@ export function NotificacoesAparelho() {
   if (situacao === "carregando") return null;
 
   return (
-    <div className="mt-4 rounded-2xl bg-[var(--color-surface-2)] p-3">
+    <div className="mt-4 rounded-md bg-[var(--color-surface-2)] p-3">
       <div className="flex items-start gap-3">
         {situacao === "ligado" ? (
           <BellRing className="mt-0.5 size-4 shrink-0 text-[var(--color-accent)]" />
@@ -278,7 +278,7 @@ export function ConviteNotificacoes() {
   if (fechado || (situacao !== "desligado" && situacao !== "iphone-instalar")) return null;
 
   return (
-    <div className="glass mx-4 mb-4 flex items-start gap-3 rounded-2xl px-4 py-3 sm:mx-8">
+    <div className="glass mx-4 mb-4 flex items-start gap-3 rounded-md px-4 py-3 sm:mx-8">
       <BellRing className="mt-0.5 size-5 shrink-0 text-[var(--color-accent)]" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold">Receba os lembretes como notificação</p>

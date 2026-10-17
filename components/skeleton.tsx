@@ -13,7 +13,7 @@
 export function Bloco({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-xl bg-[var(--color-surface-2)] ${className}`}
+      className={`animate-pulse rounded-md bg-[var(--color-surface-2)] ${className}`}
     />
   );
 }
@@ -21,8 +21,8 @@ export function Bloco({ className = "" }: { className?: string }) {
 export function CabecalhoSkeleton() {
   return (
     <header className="px-4 pb-5 pt-6 sm:px-8 sm:pt-8">
-      <Bloco className="h-10 w-56 rounded-2xl" />
-      <Bloco className="mt-2 h-10 w-40 rounded-2xl" />
+      <Bloco className="h-10 w-56 rounded-md" />
+      <Bloco className="mt-2 h-10 w-40 rounded-md" />
       <Bloco className="mt-2 h-3 w-56" />
     </header>
   );
@@ -59,11 +59,11 @@ export function KanbanSkeleton() {
             <Bloco className="size-2.5 rounded-full" />
             <Bloco className="h-3.5 w-24" />
           </div>
-          <div className="flex flex-col gap-2 rounded-xl border border-dashed bg-[var(--color-surface)] p-2">
+          <div className="flex flex-col gap-2 rounded-md border border-dashed bg-[var(--color-surface)] p-2">
             {Array.from({ length: 3 - (col % 2) }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-xl border bg-[var(--color-surface-2)] p-3"
+                className="rounded-md border bg-[var(--color-surface-2)] p-3"
               >
                 <div className="flex gap-2.5">
                   <Bloco className="size-9 shrink-0 rounded-full" />

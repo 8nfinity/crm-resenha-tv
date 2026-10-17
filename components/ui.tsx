@@ -3,44 +3,45 @@ import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Peças visuais compartilhadas pelas telas: o título grande de duas linhas, o
- * indicador com o botão redondo "↗" e o cabeçalho de card.
+ * Peças visuais compartilhadas pelas telas, no layout do Pipedrive: a barra
+ * de ferramentas da tela, o indicador compacto e o cabeçalho de quadro.
  */
 
+/**
+ * Barra de ferramentas da tela. O nome da tela já está na barra de topo (como
+ * no Pipedrive); aqui fica o título curto com o traço das barras da TV, o
+ * subtítulo e os controles à direita.
+ */
 export function PageHeader({
   title,
   subtitle,
   children,
 }: {
-  /** Use "\n" para quebrar o título em duas linhas, como no painel. */
-  title: string;
+  /** Quebra de linha vira espaço: o título é de uma linha só. Sem título
+   *  (quando a barra de topo já diz o nome da tela), fica só o subtítulo. */
+  title?: string;
   subtitle?: React.ReactNode;
   /** Controles alinhados à direita (filtros de período, exportar…). */
   children?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4 px-4 pb-5 pt-6 sm:px-8 sm:pt-8">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b px-4 py-3 sm:px-6">
       <div className="min-w-0">
-        <h1 className="display text-3xl leading-[0.95] sm:text-5xl">
-          {title.split("\n").map((linha, i, linhas) => (
-            <span
-              key={i}
-              className={cn(
-                // Texto com leve degradê (luz vindo de cima), como nos títulos
-                // da Apple. A última linha em laranja, como a moldura da TV da logo.
-                "block bg-clip-text pb-[0.06em] text-transparent",
-                linhas.length > 1 && i === linhas.length - 1
-                  ? "bg-gradient-to-r from-[var(--color-accent)] via-[#ffb067] to-[#ffe2c4]"
-                  : "bg-gradient-to-b from-white to-white/70",
-              )}
-            >
-              {linha}
-            </span>
-          ))}
-        </h1>
-        <span className="barras-tv mt-4 block h-[4px] w-28 rounded-full" />
-        {subtitle && (
-          <p className="mt-3 text-sm text-[var(--color-muted)]">{subtitle}</p>
+        {title ? (
+          <>
+            <h2 className="flex items-center gap-2.5 text-base font-bold">
+              <span className="barras-tv h-4 w-1 shrink-0 rounded-full" aria-hidden />
+              <span className="truncate">{title.replace(/\n/g, " ")}</span>
+            </h2>
+            {subtitle && <p className="mt-0.5 pl-3.5 text-xs text-[var(--color-muted)]">{subtitle}</p>}
+          </>
+        ) : (
+          subtitle && (
+            <p className="flex items-center gap-2.5 text-sm text-[var(--color-muted)]">
+              <span className="barras-tv h-4 w-1 shrink-0 rounded-full" aria-hidden />
+              {subtitle}
+            </p>
+          )
         )}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
@@ -67,10 +68,10 @@ export function Kpi({
   return (
     <div className={cn("flex items-end gap-6", className)}>
       <div className="min-w-0">
-        <p className="text-sm text-[var(--color-muted)]">{label}</p>
+        <p className="text-xs font-semibold text-[var(--color-muted)]">{label}</p>
         <p
           className={cn(
-            "mt-2 text-3xl font-semibold tabular-nums tracking-tight",
+            "mt-0.5 text-2xl font-bold tabular-nums tracking-tight",
             tone === "accent" && "text-[var(--color-accent-strong)]",
             tone === "hot" && "text-[var(--color-hot)]",
           )}
@@ -121,7 +122,7 @@ export function CardHeader({
   );
 }
 
-/** Pílula de seleção: vidro quando solta, "bolha" de vidro verde quando ativa. */
+/** Botão de seleção (período, funil): laranja quando ativo. */
 export function Pill({
   href,
   active,
@@ -135,10 +136,10 @@ export function Pill({
     <Link
       href={href}
       className={cn(
-        "rounded-full px-4 py-2 text-sm transition-all duration-300",
+        "rounded-md border px-3 py-1.5 text-sm transition-colors",
         active
-          ? "bolha font-semibold text-white"
-          : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-[var(--shadow-card)] backdrop-blur-2xl hover:text-[var(--color-text)]",
+          ? "bolha border-transparent font-semibold text-white"
+          : "bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-text)]",
       )}
     >
       {children}

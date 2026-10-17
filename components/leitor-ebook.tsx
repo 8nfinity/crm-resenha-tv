@@ -180,7 +180,7 @@ export function LeitorEbook({ id, titulo }: { id: string; titulo: string }) {
         "relative flex select-none flex-col items-center",
         telaCheia
           ? "h-screen justify-center bg-[var(--color-bg)] px-4"
-          : "rounded-3xl bg-[radial-gradient(ellipse_at_center,rgb(47_227_140/0.07),transparent_70%)] px-2 pb-4 pt-6",
+          : "rounded-lg bg-[radial-gradient(ellipse_at_center,rgb(47_227_140/0.07),transparent_70%)] px-2 pb-4 pt-6",
       )}
     >
       {erro ? (

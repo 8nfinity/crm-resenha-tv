@@ -132,7 +132,7 @@ function Linha({
       <button
         onClick={onAbrir}
         className={cn(
-          "group flex w-full items-center gap-3 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-ink)] hover:text-[var(--color-on-ink)]",
+          "group flex w-full items-center gap-3 rounded-md bg-[var(--color-surface-2)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-ink)] hover:text-[var(--color-on-ink)]",
           resolvido && "opacity-40",
         )}
       >

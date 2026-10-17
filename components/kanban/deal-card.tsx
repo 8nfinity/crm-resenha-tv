@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronLeft, ChevronRight, Clock, MessageSquare, Phone, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MessageSquare, TriangleAlert } from "lucide-react";
 import type { DealCard as DealCardType } from "@/lib/types";
 import { diaSemanaHora, sinalDoLead, type SinalAtividades } from "@/lib/atividades";
 import { cn, formatCurrency, initials, relativeDays } from "@/lib/utils";
@@ -51,28 +51,19 @@ export function DealCardView({
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
       onClick={() => onOpen?.(deal.id)}
+      // A última mensagem aparece passando o mouse: o card fica compacto como
+      // no Pipedrive, sem perder o contexto da conversa.
+      title={deal.lastMessagePreview ?? undefined}
       className={cn(
-        "group cursor-grab rounded-[20px] border border-transparent bg-[var(--color-surface-2)] p-3.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.07)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-accent)]/50 hover:bg-white/[0.08] hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_12px_28px_-14px_rgb(247_136_47/0.45)] active:cursor-grabbing",
+        "group cursor-grab rounded-md bg-[var(--color-card)] px-3 py-2.5 text-left shadow-[var(--shadow-card)] ring-1 ring-white/[0.06] transition-[box-shadow,background-color] duration-150 hover:bg-[#28211a] hover:ring-[var(--color-accent)]/60 active:cursor-grabbing",
         isDragging && "dragging",
-        overlay && "glass-forte rotate-2 cursor-grabbing",
+        overlay && "rotate-2 cursor-grabbing ring-[var(--color-accent)]",
       )}
     >
-      <div className="flex items-start gap-2.5">
-        {deal.contact.profilePicUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={deal.contact.profilePicUrl}
-            alt=""
-            className="size-9 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-ink)] text-xs font-semibold text-[var(--color-on-ink)]">
-            {initials(deal.contact.name)}
-          </div>
-        )}
-
+      {/* Como no Pipedrive: título, quem é, e o ícone de atividade à direita. */}
+      <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold leading-snug">
             {mostrarConta && (
               <span
                 className="size-2 shrink-0 rounded-full"
@@ -80,61 +71,57 @@ export function DealCardView({
                 title={`Veio de: ${deal.account.label}`}
               />
             )}
-            <p className="truncate text-sm font-medium">{deal.title}</p>
-          </div>
+            <span className="truncate">{deal.title}</span>
+          </p>
           {/* O número do lead em todo card. Sem ele (o WhatsApp só mandou o
               código interno da pessoa), diz isso em vez de esconder. */}
           {deal.contact.phone ? (
             deal.contact.phone !== deal.title && (
-              <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] tabular-nums text-[var(--color-muted)]">
-                <Phone className="size-3" />
-                {deal.contact.phone}
-              </p>
+              <p className="mt-0.5 truncate text-xs tabular-nums text-[var(--color-muted)]">{deal.contact.phone}</p>
             )
           ) : (
             <p
-              className="mt-0.5 text-[11px] italic text-[var(--color-muted)]"
+              className="mt-0.5 truncate text-xs italic text-[var(--color-muted)]"
               title="O WhatsApp só informou o código interno desta pessoa. O número aparece quando ela mandar mensagem — e, se houver um card repetido, o CRM junta os dois."
             >
-              número ainda não informado pelo WhatsApp
-            </p>
-          )}
-          {deal.lastMessagePreview && (
-            <p className="mt-0.5 truncate text-xs text-[var(--color-muted)]">
-              {deal.lastMessagePreview}
+              número ainda não informado
             </p>
           )}
         </div>
-
-        <div
-          className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums"
-          style={{ color, backgroundColor: `${color}1a` }}
-          title={deal.scoreFactors.map((f) => `${f.label}: ${f.detail}`).join("\n")}
-        >
-          {deal.score}
-        </div>
+        {/* Negócio fechado (Ganho/Perdido) não precisa de próximo passo. */}
+        {!deal.fechado && <SinalDeAtividades deal={deal} agora={agora} />}
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--color-muted)]">
-        <span className="inline-flex items-center gap-1">
-          <MessageSquare className="size-3" />
-          {relativeDays(deal.lastInboundAt)}
-        </span>
+      <div className="mt-2 flex items-center gap-2 text-[11px] text-[var(--color-muted)]">
+        {deal.contact.profilePicUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={deal.contact.profilePicUrl} alt="" className="size-5 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-[var(--color-ink)] text-[9px] font-bold text-[var(--color-on-ink)]">
+            {initials(deal.contact.name)}
+          </span>
+        )}
+        <span className="font-semibold tabular-nums text-[var(--color-text)]">{value ?? "R$ 0"}</span>
 
-        <span
-          className={cn(
-            "inline-flex items-center gap-1",
-            stalled && "text-[var(--color-warm)]",
-          )}
-        >
-          <Clock className="size-3" />
-          {deal.daysInStage}d parado
-        </span>
-
-        <span className="ml-auto flex items-center gap-2">
-          {value && <span className="text-xs font-semibold text-[var(--color-text)]">{value}</span>}
-          {/* Negócio fechado (Ganho/Perdido) não precisa de próximo passo. */}
-          {!deal.fechado && <SinalDeAtividades deal={deal} agora={agora} />}
+        <span className="ml-auto flex items-center gap-2.5">
+          <span className="inline-flex items-center gap-1" title="Última mensagem dele">
+            <MessageSquare className="size-3" />
+            {relativeDays(deal.lastInboundAt)}
+          </span>
+          <span
+            className={cn("inline-flex items-center gap-1", stalled && "font-semibold text-[var(--color-warm)]")}
+            title="Dias nesta coluna"
+          >
+            <Clock className="size-3" />
+            {deal.daysInStage}d
+          </span>
+          <span
+            className="rounded px-1.5 py-px text-[10px] font-bold tabular-nums"
+            style={{ color, backgroundColor: `${color}22` }}
+            title={[`Temperatura ${deal.score}`, ...deal.scoreFactors.map((f) => `${f.label}: ${f.detail}`)].join("\n")}
+          >
+            {deal.score}
+          </span>
         </span>
       </div>
     </div>

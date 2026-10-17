@@ -44,7 +44,6 @@ export default async function ConfiguracoesPage() {
     <>
       <div className="scroll-thin flex-1 overflow-y-auto pb-10">
       <PageHeader
-        title="Configurações"
         subtitle={admin ? "Acessos, notificações, conector do Claude, webhook, etiquetas, campos e estágios." : "Sua conta de acesso ao CRM."}
       />
       <div className="px-4 sm:px-8">
@@ -96,13 +95,13 @@ export default async function ConfiguracoesPage() {
             {mcpUrl ? (
               <CopyField value={mcpUrl} className="mt-3" />
             ) : (
-              <p className="mt-3 rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
+              <p className="mt-3 rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
                 MCP_SECRET_PATH não está definida — o endpoint está desativado.
               </p>
             )}
 
             {ipCheckOff && emProducao && (
-              <p className="mt-2 rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_15%,transparent)] px-3 py-2 text-xs">
+              <p className="mt-2 rounded-md bg-[color-mix(in_srgb,var(--color-hot)_15%,transparent)] px-3 py-2 text-xs">
                 <strong>Atenção:</strong> MCP_DISABLE_IP_CHECK está ligado em
                 produção. Qualquer pessoa com essa URL lê todos os seus leads.
                 Mude para &quot;false&quot; nas variáveis de ambiente da hospedagem (Railway).

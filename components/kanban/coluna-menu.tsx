@@ -90,7 +90,7 @@ export function ColunaMenu({
       </button>
 
       {aberto && (
-        <div className="glass-forte absolute right-0 top-full z-30 mt-1 w-64 rounded-3xl p-2">
+        <div className="glass-forte absolute right-0 top-full z-30 mt-1 w-64 rounded-lg p-2">
           {modo === "menu" && (
             <>
               <Opcao icone={Pencil} onClick={() => setModo("renomear")}>Renomear</Opcao>
@@ -139,7 +139,7 @@ export function ColunaMenu({
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 maxLength={60}
-                className="w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                className="w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -170,7 +170,7 @@ export function ColunaMenu({
               <select
                 value={destino}
                 onChange={(e) => setDestino(e.target.value)}
-                className="mt-2 w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+                className="mt-2 w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               >
                 <option value="">Escolha a coluna…</option>
                 {outras.map((s) => (
@@ -220,7 +220,7 @@ function Opcao({
     <button
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface-2)]",
+        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface-2)]",
         perigo && "text-[var(--color-hot)]",
       )}
     >
@@ -263,7 +263,7 @@ export function NovaColuna({ pipelineId }: { pipelineId: string }) {
     return (
       <button
         onClick={() => setAberto(true)}
-        className="flex h-24 w-64 shrink-0 items-center justify-center gap-2 rounded-[28px] border-2 border-dashed border-[var(--color-border)] text-sm font-semibold text-[var(--color-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        className="flex h-24 w-64 shrink-0 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--color-border)] text-sm font-semibold text-[var(--color-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
       >
         <Plus className="size-4" />
         Nova coluna
@@ -274,7 +274,7 @@ export function NovaColuna({ pipelineId }: { pipelineId: string }) {
   return (
     <form
       onSubmit={criar}
-      className="glass relative h-fit w-64 shrink-0 rounded-[28px] p-4"
+      className="glass relative h-fit w-64 shrink-0 rounded-lg p-4"
     >
       <p className="text-[11px] font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Nova coluna</p>
       <input
@@ -283,7 +283,7 @@ export function NovaColuna({ pipelineId }: { pipelineId: string }) {
         onChange={(e) => setNome(e.target.value)}
         maxLength={60}
         placeholder="Ex.: Avaliação agendada"
-        className="mt-2 w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+        className="mt-2 w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
       />
       <div className="mt-3 flex flex-wrap gap-1.5">
         {CORES_COLUNA.map((c) => (

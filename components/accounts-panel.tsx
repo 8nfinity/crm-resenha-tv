@@ -123,7 +123,7 @@ export function AccountsPanel() {
       </div>
 
       {erro && (
-        <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-sm">
+        <p className="rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-sm">
           {erro}
         </p>
       )}

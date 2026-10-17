@@ -251,7 +251,7 @@ export function Calendario({
       <aside className={cn("scroll-thin hidden w-64 shrink-0 flex-col gap-5 overflow-y-auto", visao !== "lista" && "lg:flex")}>
         <button
           onClick={() => setCriar({ data: chaveDia(ref), hora: "09:00" })}
-          className="inline-flex w-fit items-center gap-3 rounded-2xl bg-[var(--color-surface)] py-3.5 pl-4 pr-6 text-sm font-semibold shadow-[var(--shadow-card)] backdrop-blur-2xl transition-colors hover:bg-[var(--color-surface-2)]"
+          className="inline-flex w-fit items-center gap-3 rounded-md bg-[var(--color-surface)] py-3.5 pl-4 pr-6 text-sm font-semibold shadow-[var(--shadow-card)] backdrop-blur-2xl transition-colors hover:bg-[var(--color-surface-2)]"
         >
           <Plus className="size-6 text-[var(--color-accent)]" strokeWidth={2.5} />
           Criar
@@ -259,7 +259,7 @@ export function Calendario({
 
         <MiniMes ref_={ref} hojeChave={hojeChave} porDia={porDia} onEscolher={(d) => ir(visao === "mes" ? "dia" : visao, d)} />
 
-        <div className="rounded-2xl border border-[var(--color-border)] p-3 text-xs">
+        <div className="rounded-md border border-[var(--color-border)] p-3 text-xs">
           <p className="flex justify-between">
             <span className="text-[var(--color-muted)]">A fazer hoje</span>
             <strong className="tabular-nums">{aFazerHoje}</strong>
@@ -272,7 +272,7 @@ export function Calendario({
       </aside>
 
       {/* ── Área principal ── */}
-      <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[28px]">
+      <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg">
         {visao === "lista" ? (
           <VisaoLista
             atividades={atividades}
@@ -786,7 +786,7 @@ function VisaoAgenda({
             </div>
             <ul className="flex min-w-0 flex-1 flex-col gap-1">
               {(porDia.get(k) ?? []).map((a) => (
-                <li key={a.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
+                <li key={a.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
                   <button
                     onClick={() => onAlternar(a)}
                     aria-label={a.doneAt ? "Reabrir" : "Marcar como feita"}
@@ -1253,7 +1253,7 @@ function Modal({ onFechar, children }: { onFechar: () => void; children: React.R
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-black/45 p-4 backdrop-blur-sm" onClick={onFechar}>
       <div
-        className="glass-forte w-full max-w-md rounded-[28px] p-5"
+        className="glass-forte w-full max-w-md rounded-lg p-5"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -1397,7 +1397,7 @@ function CriarAtividade({
   }
 
   const campo =
-    "w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]";
+    "w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]";
 
   return (
     <Modal onFechar={onFechar}>
@@ -1428,7 +1428,7 @@ function CriarAtividade({
         <div className="mt-3 flex gap-2">
           <User className="mt-2.5 size-4 shrink-0 text-[var(--color-muted)]" />
           {lead ? (
-            <div className="flex w-full items-center justify-between rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm">
+            <div className="flex w-full items-center justify-between rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm">
               <span className="truncate font-semibold">{lead.nome}</span>
               <button type="button" onClick={() => setLead(null)} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">
                 trocar
@@ -1438,7 +1438,7 @@ function CriarAtividade({
             <div className="relative w-full">
               <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar lead pelo nome…" className={campo} />
               {sugestoes.length > 0 && (
-                <ul className="glass-forte absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-2xl">
+                <ul className="glass-forte absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-md">
                   {sugestoes.map((l) => (
                     <li key={l.id}>
                       <button type="button" onClick={() => setLead(l)} className="block w-full truncate px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-2)]">

@@ -36,6 +36,7 @@ export function Board({
   deals: initialDeals,
   campos,
   leadInicial = null,
+  buscaInicial = "",
 }: {
   /** Funil aberto: é nele que "Nova coluna" cria. */
   pipelineId: string;
@@ -44,6 +45,8 @@ export function Board({
   campos: Campo[];
   /** Lead para abrir já com o painel (link direto, ex.: a nota no Pipedrive). */
   leadInicial?: string | null;
+  /** Termo da busca da barra de topo. */
+  buscaInicial?: string;
 }) {
   const [deals, setDeals] = useState(initialDeals);
 
@@ -58,7 +61,9 @@ export function Board({
   }, []);
   // Criar/editar colunas é de administrador; vendedor só move os cards.
   const admin = useEhAdmin();
-  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS);
+  const [filtros, setFiltros] = useState<Filtros>({ ...FILTROS_VAZIOS, busca: buscaInicial });
+  // Nova busca pela barra de topo com o funil já aberto.
+  useEffect(() => setFiltros((f) => ({ ...f, busca: buscaInicial })), [buscaInicial]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const router = useRouter();
 
@@ -180,7 +185,7 @@ export function Board({
   return (
     <>
       {error && (
-        <div className="mx-4 mb-3 rounded-2xl border border-[var(--color-hot)] sm:mx-8 bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2 text-sm">
+        <div className="mx-4 mt-3 rounded-md border border-[var(--color-hot)] sm:mx-6 bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2 text-sm">
           {error}
         </div>
       )}
@@ -204,7 +209,7 @@ export function Board({
           liberar();
         }}
       >
-        <div className="scroll-thin flex min-h-0 flex-1 gap-4 overflow-x-auto px-4 pb-6 sm:px-8">
+        <div className="scroll-thin flex min-h-0 flex-1 gap-2 overflow-x-auto px-4 pb-4 pt-3 sm:px-6">
           {stages.map((stage) => (
             <Column
               key={stage.id}
@@ -264,35 +269,39 @@ function Column({
   const totalValue = deals.reduce((sum, d) => sum + (d.value ?? 0), 0);
 
   return (
-    <div className="glass relative flex w-76 shrink-0 flex-col rounded-[28px] p-2">
-      <div className="flex items-center gap-2 px-3 pb-3 pt-3">
+    <div className="flex w-[272px] shrink-0 flex-col rounded-md bg-[var(--color-surface)]">
+      {/* Cabeçalho em seta, como as etapas do Pipedrive: nome, e embaixo o
+          total em R$ e quantos negócios. A cor da coluna fica no traço. */}
+      <div className="relative py-2 pl-3 pr-5">
+        {/* A seta é só o fundo: recortar o cabeçalho inteiro cortaria o menu ⋯. */}
         <span
-          className="size-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: stage.color }}
+          className="absolute inset-0 bg-[#1d1813]"
+          style={{ clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%)" }}
+          aria-hidden
         />
-        <h2 className="truncate text-sm font-semibold">{stage.name}</h2>
-        <span className="rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[var(--color-on-ink)]">
-          {deals.length}
-        </span>
-        <span className="ml-auto flex items-center gap-1">
-          {totalValue > 0 && (
-            <span className="text-[11px] tabular-nums text-[var(--color-muted)]">
-              {totalValue.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-                maximumFractionDigits: 0,
-              })}
-            </span>
-          )}
-          {admin && <ColunaMenu stage={stage} stages={stages} quantidade={totalNaColuna} />}
-        </span>
+        <span
+          className="absolute inset-x-0 bottom-0 h-[2px]"
+          style={{ backgroundColor: stage.color, clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 0, calc(100% - 12px) 100%, 0 100%)" }}
+          aria-hidden
+        />
+        <div className="relative flex items-center gap-1.5">
+          <h2 className="truncate text-[13px] font-bold">{stage.name}</h2>
+          <span className="ml-auto flex items-center">
+            {admin && <ColunaMenu stage={stage} stages={stages} quantidade={totalNaColuna} />}
+          </span>
+        </div>
+        <p className="relative text-[11px] tabular-nums text-[var(--color-muted)]">
+          {totalValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+          {" · "}
+          {deals.length} {deals.length === 1 ? "negócio" : "negócios"}
+        </p>
       </div>
 
       <div
         ref={setNodeRef}
-        className={`scroll-thin flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-[22px] p-1 transition-colors ${
+        className={`scroll-thin flex min-h-24 flex-1 flex-col gap-1.5 overflow-y-auto rounded-b-md p-1.5 transition-colors ${
           isOver
-            ? "bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] ring-2 ring-[var(--color-accent)]"
+            ? "bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] ring-1 ring-inset ring-[var(--color-accent)]"
             : ""
         }`}
       >
@@ -312,7 +321,7 @@ function Column({
         </SortableContext>
 
         {deals.length === 0 && (
-          <p className="hatch grid flex-1 place-items-center rounded-[20px] text-xs text-[var(--color-muted)]">
+          <p className="grid flex-1 place-items-center rounded-md border border-dashed text-xs text-[var(--color-muted)]">
             Arraste um lead para cá
           </p>
         )}

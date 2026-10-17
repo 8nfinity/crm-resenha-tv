@@ -67,7 +67,7 @@ export function CustomFieldEditor() {
   return (
     <div className="flex flex-col gap-3">
       {erro && (
-        <p className="rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
+        <p className="rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-3 py-2 text-xs">
           {erro}
         </p>
       )}
@@ -100,13 +100,13 @@ export function CustomFieldEditor() {
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           placeholder="Nome do campo (ex: Origem)"
-          className="w-48 rounded-xl bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
+          className="w-48 rounded-md bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
         />
 
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value as CampoTipo)}
-          className="rounded-xl bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm outline-none"
+          className="rounded-md bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm outline-none"
         >
           {TIPOS.map((t) => (
             <option key={t.valor} value={t.valor}>
@@ -120,7 +120,7 @@ export function CustomFieldEditor() {
             value={opcoes}
             onChange={(e) => setOpcoes(e.target.value)}
             placeholder="Opções separadas por vírgula"
-            className="min-w-56 flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
+            className="min-w-56 flex-1 rounded-md bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
           />
         )}
 

@@ -400,7 +400,7 @@ export function AccountCard({
       {erro && <p className="mt-2 text-xs text-[var(--color-hot)]">{erro}</p>}
 
       {resumo && (
-        <p className="mt-2 flex items-center gap-1.5 rounded-2xl bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
+        <p className="mt-2 flex items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-3 py-2 text-xs">
           <CheckCircle2 className="size-3.5 shrink-0 text-[var(--color-accent)]" />
           {resumo}
         </p>
@@ -438,7 +438,7 @@ export function AccountCard({
           <img
             src={qr}
             alt="QR Code do WhatsApp"
-            className="size-52 rounded-2xl bg-white p-3"
+            className="size-52 rounded-md bg-white p-3"
           />
           <p className="text-center text-sm">
             No celular: <strong>WhatsApp → Aparelhos conectados → Conectar aparelho</strong>
@@ -465,7 +465,7 @@ export function AccountCard({
       {/* As três opções têm consequências diferentes, então são explícitas em
           vez de um "confirmar" genérico. */}
       {confirmando && (
-        <div className="mt-3 flex flex-col gap-2 rounded-xl bg-[var(--color-surface-2)] p-3">
+        <div className="mt-3 flex flex-col gap-2 rounded-md bg-[var(--color-surface-2)] p-3">
           <p className="text-sm font-medium">
             O que fazer com {conta.label ?? "esta conta"}?
           </p>

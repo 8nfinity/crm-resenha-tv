@@ -162,7 +162,7 @@ export default async function MetricasPage({
                     })}
                   </div>
                   {atividades.atrasadas > 0 && (
-                    <p className="mt-4 rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2.5 text-xs">
+                    <p className="mt-4 rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2.5 text-xs">
                       {atividades.atrasadas} atividades atrasadas.
                     </p>
                   )}
@@ -339,7 +339,7 @@ function FunilEscuro({
       )}
 
       {gargalo && (
-        <p className="mt-6 rounded-2xl border border-[var(--color-yellow)]/40 bg-[color-mix(in_srgb,var(--color-yellow)_8%,transparent)] px-4 py-3 text-xs">
+        <p className="mt-6 rounded-md border border-[var(--color-yellow)]/40 bg-[color-mix(in_srgb,var(--color-yellow)_8%,transparent)] px-4 py-3 text-xs">
           Gargalo: <strong className="text-[var(--color-yellow)]">{gargalo.nome}</strong> — os leads
           ficam em média {horas(gargalo.horas)} nesse estágio antes de avançar.
         </p>
@@ -523,7 +523,7 @@ function FollowUps({ f }: { f: FollowUpsFeitos }) {
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-6">
         {f.janelas.map((j) => (
-          <div key={j.dias} className="rounded-2xl bg-[var(--color-surface-2)] p-4">
+          <div key={j.dias} className="rounded-md bg-[var(--color-surface-2)] p-4">
             <p className="text-xs text-[var(--color-muted)]">{rotuloJanela(j.dias)}</p>
             <p className="mt-1 text-3xl font-bold tabular-nums text-[var(--color-accent)]">{j.feitos}</p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface)]">
@@ -537,12 +537,12 @@ function FollowUps({ f }: { f: FollowUpsFeitos }) {
             </p>
           </div>
         ))}
-        <div className="rounded-2xl border border-[var(--color-border)] p-4">
+        <div className="rounded-md border border-[var(--color-border)] p-4">
           <p className="text-xs text-[var(--color-muted)]">Agendados</p>
           <p className="mt-1 text-3xl font-bold tabular-nums">{f.agendados}</p>
           <p className="mt-2 text-[11px] text-[var(--color-muted)]">em aberto, com data</p>
         </div>
-        <div className="rounded-2xl border border-[var(--color-border)] p-4">
+        <div className="rounded-md border border-[var(--color-border)] p-4">
           <p className="text-xs text-[var(--color-muted)]">Atrasados</p>
           <p className={`mt-1 text-3xl font-bold tabular-nums ${f.atrasados > 0 ? "text-[var(--color-hot)]" : ""}`}>
             {f.atrasados}

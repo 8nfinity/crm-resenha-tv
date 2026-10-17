@@ -131,13 +131,13 @@ export function SeletorDeFunil({ atual }: { atual: { id: string; name: string } 
   }
 
   const campo =
-    "w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]";
+    "w-full rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]";
 
   return (
     <div className="relative" ref={caixa}>
       <button
         onClick={() => (aberto ? fechar() : setAberto(true))}
-        className="bolha inline-flex max-w-72 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white"
+        className="inline-flex max-w-72 items-center gap-2 rounded-md border bg-[var(--color-surface)] px-3 py-1.5 text-sm font-semibold hover:border-[var(--color-accent)]"
         aria-haspopup="menu"
         aria-expanded={aberto}
       >
@@ -146,7 +146,7 @@ export function SeletorDeFunil({ atual }: { atual: { id: string; name: string } 
       </button>
 
       {aberto && (
-        <div className="glass-forte absolute left-0 top-full z-40 mt-2 w-80 rounded-3xl p-2" role="menu">
+        <div className="glass-forte absolute left-0 top-full z-40 mt-2 w-80 rounded-lg p-2" role="menu">
           {!funis ? (
             <p className="flex items-center gap-2 px-3 py-3 text-sm text-[var(--color-muted)]">
               <Loader2 className="size-4 animate-spin" /> Carregando funis…
@@ -214,7 +214,7 @@ export function SeletorDeFunil({ atual }: { atual: { id: string; name: string } 
                     ) : (
                       <div
                         className={cn(
-                          "group flex items-center gap-1 rounded-2xl px-1 py-0.5",
+                          "group flex items-center gap-1 rounded-md px-1 py-0.5",
                           f.id === atual.id ? "bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)]" : "hover:bg-[var(--color-surface-2)]",
                         )}
                       >
@@ -290,7 +290,7 @@ export function SeletorDeFunil({ atual }: { atual: { id: string; name: string } 
                         setEditando(null);
                         setCriando(true);
                       }}
-                      className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
                     >
                       <Plus className="size-4" /> Novo funil
                     </button>

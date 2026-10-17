@@ -245,7 +245,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
       </PageHeader>
 
       {erroEnvio && (
-        <p className="mx-4 mb-4 rounded-2xl bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2 text-sm sm:mx-8">
+        <p className="mx-4 mb-4 rounded-md bg-[color-mix(in_srgb,var(--color-hot)_12%,transparent)] px-4 py-2 text-sm sm:mx-8">
           {erroEnvio}
         </p>
       )}
@@ -298,7 +298,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                   <div
                     key={s.id}
                     className={cn(
-                      "group flex items-center gap-1 rounded-xl pr-1 transition-colors",
+                      "group flex items-center gap-1 rounded-md pr-1 transition-colors",
                       s.id === atualId ? "bg-[var(--color-ink)] text-[var(--color-on-ink)]" : "hover:bg-[var(--color-surface-2)]",
                     )}
                   >
@@ -338,7 +338,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                         key={p.id}
                         onClick={() => abrirPdf(p.id)}
                         className={cn(
-                          "flex min-w-0 flex-col rounded-xl px-3 py-2 text-left transition-colors",
+                          "flex min-w-0 flex-col rounded-md px-3 py-2 text-left transition-colors",
                           p.id === pdfId ? "bg-[var(--color-ink)] text-[var(--color-on-ink)]" : "hover:bg-[var(--color-surface-2)]",
                         )}
                       >
@@ -372,7 +372,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
               </div>
 
               {confirmarPdf && (
-                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-hot)] p-3 text-sm">
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-hot)] p-3 text-sm">
                   <span>Excluir o e-book “{tituloPdf(pdfAtual.name)}”? Não dá para desfazer.</span>
                   <button onClick={() => void excluirPdf()} className="rounded-full bg-[var(--color-hot)] px-3 py-1 font-semibold text-[var(--color-on-ink)]">
                     Excluir
@@ -396,7 +396,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                     onChange={(e) => setTitulo(e.target.value)}
                     maxLength={120}
                     placeholder="Título da seção"
-                    className="w-full rounded-xl bg-[var(--color-surface-2)] px-4 py-3 text-xl font-bold outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    className="w-full rounded-md bg-[var(--color-surface-2)] px-4 py-3 text-xl font-bold outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   />
                   <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <div>
@@ -409,7 +409,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                         rows={22}
                         spellCheck
                         placeholder={"## Título\n\nTexto normal, **negrito**, *itálico*.\n\n- item de lista\n1. passo numerado\n\n> destaque"}
-                        className="scroll-thin w-full resize-y rounded-xl bg-[var(--color-surface-2)] p-4 font-mono text-sm leading-relaxed outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+                        className="scroll-thin w-full resize-y rounded-md bg-[var(--color-surface-2)] p-4 font-mono text-sm leading-relaxed outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
                       />
                       <p className="mt-1.5 text-[11px] text-[var(--color-muted)]">
                         ## título · **negrito** · *itálico* · - lista · 1. passos · &gt; destaque · | tabela |
@@ -417,7 +417,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                     </div>
                     <div>
                       <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">Prévia</p>
-                      <div className="markdown min-h-40 rounded-xl border border-[var(--color-border)] p-4">
+                      <div className="markdown min-h-40 rounded-md border border-[var(--color-border)] p-4">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{texto || "*Nada escrito ainda.*"}</ReactMarkdown>
                       </div>
                     </div>
@@ -461,7 +461,7 @@ export function Playbook({ secoes, pdfs = [] }: { secoes: Secao[]; pdfs?: Pdf[] 
                   </div>
 
                   {confirmarExclusao && (
-                    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-hot)] p-3 text-sm">
+                    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-hot)] p-3 text-sm">
                       <span>Excluir “{atual.title}”? Não dá para desfazer.</span>
                       <button onClick={() => void excluir()} className="rounded-full bg-[var(--color-hot)] px-3 py-1 font-semibold text-[var(--color-on-ink)]">
                         Excluir

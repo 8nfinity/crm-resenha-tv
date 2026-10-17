@@ -81,7 +81,7 @@ function EdicaoRapida({
               onCancelar();
             }
           }}
-          className="min-w-0 flex-1 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          className="min-w-0 flex-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
         />
         <button
           onClick={() => void salvar()}
@@ -341,7 +341,7 @@ function JuntarComOutro({
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por nome ou número"
-            className="w-full rounded-xl bg-[var(--color-surface)] px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+            className="w-full rounded-md bg-[var(--color-surface)] px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           />
           {sugestoes && opcoes.length > 0 && (
             <p className="text-[11px] text-[var(--color-muted)]">Mais prováveis:</p>
@@ -351,7 +351,7 @@ function JuntarComOutro({
               <li key={o.id}>
                 <button
                   onClick={() => setEscolhido(o)}
-                  className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface)]"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface)]"
                 >
                   <span className="min-w-0 flex-1 truncate">{o.nome}</span>
                   <span className="shrink-0 text-[11px] tabular-nums text-[var(--color-muted)]">{o.telefone ?? "sem número"}</span>
@@ -535,7 +535,7 @@ export function DealPanel({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40 p-0 backdrop-blur-sm sm:p-3" onClick={onClose}>
       <aside
-        className="glass-forte flex h-full w-full max-w-md flex-col overflow-hidden sm:rounded-[32px]"
+        className="glass-forte flex h-full w-full max-w-md flex-col overflow-hidden sm:rounded-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {!deal ? (
@@ -756,7 +756,7 @@ export function DealPanel({
                       <select
                         value={String(deal.customValues[campo.id] ?? "")}
                         onChange={(e) => void definirCampo(campo.id, e.target.value)}
-                        className="min-w-0 flex-1 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        className="min-w-0 flex-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                       >
                         <option value="">—</option>
                         {campo.options.map((o) => (
@@ -778,7 +778,7 @@ export function DealPanel({
                         // onBlur em vez de onChange: salvar a cada tecla geraria
                         // uma requisicao por caractere.
                         onBlur={(e) => void definirCampo(campo.id, e.target.value)}
-                        className="min-w-0 flex-1 rounded-xl bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        className="min-w-0 flex-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                       />
                     )}
                   </div>
@@ -817,7 +817,7 @@ export function DealPanel({
                     <div
                       key={m.id}
                       className={cn(
-                        "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm",
+                        "max-w-[85%] rounded-md px-3.5 py-2 text-sm",
                         m.fromMe
                           ? "self-end bg-[color-mix(in_srgb,var(--color-accent)_28%,var(--color-surface))]"
                           : "self-start bg-[var(--color-surface-2)]",
@@ -838,7 +838,7 @@ export function DealPanel({
                 <div className="flex flex-col gap-2">
                   {linhaDoTempo(deal).map((item) =>
                     item.tipo === "nota" ? (
-                      <div key={item.id} className="rounded-xl bg-[var(--color-surface-2)] p-3 text-sm">
+                      <div key={item.id} className="rounded-md bg-[var(--color-surface-2)] p-3 text-sm">
                         <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted)]">
                           <StickyNote className="size-3" /> Anotação
                         </p>
@@ -874,7 +874,7 @@ export function DealPanel({
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addNote()}
                   placeholder="Escreva uma anotação…"
-                  className="flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+                  className="flex-1 rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
                 />
                 <button
                   onClick={addNote}
@@ -905,7 +905,7 @@ function EventoDeEtiqueta({ evento }: { evento: EventoEtiqueta }) {
 
   if (atendente && !saiu) {
     return (
-      <div className="flex gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_7%,transparent)] px-3 py-2 text-sm">
+      <div className="flex gap-2.5 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_7%,transparent)] px-3 py-2 text-sm">
         <UserRound className="mt-0.5 size-3.5 shrink-0 text-[var(--color-accent)]" />
         <div className="min-w-0 flex-1">
           <p>
@@ -936,7 +936,7 @@ function EventoComum({
 }) {
   const vendedor = atendente;
   return (
-    <div className="flex gap-2.5 rounded-xl border border-dashed px-3 py-2 text-sm">
+    <div className="flex gap-2.5 rounded-md border border-dashed px-3 py-2 text-sm">
       {vendedor ? (
         <UserRound className="mt-0.5 size-3.5 shrink-0 text-[var(--color-accent)]" />
       ) : (
