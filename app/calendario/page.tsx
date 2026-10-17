@@ -1,10 +1,17 @@
-import { atividadesEntre, contarAtrasadas, leadsParaAgendar } from "@/lib/calendario";
+import {
+  atividadesEntre,
+  atividadesParaLista,
+  contarAtrasadas,
+  leadsParaAgendar,
+  responsaveis,
+} from "@/lib/calendario";
+import { listarFunis } from "@/lib/funis";
 import { Calendario, type Visao } from "@/components/calendario";
 
 // Atividades mudam a cada clique (e chegam de outras abas pelo "Ao vivo").
 export const dynamic = "force-dynamic";
 
-const VISOES: Visao[] = ["dia", "semana", "mes", "agenda"];
+const VISOES: Visao[] = ["lista", "dia", "semana", "mes", "agenda"];
 
 /** "2026-09-30" → Date local. Qualquer coisa inválida vira hoje. */
 function lerData(valor: string | undefined): Date {
@@ -28,7 +35,8 @@ export default async function CalendarioPage({
 
   // Busca o mês da data com folga (a grade do mês mostra até 6 semanas) e,
   // na Programação, os 60 dias seguintes. Um dia extra de cada lado cobre
-  // diferença de fuso entre servidor e navegador.
+  // diferença de fuso entre servidor e navegador. A Lista não tem período:
+  // traz tudo o que está em aberto e o que foi feito há pouco.
   const inicio = new Date(data.getFullYear(), data.getMonth(), 1);
   inicio.setDate(inicio.getDate() - 8);
   const fimMes = new Date(data.getFullYear(), data.getMonth() + 1, 1);
@@ -37,10 +45,12 @@ export default async function CalendarioPage({
   fimAgenda.setDate(fimAgenda.getDate() + 61);
   const fim = fimAgenda > fimMes ? fimAgenda : fimMes;
 
-  const [atividades, atrasadas, leads] = await Promise.all([
-    atividadesEntre(inicio, fim),
+  const [atividades, atrasadas, leads, usuarios, funis] = await Promise.all([
+    visao === "lista" ? atividadesParaLista() : atividadesEntre(inicio, fim),
     contarAtrasadas(),
     leadsParaAgendar(),
+    responsaveis(),
+    listarFunis(),
   ]);
 
   return (
@@ -50,6 +60,8 @@ export default async function CalendarioPage({
       atividades={atividades}
       atrasadasTotal={atrasadas}
       leads={leads}
+      responsaveis={usuarios}
+      funis={funis.map((f) => ({ id: f.id, nome: f.name }))}
     />
   );
 }

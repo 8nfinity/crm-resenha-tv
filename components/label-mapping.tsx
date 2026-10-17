@@ -7,7 +7,19 @@ import { descreverEvento } from "@/lib/saude-etiquetas";
 import { EVENTO_MUDOU, type DetalheMudou } from "@/components/ao-vivo";
 import type { Etiquetagem } from "@/lib/etiquetagens-recebidas";
 
-type Estagio = { id: string; name: string; color: string };
+type Estagio = { id: string; name: string; color: string; pipeline?: { id: string; name: string } };
+
+/** Colunas agrupadas por funil, na ordem que a API devolve. */
+function porFunil(estagios: Estagio[]): { id: string; name: string; colunas: Estagio[] }[] {
+  const grupos: { id: string; name: string; colunas: Estagio[] }[] = [];
+  for (const s of estagios) {
+    const id = s.pipeline?.id ?? "";
+    const g = grupos.find((x) => x.id === id);
+    if (g) g.colunas.push(s);
+    else grupos.push({ id, name: s.pipeline?.name ?? "", colunas: [s] });
+  }
+  return grupos;
+}
 
 type Etiqueta = {
   id: string;
@@ -365,11 +377,23 @@ export function LabelMapping({
                         <option value="">Não move o lead</option>
                         <option value={IGNORAR}>🚫 Ignorar contato (some do CRM)</option>
                         <option value={ATENDENTE}>👤 Atendente (registra quem atendeu)</option>
-                        {estagios.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
+                        {/* Com vários funis, a coluna vem dentro do funil dela: a mesma
+                            "Novo lead" pode existir em dois. */}
+                        {porFunil(estagios).length > 1
+                          ? porFunil(estagios).map((g) => (
+                              <optgroup key={g.id} label={g.name}>
+                                {g.colunas.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))
+                          : estagios.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
                       </select>
                       {sugestaoDe(etiqueta) && (
                         // Lista com o nome de um estágio, mas ainda sem ação:

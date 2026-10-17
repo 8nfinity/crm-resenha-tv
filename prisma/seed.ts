@@ -22,11 +22,18 @@ const STAGES = [
 ];
 
 async function main() {
+  // O mesmo id que a migration dos funis dá ao funil das colunas antigas.
+  const funil = await prisma.pipeline.upsert({
+    where: { id: "funil_principal" },
+    update: {},
+    create: { id: "funil_principal", name: "Funil principal", order: 0 },
+  });
+
   for (const stage of STAGES) {
     await prisma.stage.upsert({
-      where: { order: stage.order },
+      where: { pipelineId_order: { pipelineId: funil.id, order: stage.order } },
       update: {},
-      create: stage,
+      create: { ...stage, pipelineId: funil.id },
     });
   }
 

@@ -395,6 +395,8 @@ export function AccountCard({
         )}
       </div>
 
+      <FunilDeEntrada conta={conta} onMudou={onMudou} />
+
       {erro && <p className="mt-2 text-xs text-[var(--color-hot)]">{erro}</p>}
 
       {resumo && (
@@ -515,5 +517,54 @@ export function AccountCard({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Em qual funil caem os leads novos deste número. Só aparece com mais de um
+ * funil — com um só, não há o que escolher.
+ */
+function FunilDeEntrada({ conta, onMudou }: { conta: ContaResumo; onMudou: () => void }) {
+  const [funis, setFunis] = useState<{ id: string; name: string }[]>([]);
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/pipelines")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setFunis)
+      .catch(() => {});
+  }, []);
+
+  if (funis.length < 2) return null;
+
+  async function escolher(id: string) {
+    setSalvando(true);
+    await fetch(`/api/accounts/${conta.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryPipelineId: id || null }),
+    }).catch(() => null);
+    setSalvando(false);
+    onMudou();
+  }
+
+  return (
+    <label className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
+      Leads novos deste número entram no funil
+      <select
+        // Sem escolha, vale o primeiro funil: é o que a lista mostra.
+        value={funis.some((f) => f.id === conta.entryPipelineId) ? conta.entryPipelineId! : funis[0].id}
+        disabled={salvando}
+        onChange={(e) => void escolher(e.target.value)}
+        className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-sm text-[var(--color-text)] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+      >
+        {funis.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
+      </select>
+      {salvando && <Loader2 className="size-3.5 animate-spin" />}
+    </label>
   );
 }

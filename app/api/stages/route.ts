@@ -3,10 +3,14 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { avisarMudanca } from "@/lib/eventos";
 
+/** Todas as colunas de todos os funis, na ordem dos funis e depois das colunas. */
 export async function GET() {
   const stages = await prisma.stage.findMany({
-    orderBy: { order: "asc" },
-    include: { _count: { select: { deals: true } } },
+    orderBy: [{ pipeline: { order: "asc" } }, { order: "asc" }],
+    include: {
+      _count: { select: { deals: true } },
+      pipeline: { select: { id: true, name: true } },
+    },
   });
   return NextResponse.json(stages);
 }
@@ -14,6 +18,8 @@ export async function GET() {
 const createSchema = z.object({
   name: z.string().trim().min(1).max(60),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#64748b"),
+  /** Funil da coluna. Sem ele, o primeiro funil. */
+  pipelineId: z.string().min(1).optional(),
 });
 
 export async function POST(request: Request) {
@@ -22,14 +28,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nome inválido" }, { status: 400 });
   }
 
+  const funil = parsed.data.pipelineId
+    ? await prisma.pipeline.findUnique({ where: { id: parsed.data.pipelineId } })
+    : await prisma.pipeline.findFirst({ orderBy: { order: "asc" } });
+  if (!funil) return NextResponse.json({ error: "Funil não encontrado" }, { status: 404 });
+  const pipelineId = funil.id;
+
   // Entra antes dos estágios finais: um estágio novo quase nunca deve ficar
   // depois de "Ganho" e "Perdido".
   const ultimoAtivo = await prisma.stage.findFirst({
-    where: { isWon: false, isLost: false },
+    where: { pipelineId, isWon: false, isLost: false },
     orderBy: { order: "desc" },
   });
   const finais = await prisma.stage.findMany({
-    where: { OR: [{ isWon: true }, { isLost: true }] },
+    where: { pipelineId, OR: [{ isWon: true }, { isLost: true }] },
     orderBy: { order: "asc" },
   });
 
@@ -46,7 +58,7 @@ export async function POST(request: Request) {
     }
 
     const stage = await tx.stage.create({
-      data: { name: parsed.data.name, color: parsed.data.color, order: novaOrdem },
+      data: { name: parsed.data.name, color: parsed.data.color, order: novaOrdem, pipelineId },
     });
 
     return stage;

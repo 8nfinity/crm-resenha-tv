@@ -31,15 +31,31 @@ import {
 } from "./board-filters";
 
 export function Board({
+  pipelineId,
   stages,
   deals: initialDeals,
   campos,
+  leadInicial = null,
 }: {
+  /** Funil aberto: é nele que "Nova coluna" cria. */
+  pipelineId: string;
   stages: StageColumn[];
   deals: DealCard[];
   campos: Campo[];
+  /** Lead para abrir já com o painel (link direto, ex.: a nota no Pipedrive). */
+  leadInicial?: string | null;
 }) {
   const [deals, setDeals] = useState(initialDeals);
+
+  // Relógio dos ícones de atividade: só depois de montar (o servidor já mandou
+  // o ícone calculado) e a cada minuto — a atividade que vence com a tela
+  // aberta fica vermelha sozinha.
+  const [agora, setAgora] = useState<Date | null>(null);
+  useEffect(() => {
+    setAgora(new Date());
+    const t = setInterval(() => setAgora(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   // Criar/editar colunas é de administrador; vendedor só move os cards.
   const admin = useEhAdmin();
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS);
@@ -56,7 +72,7 @@ export function Board({
     if (ocupado.current) pendentes.current = initialDeals;
     else setDeals(initialDeals);
   }, [initialDeals]);
-  const [openDealId, setOpenDealId] = useState<string | null>(null);
+  const [openDealId, setOpenDealId] = useState<string | null>(leadInicial);
   const [error, setError] = useState<string | null>(null);
 
   // Um pequeno limiar impede que um clique para abrir o card seja interpretado
@@ -65,7 +81,7 @@ export function Board({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  const visiveis = useMemo(() => aplicarFiltros(deals, filtros), [deals, filtros]);
+  const visiveis = useMemo(() => aplicarFiltros(deals, filtros, agora), [deals, filtros, agora]);
 
   const byStage = useMemo(() => {
     const map = new Map<string, DealCard[]>();
@@ -200,14 +216,15 @@ export function Board({
               totalNaColuna={deals.filter((d) => d.stageId === stage.id).length}
               onOpen={setOpenDealId}
               mostrarConta={varias}
+              agora={agora}
             />
           ))}
-          {admin && <NovaColuna />}
+          {admin && <NovaColuna pipelineId={pipelineId} />}
         </div>
 
         <DragOverlay>
           {activeDeal && (
-            <DealCardView deal={activeDeal} overlay mostrarConta={varias} />
+            <DealCardView deal={activeDeal} overlay mostrarConta={varias} agora={agora} />
           )}
         </DragOverlay>
       </DndContext>
@@ -231,6 +248,7 @@ function Column({
   totalNaColuna,
   onOpen,
   mostrarConta,
+  agora,
 }: {
   stage: StageColumn;
   stages: StageColumn[];
@@ -238,6 +256,7 @@ function Column({
   totalNaColuna: number;
   onOpen: (id: string) => void;
   mostrarConta: boolean;
+  agora: Date | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const admin = useEhAdmin();
@@ -287,6 +306,7 @@ function Column({
               deal={deal}
               onOpen={onOpen}
               mostrarConta={mostrarConta}
+              agora={agora}
             />
           ))}
         </SortableContext>

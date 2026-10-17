@@ -1,13 +1,45 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Board } from "@/components/kanban/board";
+import { SeletorDeFunil } from "@/components/kanban/seletor-funil";
 import { getDealCards, getStages } from "@/lib/queries";
 import { listarCampos } from "@/lib/custom-fields";
+import { escolherFunil, listarFunis } from "@/lib/funis";
+import { COOKIE_FUNIL } from "@/lib/funil-cookie";
 import { Kpi, PageHeader } from "@/components/ui";
+import { prisma } from "@/lib/db";
 
 // O funil muda a cada mensagem recebida; cache aqui mostraria dado velho.
 export const dynamic = "force-dynamic";
 
-export default async function FunilPage() {
+export default async function FunilPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ funil?: string; lead?: string }>;
+}) {
+  // O funil vem do endereço; sem ele, o último aberto (cookie); sem os dois,
+  // o primeiro. A lista de funis é uma consulta pequena e decide o resto.
+  // `?lead=<id>` (o link da nota no Pipedrive) abre o funil DO lead, com o
+  // painel dele aberto.
+  const params = await searchParams;
+  const [guardado, funis, doLead] = await Promise.all([
+    cookies().then((c) => c.get(COOKIE_FUNIL)?.value),
+    listarFunis(),
+    params.lead
+      ? prisma.deal.findUnique({ where: { id: params.lead }, select: { id: true, stage: { select: { pipelineId: true } } } })
+      : null,
+  ]);
+  const funil = escolherFunil(funis, doLead?.stage.pipelineId ?? params.funil ?? guardado);
+
+  if (!funil) {
+    return (
+      <EmptyState
+        title="Nenhum funil configurado"
+        body="Rode `npm run db:seed` para criar o funil inicial."
+      />
+    );
+  }
+
   // Tudo em paralelo, de propósito.
   //
   // A versão "econômica" — buscar os campos e repassar para getDealCards —
@@ -17,8 +49,8 @@ export default async function FunilPage() {
   // custam zero de tempo adicional. Com o banco a 200ms de distância, o que
   // importa é o número de RODADAS, não o de consultas.
   const [stages, deals, campos] = await Promise.all([
-    getStages(),
-    getDealCards(),
+    getStages(funil.id),
+    getDealCards(undefined, funil.id),
     listarCampos(),
   ]);
 
@@ -27,8 +59,10 @@ export default async function FunilPage() {
 
   return (
     <>
-      <PageHeader title={"Funil\nde vendas"}>
-        <div className="flex gap-8">
+      {/* "Funil principal" vira FUNIL / PRINCIPAL, sem repetir a palavra. */}
+      <PageHeader title={`Funil\n${funil.name.replace(/^funil\s+/i, "") || funil.name}`}>
+        <div className="flex flex-wrap items-center gap-8">
+          <SeletorDeFunil atual={{ id: funil.id, name: funil.name }} />
           <Kpi label="Leads" value={deals.length} />
           <Kpi label="Quentes" value={hot} tone={hot > 0 ? "accent" : undefined} />
           <Kpi label="Parados 7d+" value={stalled} tone={stalled > 0 ? "hot" : undefined} />
@@ -37,17 +71,19 @@ export default async function FunilPage() {
 
       {stages.length === 0 ? (
         <EmptyState
-          title="Nenhum estágio configurado"
-          body="Rode `npm run db:seed` para criar as colunas iniciais do funil."
+          title="Este funil não tem colunas"
+          body="Crie uma coluna para começar a receber leads aqui."
         />
-      ) : deals.length === 0 ? (
+      ) : deals.length === 0 && funis.length === 1 ? (
         <EmptyState
           title="Seu funil está vazio"
           body="Conecte o WhatsApp e importe seus contatos para começar."
           action={{ href: "/conexao", label: "Conectar WhatsApp" }}
         />
       ) : (
-        <Board stages={stages} deals={deals} campos={campos} />
+        // Com vários funis, um funil vazio ainda mostra as colunas: é nelas que
+        // você arrasta, etiqueta ou move os leads para cá.
+        <Board key={funil.id} pipelineId={funil.id} stages={stages} deals={deals} campos={campos} leadInicial={doLead?.id ?? null} />
       )}
     </>
   );

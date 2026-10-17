@@ -41,6 +41,10 @@ model WhatsAppAccount {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  /// Funil onde caem os leads novos deste número. Nulo: o primeiro funil.
+  entryPipelineId String?
+  entryPipeline   Pipeline? @relation(fields: [entryPipelineId], references: [id], onDelete: SetNull)
+
   /// SEM USO desde 05/10/2026. Guardavam a "conferência da chave das
   /// etiquetas", que retirava uma etiqueta inexistente de uma conversa — isso
   /// escreve nos dados da conta do WhatsApp e travava a chegada das etiquetas.
@@ -181,21 +185,42 @@ model CustomField {
   @@index([order])
 }
 
-/// Coluna do kanban. Editável pela interface — nada de estágio hardcoded no código.
-model Stage {
+/// Um funil (Captação, Relacionamento, Processos Seletivos…), como no Pipedrive.
+///
+/// O lead está em UM funil por vez: o funil é o da coluna onde ele está. Mudar
+/// de funil é mudar de coluna — passa por moveDealToStage como qualquer
+/// movimento, e o histórico registra a passagem de um funil para o outro.
+model Pipeline {
   id        String   @id @default(cuid())
   name      String
   order     Int      @unique
-  color     String   @default("#64748b")
-  isWon     Boolean  @default(false)
-  isLost    Boolean  @default(false)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  stages   Stage[]
+  /// Números de WhatsApp cujos leads novos caem neste funil.
+  accounts WhatsAppAccount[]
+}
+
+/// Coluna do kanban. Editável pela interface — nada de estágio hardcoded no código.
+model Stage {
+  id         String   @id @default(cuid())
+  pipelineId String
+  name       String
+  /// Posição dentro do funil (cada funil numera as suas colunas).
+  order      Int
+  color      String   @default("#64748b")
+  isWon      Boolean  @default(false)
+  isLost     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  pipeline       Pipeline          @relation(fields: [pipelineId], references: [id])
   deals          Deal[]
   transitionsIn  StageTransition[] @relation("ToStage")
   transitionsOut StageTransition[] @relation("FromStage")
   labels         WhatsAppLabel[]
 
+  @@unique([pipelineId, order])
   @@index([order])
 }
 
@@ -224,6 +249,12 @@ model Deal {
   /// Valores dos campos que você definiu, como { "<id do campo>": valor }.
   /// A definição de cada campo está em CustomField.
   customValues Json?
+
+  /// Negócio e pessoa criados no Pipedrive quando o lead foi enviado para lá.
+  /// Guardados para mandar de novo só atualizar, sem duplicar.
+  pipedriveDealId   Int?
+  pipedrivePersonId Int?
+  pipedriveSentAt   DateTime?
 
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -374,6 +405,18 @@ model SystemState {
   /// próprio CRM na primeira vez: ninguém precisa configurar nada.
   vapidPublicKey    String?
   vapidPrivateKey   String?
+
+  /// Integração com o Pipedrive. O token nunca volta para o navegador.
+  pipedriveToken      String?
+  /// Subdomínio da empresa ("resenhatv" em resenhatv.pipedrive.com), lido do
+  /// próprio Pipedrive ao salvar o token: é para onde vão as chamadas.
+  pipedriveDomain     String?
+  /// Funil e etapa do Pipedrive onde os negócios enviados entram.
+  pipedrivePipelineId Int?
+  pipedriveStageId    Int?
+  /// Coluna do CRM que envia o lead sozinho ao entrar nela. Nula: só manual.
+  pipedriveAutoStageId String?
+
   updatedAt         DateTime  @updatedAt
 }
 

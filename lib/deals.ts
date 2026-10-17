@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { averageResponseHours, calculateScore, type ScoreResult } from "@/lib/scoring";
+import { envioAutomatico } from "@/lib/pipedrive";
 
 /**
  * Operações sobre deals.
@@ -13,7 +14,8 @@ import { averageResponseHours, calculateScore, type ScoreResult } from "@/lib/sc
 
 /** Move um card de coluna e registra a passagem. Atômico. */
 export async function moveDealToStage(dealId: string, toStageId: string) {
-  return prisma.$transaction(async (tx) => {
+  let moveu = false;
+  const resultado = await prisma.$transaction(async (tx) => {
     const deal = await tx.deal.findUniqueOrThrow({
       where: { id: dealId },
       select: { id: true, stageId: true, enteredStageAt: true },
@@ -35,16 +37,25 @@ export async function moveDealToStage(dealId: string, toStageId: string) {
       },
     });
 
+    moveu = true;
     return tx.deal.update({
       where: { id: dealId },
       data: { stageId: toStageId, enteredStageAt: now },
     });
   });
+
+  // Coluna com envio automático ao Pipedrive: vale para arrasto, etiqueta e
+  // painel, porque todo movimento passa por aqui. Não espera nem atrapalha.
+  if (moveu) void envioAutomatico(dealId, toStageId);
+  return resultado;
 }
 
 /**
  * Cria o deal de um contato, já com a transição de nascimento registrada.
  * Idempotente: se o contato já tem deal, devolve o existente.
+ *
+ * Sem estágio informado, o lead entra na primeira coluna do funil de entrada
+ * do número de WhatsApp por onde ele chegou.
  */
 export async function createDealForContact(contactId: string, stageId?: string) {
   const existing = await prisma.deal.findUnique({ where: { contactId } });
@@ -52,7 +63,7 @@ export async function createDealForContact(contactId: string, stageId?: string) 
 
   const firstStage = stageId
     ? await prisma.stage.findUniqueOrThrow({ where: { id: stageId } })
-    : await primeiraColuna();
+    : await primeiraColuna(await funilDeEntrada(contactId));
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -75,8 +86,8 @@ export async function createDealForContact(contactId: string, stageId?: string) 
     }
     // Coluna guardada foi excluída nesse meio-tempo: esquece e tenta de novo
     // com a primeira coluna atual.
-    if (!stageId && colunaGuardada && (error as { code?: string }).code === "P2003") {
-      colunaGuardada = null;
+    if (!stageId && colunasGuardadas.size > 0 && (error as { code?: string }).code === "P2003") {
+      colunasGuardadas.clear();
       return createDealForContact(contactId);
     }
     throw error;
@@ -84,19 +95,44 @@ export async function createDealForContact(contactId: string, stageId?: string) 
 }
 
 /**
- * Primeira coluna em andamento (onde todo lead novo entra), guardada por
- * 30 s. Cada lead novo pagava uma ida ao banco só para descobrir isso.
+ * Funil onde caem os leads novos do número por onde o contato chegou. Nulo:
+ * o número não escolheu, vale o primeiro funil.
  */
-let colunaGuardada: { id: string; ate: number } | null = null;
-
-async function primeiraColuna(): Promise<{ id: string }> {
-  if (colunaGuardada && colunaGuardada.ate > Date.now()) return { id: colunaGuardada.id };
-  const stage = await prisma.stage.findFirstOrThrow({
-    where: { isWon: false, isLost: false },
-    orderBy: { order: "asc" },
-    select: { id: true },
+async function funilDeEntrada(contactId: string): Promise<string | null> {
+  const contato = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: { account: { select: { entryPipelineId: true } } },
   });
-  colunaGuardada = { id: stage.id, ate: Date.now() + 30_000 };
+  return contato?.account.entryPipelineId ?? null;
+}
+
+/**
+ * Primeira coluna em andamento de um funil (onde o lead novo entra), guardada
+ * por 30 s. Cada lead novo pagava uma ida ao banco só para descobrir isso.
+ * `null` é o primeiro funil.
+ */
+const colunasGuardadas = new Map<string, { id: string; ate: number }>();
+
+async function primeiraColuna(pipelineId: string | null): Promise<{ id: string }> {
+  const chave = pipelineId ?? "";
+  const guardada = colunasGuardadas.get(chave);
+  if (guardada && guardada.ate > Date.now()) return { id: guardada.id };
+
+  const emAndamento = { isWon: false, isLost: false };
+  const stage =
+    (pipelineId &&
+      (await prisma.stage.findFirst({
+        where: { ...emAndamento, pipelineId },
+        orderBy: { order: "asc" },
+        select: { id: true },
+      }))) ||
+    // Sem funil escolhido (ou o escolhido sumiu): o primeiro funil.
+    (await prisma.stage.findFirstOrThrow({
+      where: emAndamento,
+      orderBy: [{ pipeline: { order: "asc" } }, { order: "asc" }],
+      select: { id: true },
+    }));
+  colunasGuardadas.set(chave, { id: stage.id, ate: Date.now() + 30_000 });
   return stage;
 }
 
@@ -121,8 +157,10 @@ export async function recalculateScore(dealId: string): Promise<ScoreResult | nu
   const inbound = messages.filter((m) => !m.fromMe);
   const outbound = messages.filter((m) => m.fromMe);
 
+  // A posição do lead conta dentro do funil dele: a 2ª de 3 colunas num funil
+  // curto é tão adiante quanto a 4ª de 6 num funil longo.
   const activeStages = await prisma.stage.count({
-    where: { isWon: false, isLost: false },
+    where: { isWon: false, isLost: false, pipelineId: deal.stage.pipelineId },
   });
 
   const result = calculateScore({

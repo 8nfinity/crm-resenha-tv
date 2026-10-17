@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 /** Paleta das colunas: legível no fundo escuro e distinta entre si. */
 export const CORES_COLUNA = [
-  "#94a3b8", "#5eb8ff", "#a78bfa", "#f472b6", "#f2d417", "#fb923c", "#2fe38c", "#ff7a59",
+  "#94a3b8", "#5eb8ff", "#a78bfa", "#f472b6", "#ffd629", "#fb923c", "#46c22d", "#ff7a59",
 ];
 
 async function enviar(url: string, init: RequestInit): Promise<{ ok: boolean; erro?: string }> {
@@ -230,8 +230,8 @@ function Opcao({
   );
 }
 
-/** Cartão no fim do quadro para criar uma coluna. */
-export function NovaColuna() {
+/** Cartão no fim do quadro para criar uma coluna no funil aberto. */
+export function NovaColuna({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
@@ -246,7 +246,7 @@ export function NovaColuna() {
     const r = await enviar("/api/stages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: nome.trim(), color: cor }),
+      body: JSON.stringify({ name: nome.trim(), color: cor, pipelineId }),
     });
     setSalvando(false);
     if (!r.ok) {

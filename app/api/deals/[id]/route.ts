@@ -2,19 +2,28 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getDealDetail } from "@/lib/queries";
 import { exigirAdmin } from "@/lib/auth/usuario";
+import { lerConfig, urlDoNegocio } from "@/lib/pipedrive";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const deal = await getDealDetail(id);
+  const [deal, pipedrive] = await Promise.all([getDealDetail(id), lerConfig()]);
 
   if (!deal) {
     return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(deal);
+  // O painel mostra "Enviar para o Pipedrive" (ou o link do negócio lá).
+  // O token não sai daqui: só se está conectado e o endereço do negócio.
+  return NextResponse.json({
+    ...deal,
+    pipedrive: {
+      conectado: pipedrive !== null,
+      url: pipedrive && deal.pipedriveDealId ? urlDoNegocio(pipedrive.dominio, deal.pipedriveDealId) : null,
+    },
+  });
 }
 
 /**

@@ -2,8 +2,9 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, MessageSquare, CheckSquare, Phone } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MessageSquare, Phone, TriangleAlert } from "lucide-react";
 import type { DealCard as DealCardType } from "@/lib/types";
+import { diaSemanaHora, sinalDoLead, type SinalAtividades } from "@/lib/atividades";
 import { cn, formatCurrency, initials, relativeDays } from "@/lib/utils";
 
 /** Cor da faixa de temperatura. Quente laranja, gelado azul — leitura instantânea. */
@@ -19,12 +20,15 @@ export function DealCardView({
   onOpen,
   overlay = false,
   mostrarConta = false,
+  agora = null,
 }: {
   deal: DealCardType;
   onOpen?: (id: string) => void;
   overlay?: boolean;
   /** Só faz sentido com mais de um número conectado. */
   mostrarConta?: boolean;
+  /** Relógio do quadro (nulo até a tela montar). */
+  agora?: Date | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: deal.id, data: { stageId: deal.stageId } });
@@ -48,7 +52,7 @@ export function DealCardView({
       {...(overlay ? {} : listeners)}
       onClick={() => onOpen?.(deal.id)}
       className={cn(
-        "group cursor-grab rounded-[20px] border border-transparent bg-[var(--color-surface-2)] p-3.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.07)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-accent)]/50 hover:bg-white/[0.08] hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_12px_28px_-14px_rgb(47_227_140/0.45)] active:cursor-grabbing",
+        "group cursor-grab rounded-[20px] border border-transparent bg-[var(--color-surface-2)] p-3.5 text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.07)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-accent)]/50 hover:bg-white/[0.08] hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_12px_28px_-14px_rgb(247_136_47/0.45)] active:cursor-grabbing",
         isDragging && "dragging",
         overlay && "glass-forte rotate-2 cursor-grabbing",
       )}
@@ -127,17 +131,57 @@ export function DealCardView({
           {deal.daysInStage}d parado
         </span>
 
-        {deal.openActivities > 0 && (
-          <span className="inline-flex items-center gap-1">
-            <CheckSquare className="size-3" />
-            {deal.openActivities}
-          </span>
-        )}
-
-        {value && (
-          <span className="ml-auto text-xs font-semibold text-[var(--color-text)]">{value}</span>
-        )}
+        <span className="ml-auto flex items-center gap-2">
+          {value && <span className="text-xs font-semibold text-[var(--color-text)]">{value}</span>}
+          <SinalDeAtividades deal={deal} agora={agora} />
+        </span>
       </div>
     </div>
+  );
+}
+
+const ESTILO_SINAL: Record<SinalAtividades, { fundo: string; texto: string }> = {
+  atrasada: { fundo: "var(--color-hot)", texto: "#fff" },
+  hoje: { fundo: "#46c22d", texto: "#fff" },
+  futura: { fundo: "rgb(255 255 255 / 0.18)", texto: "var(--color-text)" },
+  nenhuma: { fundo: "transparent", texto: "var(--color-warm)" },
+};
+
+/**
+ * O ícone de atividades do lead, como no Pipedrive: vermelho com "‹" quando
+ * há atrasada, verde com "›" quando a próxima é hoje, cinza com "›" quando é
+ * outro dia, e o triângulo amarelo quando não tem nada marcado.
+ */
+function SinalDeAtividades({ deal, agora }: { deal: DealCardType; agora: Date | null }) {
+  // Até a tela montar vale o que o servidor calculou (o desenho dos dois
+  // precisa bater); depois, o relógio de quem está vendo.
+  const sinal = agora ? sinalDoLead(deal.proximaAtividade, agora) : deal.sinal;
+  const estilo = ESTILO_SINAL[sinal];
+  const prox = deal.proximaAtividade;
+
+  const quando = prox?.dueAt ? diaSemanaHora(prox.dueAt) : "sem data";
+  const outras = deal.openActivities - 1;
+  const titulo =
+    sinal === "nenhuma"
+      ? "Nenhuma atividade marcada para este lead"
+      : sinal === "atrasada"
+        ? `${deal.atrasadas} ${deal.atrasadas === 1 ? "atividade atrasada" : "atividades atrasadas"} · a mais antiga: ${prox!.nome} (${quando})`
+        : `${sinal === "hoje" ? "Hoje" : "Próxima"}: ${prox!.nome} (${quando})${outras > 0 ? ` · +${outras} em aberto` : ""}`;
+
+  return (
+    <span
+      title={titulo}
+      aria-label={titulo}
+      className="grid size-[22px] shrink-0 place-items-center rounded-full"
+      style={{ backgroundColor: estilo.fundo, color: estilo.texto }}
+    >
+      {sinal === "nenhuma" ? (
+        <TriangleAlert className="size-[18px]" strokeWidth={2.4} />
+      ) : sinal === "atrasada" ? (
+        <ChevronLeft className="size-4" strokeWidth={3} />
+      ) : (
+        <ChevronRight className="size-4" strokeWidth={3} />
+      )}
+    </span>
   );
 }

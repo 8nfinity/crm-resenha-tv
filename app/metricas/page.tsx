@@ -11,6 +11,7 @@ import { descreverPeriodo, PERIODOS, rotuloJanela } from "@/lib/periodo";
 import { formatarMinutos, SILENCIO_QUE_ABRE_CONVERSA_H } from "@/lib/tempo-resposta";
 import { ExportarPdf } from "@/components/exportar-pdf";
 import { CardHeader, Kpi, PageHeader, Pill } from "@/components/ui";
+import { escolherFunil, listarFunis } from "@/lib/funis";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,17 @@ function horas(h: number | null): string {
 export default async function MetricasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string }>;
+  searchParams: Promise<{ dias?: string; funil?: string }>;
 }) {
   const params = await searchParams;
   const dias = Math.min(Math.max(Number(params.dias) || 30, 1), 730);
+  const funis = await listarFunis();
+  const escolhido = escolherFunil(funis, params.funil);
+  // Os links de período mantêm o funil, e os de funil mantêm o período.
+  const link = (d: number, f?: string) => `/metricas?dias=${d}${f ? `&funil=${encodeURIComponent(f)}` : ""}`;
 
   const [funil, atividades, resposta, followUps] = await Promise.all([
-    funnelMetrics(dias),
+    funnelMetrics(dias, escolhido?.id),
     activityReport(dias),
     tempoDeResposta(dias),
     followUpsFeitos(),
@@ -49,7 +54,7 @@ export default async function MetricasPage({
     <div className="scroll-thin flex-1 overflow-y-auto pb-10">
       <PageHeader title={"Visão geral\ndo funil"} subtitle={descreverPeriodo(dias)}>
         {PERIODOS.map((d) => (
-          <Pill key={d} href={`/metricas?dias=${d}`} active={d === dias}>
+          <Pill key={d} href={link(d, params.funil)} active={d === dias}>
             {d === 1 ? "Hoje" : `${d} dias`}
           </Pill>
         ))}
@@ -57,12 +62,24 @@ export default async function MetricasPage({
       </PageHeader>
 
       <div className="flex flex-col gap-5 px-4 sm:px-8">
+        {funis.length > 1 && (
+          // Conversão, ganhos e perdidos são de um funil; atividades, tempo de
+          // resposta e follow-ups abaixo valem para o CRM inteiro.
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Funil</span>
+            {funis.map((f) => (
+              <Pill key={f.id} href={link(dias, f.id)} active={f.id === escolhido?.id}>
+                {f.name}
+              </Pill>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-x-8 gap-y-6 lg:grid-cols-4">
           <Kpi
             label="Novos leads"
             value={funil.novos}
             caption="entraram no funil"
-            href="/funil"
+            href={escolhido ? `/funil?funil=${encodeURIComponent(escolhido.id)}` : "/funil"}
           />
           <Kpi label="Ganhos" value={funil.ganhos} caption="negócios fechados" tone="accent" />
           <Kpi label="Perdidos" value={funil.perdidos} caption="saíram do funil" />

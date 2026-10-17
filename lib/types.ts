@@ -1,4 +1,5 @@
 import type { ScoreFactor } from "@/lib/scoring";
+import type { SinalAtividades } from "@/lib/atividades";
 
 /** O que o kanban precisa saber de um card. Serializável para o cliente. */
 export type DealCard = {
@@ -27,12 +28,22 @@ export type DealCard = {
   daysInStage: number;
   lastMessagePreview: string | null;
   openActivities: number;
+  /**
+   * A atividade em aberto que manda no ícone do card: a de prazo mais antigo
+   * (se houver atrasada, é ela). Nula quando o lead não tem nada marcado.
+   */
+  proximaAtividade: { nome: string; dueAt: string | null } | null;
+  /** Quantas atividades em aberto já passaram do prazo. */
+  atrasadas: number;
+  /** O ícone calculado no servidor; a tela recalcula pelo relógio depois de abrir. */
+  sinal: SinalAtividades;
   /** Valores dos campos que voce definiu, indexados pelo id do campo. */
   customValues: Record<string, string | number | null>;
 };
 
 export type StageColumn = {
   id: string;
+  pipelineId: string;
   name: string;
   order: number;
   color: string;

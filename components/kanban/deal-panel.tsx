@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Send, Trash2, Tag, UserRound, StickyNote, Combine, Loader2, Pencil, Check } from "lucide-react";
+import { X, Send, Trash2, Tag, UserRound, StickyNote, Combine, Loader2, Pencil, Check, ExternalLink, RefreshCw } from "lucide-react";
 import { AtividadesLead, type AtividadeDoLead } from "@/components/atividades-lead";
 import { dataHora } from "@/lib/atividades";
 import { useEhAdmin } from "@/components/sessao";
@@ -17,7 +17,8 @@ type DealDetail = {
   score: number;
   scoreSummary: string;
   scoreFactors: ScoreFactor[];
-  stage: { name: string; color: string };
+  stageId: string;
+  stage: { name: string; color: string; pipeline: { id: string; name: string } };
   contact: { phone: string | null; profilePicUrl: string | null; waJid: string };
   messages: {
     id: string;
@@ -30,6 +31,8 @@ type DealDetail = {
   notes: { id: string; body: string; createdAt: string }[];
   activities: AtividadeDoLead[];
   labelEvents: EventoEtiqueta[];
+  /** Se o Pipedrive está conectado e, se o lead já foi enviado, o link do negócio lá. */
+  pipedrive: { conectado: boolean; url: string | null };
 };
 
 type EventoEtiqueta = {
@@ -97,6 +100,145 @@ function EdicaoRapida({
         </button>
       </div>
       {ajuda && <p className="mt-1 text-[11px] text-[var(--color-muted)]">{ajuda}</p>}
+    </div>
+  );
+}
+
+type ColunaComFunil = { id: string; name: string; pipeline: { id: string; name: string } };
+
+/**
+ * Onde o lead está — "Funil · Coluna" — e o seletor para mudar. Escolher uma
+ * coluna de outro funil é o "mover para outro funil": passa pelo mesmo
+ * caminho do arrasto, então o histórico e as métricas registram a passagem.
+ */
+function MoverLead({ deal, onMovido }: { deal: DealDetail; onMovido: () => void }) {
+  const [colunas, setColunas] = useState<ColunaComFunil[] | null>(null);
+  const [movendo, setMovendo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/stages")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setColunas)
+      .catch(() => setColunas([]));
+  }, []);
+
+  // Agrupa por funil, na ordem que a API já devolve (funis, depois colunas).
+  const funis: { id: string; name: string; colunas: ColunaComFunil[] }[] = [];
+  for (const c of colunas ?? []) {
+    const f = funis.find((x) => x.id === c.pipeline.id);
+    if (f) f.colunas.push(c);
+    else funis.push({ id: c.pipeline.id, name: c.pipeline.name, colunas: [c] });
+  }
+  const variosFunis = funis.length > 1;
+
+  async function mover(stageId: string) {
+    if (stageId === deal.stageId) return;
+    setMovendo(true);
+    setErro(null);
+    const res = await fetch(`/api/deals/${deal.id}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stageId }),
+    }).catch(() => null);
+    setMovendo(false);
+    if (!res?.ok) return setErro("Não deu para mover. Tente de novo.");
+    onMovido();
+  }
+
+  return (
+    <div className="mt-1">
+      <label
+        className="relative inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
+        style={{ color: deal.stage.color, backgroundColor: `${deal.stage.color}1a` }}
+        title="Mudar de coluna ou de funil"
+      >
+        {movendo && <Loader2 className="size-3 animate-spin" />}
+        <span className="truncate">
+          {variosFunis && <span className="opacity-75">{deal.stage.pipeline.name} · </span>}
+          {deal.stage.name}
+        </span>
+        <span aria-hidden>▾</span>
+        {/* O <select> fica por cima, invisível: o selo é o botão, a lista é a do sistema. */}
+        <select
+          value={deal.stageId}
+          disabled={!colunas || movendo}
+          onChange={(e) => void mover(e.target.value)}
+          aria-label="Mover para outra coluna ou funil"
+          className="absolute inset-0 cursor-pointer opacity-0"
+        >
+          {variosFunis
+            ? funis.map((f) => (
+                <optgroup key={f.id} label={f.name}>
+                  {f.colunas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))
+            : funis[0]?.colunas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+        </select>
+      </label>
+      {erro && <p className="mt-1 text-xs text-[var(--color-hot)]">{erro}</p>}
+    </div>
+  );
+}
+
+/**
+ * Enviar o lead para o Pipedrive. Depois de enviado, vira o link do negócio
+ * lá, com um botão para atualizar (título e valor) sem duplicar.
+ */
+function BotaoPipedrive({ deal, onEnviado }: { deal: DealDetail; onEnviado: () => void }) {
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar() {
+    setEnviando(true);
+    setErro(null);
+    const res = await fetch(`/api/deals/${deal.id}/pipedrive`, { method: "POST" }).catch(() => null);
+    setEnviando(false);
+    if (!res?.ok) return setErro((await res?.json().catch(() => null))?.error ?? "Não deu para enviar ao Pipedrive.");
+    onEnviado();
+  }
+
+  return (
+    <div className="mt-1.5">
+      {deal.pipedrive.url ? (
+        <span className="inline-flex items-center gap-1">
+          <a
+            href={deal.pipedrive.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] font-semibold hover:text-[var(--color-accent)]"
+          >
+            No Pipedrive <ExternalLink className="size-3" />
+          </a>
+          <button
+            onClick={() => void enviar()}
+            disabled={enviando}
+            title="Atualizar o negócio no Pipedrive (título e valor)"
+            aria-label="Atualizar no Pipedrive"
+            className="rounded-full p-1 text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3", enviando && "animate-spin")} />
+          </button>
+        </span>
+      ) : (
+        <button
+          onClick={() => void enviar()}
+          disabled={enviando}
+          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
+        >
+          {enviando ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+          {enviando ? "Enviando…" : "Enviar para o Pipedrive"}
+        </button>
+      )}
+      {erro && <p className="mt-1 text-xs text-[var(--color-hot)]">{erro}</p>}
     </div>
   );
 }
@@ -313,6 +455,7 @@ export function DealPanel({
       activities: bruto.activities ?? [],
       labelEvents: bruto.labelEvents ?? [],
       scoreFactors: bruto.scoreFactors ?? [],
+      pipedrive: bruto.pipedrive ?? { conectado: false, url: null },
     });
   }
 
@@ -467,15 +610,8 @@ export function DealPanel({
                   </p>
                 )}
                 {erroEdicao && <p className="mt-1 text-xs text-[var(--color-hot)]">{erroEdicao}</p>}
-                <span
-                  className="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px]"
-                  style={{
-                    color: deal.stage.color,
-                    backgroundColor: `${deal.stage.color}1a`,
-                  }}
-                >
-                  {deal.stage.name}
-                </span>
+                <MoverLead deal={deal} onMovido={() => void load()} />
+                {deal.pipedrive.conectado && <BotaoPipedrive deal={deal} onEnviado={() => void load()} />}
               </div>
 
               <div className="flex items-center gap-1">

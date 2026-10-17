@@ -11,11 +11,13 @@ type Stage = {
   isWon: boolean;
   isLost: boolean;
   _count: { deals: number };
+  pipeline: { id: string; name: string };
 };
 
 export function StageEditor() {
   const [stages, setStages] = useState<Stage[] | null>(null);
-  const [novo, setNovo] = useState("");
+  /** Nome da coluna nova, por funil. */
+  const [novo, setNovo] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
 
   async function carregar() {
@@ -45,16 +47,17 @@ export function StageEditor() {
     void carregar();
   }
 
-  async function criar() {
-    if (!novo.trim()) return;
+  async function criar(pipelineId: string) {
+    const nome = (novo[pipelineId] ?? "").trim();
+    if (!nome) return;
     setErro(null);
     const res = await fetch("/api/stages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: novo.trim() }),
+      body: JSON.stringify({ name: nome, pipelineId }),
     });
     if (!res.ok) setErro((await res.json()).error ?? "Falha ao criar");
-    setNovo("");
+    setNovo((n) => ({ ...n, [pipelineId]: "" }));
     void carregar();
   }
 
@@ -69,6 +72,14 @@ export function StageEditor() {
     return <p className="text-sm text-[var(--color-muted)]">Carregando…</p>;
   }
 
+  // Um bloco por funil, na ordem que a API devolve.
+  const funis: { id: string; name: string; colunas: Stage[] }[] = [];
+  for (const s of stages) {
+    const f = funis.find((x) => x.id === s.pipeline.id);
+    if (f) f.colunas.push(s);
+    else funis.push({ id: s.pipeline.id, name: s.pipeline.name, colunas: [s] });
+  }
+
   return (
     <div className="flex flex-col gap-2">
       {erro && (
@@ -77,7 +88,12 @@ export function StageEditor() {
         </p>
       )}
 
-      {stages.map((s) => (
+      {funis.map((funil) => (
+        <div key={funil.id} className="flex flex-col gap-2">
+          {funis.length > 1 && (
+            <p className="mt-3 text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)] first:mt-0">{funil.name}</p>
+          )}
+      {funil.colunas.map((s) => (
         <div key={s.id} className="flex items-center gap-2">
           <input
             type="color"
@@ -109,23 +125,25 @@ export function StageEditor() {
         </div>
       ))}
 
-      <div className="mt-2 flex gap-2">
+      <div className="mt-1 flex gap-2">
         <input
-          value={novo}
-          onChange={(e) => setNovo(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void criar()}
-          placeholder="Nome do novo estágio…"
+          value={novo[funil.id] ?? ""}
+          onChange={(e) => setNovo((n) => ({ ...n, [funil.id]: e.target.value }))}
+          onKeyDown={(e) => e.key === "Enter" && void criar(funil.id)}
+          placeholder={funis.length > 1 ? `Nova coluna em ${funil.name}…` : "Nome do novo estágio…"}
           className="flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--color-muted)]"
         />
         <button
-          onClick={() => void criar()}
-          disabled={!novo.trim()}
+          onClick={() => void criar(funil.id)}
+          disabled={!(novo[funil.id] ?? "").trim()}
           className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm disabled:opacity-40"
         >
           <Plus className="size-3.5" />
           Adicionar
         </button>
       </div>
+        </div>
+      ))}
     </div>
   );
 }

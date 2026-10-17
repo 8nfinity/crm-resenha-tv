@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { moveDealToStage, recalculateScore } from "@/lib/deals";
+import { avisarMudanca } from "@/lib/eventos";
 
 const bodySchema = z.object({ stageId: z.string().min(1) });
 
@@ -21,6 +22,9 @@ export async function POST(
     // Mudar de estágio altera o avanço no funil e zera o tempo parado,
     // então o score muda junto.
     const score = await recalculateScore(id);
+    // Outras telas abertas (e o quadro, quando a mudança veio do painel do
+    // lead — inclusive para outro funil) se atualizam.
+    avisarMudanca({ dealIds: [id], motivo: "funil" });
     return NextResponse.json({ ok: true, score: score?.score ?? null });
   } catch (error) {
     console.error("Falha ao mover deal", error);

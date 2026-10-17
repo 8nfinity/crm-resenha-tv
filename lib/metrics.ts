@@ -37,6 +37,8 @@ export type StageMetric = {
 
 export type FunnelMetrics = {
   dias: number;
+  /** De qual funil são as contas (cada funil tem as suas colunas). */
+  funil: { id: string; name: string } | null;
   estagios: StageMetric[];
   novos: number;
   ganhos: number;
@@ -58,8 +60,15 @@ function diasAtras(dias: number): Date {
   return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 }
 
-export async function funnelMetrics(dias: number): Promise<FunnelMetrics> {
+/**
+ * Métricas de UM funil — conversão entre colunas só faz sentido dentro dele.
+ * Sem `pipelineId`, o primeiro funil.
+ */
+export async function funnelMetrics(dias: number, pipelineId?: string): Promise<FunnelMetrics> {
   const desde = diasAtras(dias);
+  const funil = pipelineId
+    ? await prisma.pipeline.findUnique({ where: { id: pipelineId }, select: { id: true, name: true } })
+    : await prisma.pipeline.findFirst({ orderBy: { order: "asc" }, select: { id: true, name: true } });
 
   // As quatro consultas são independentes entre si. Sequenciais, cada uma paga
   // os ~200ms de rede até o banco (que fica em outra região) — quatro idas
@@ -70,7 +79,7 @@ export async function funnelMetrics(dias: number): Promise<FunnelMetrics> {
   // avança de novo geraria duas passagens pelo mesmo ponto, inflando a
   // conversão. O `groupBy` do Prisma conta linhas, não valores distintos.
   const [estagios, chegadas, permanencia, atuais] = await Promise.all([
-    prisma.stage.findMany({ orderBy: { order: "asc" } }),
+    prisma.stage.findMany({ where: { pipelineId: funil?.id ?? "" }, orderBy: { order: "asc" } }),
 
     prisma.$queryRaw<{ toStageId: string; total: bigint }[]>`
       SELECT "toStageId", COUNT(DISTINCT "dealId") AS total
@@ -99,6 +108,7 @@ export async function funnelMetrics(dias: number): Promise<FunnelMetrics> {
   if (estagios.length === 0) {
     return {
       dias,
+      funil,
       estagios: [],
       novos: 0,
       ganhos: 0,
@@ -155,6 +165,7 @@ export async function funnelMetrics(dias: number): Promise<FunnelMetrics> {
 
   return {
     dias,
+    funil,
     estagios: metrics,
     novos,
     ganhos,

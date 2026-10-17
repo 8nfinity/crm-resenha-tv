@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { activityReport, funnelMetrics } from "@/lib/metrics";
+import { listarFunis } from "@/lib/funis";
 
 /**
  * Ferramentas de métricas.
@@ -28,12 +29,20 @@ export const metricasFunil = {
   description:
     "Métricas do funil num período: quantos leads passaram por cada estágio, taxa " +
     "de conversão entre etapas, tempo médio por estágio e onde está o gargalo. " +
-    "Use para relatórios e para perguntas sobre desempenho do funil.",
+    "Use para relatórios e para perguntas sobre desempenho do funil. O CRM pode " +
+    "ter vários funis (Captação, Relacionamento…); sem 'funil', usa o primeiro.",
   schema: z.object({
     dias: z.number().min(1).max(730).default(30).describe("Período em dias."),
+    funil: z.string().optional().describe("Nome do funil, ex.: 'Captação'. Sem ele, o primeiro funil."),
   }),
-  async handler(args: { dias?: number }) {
-    const m = await funnelMetrics(args.dias ?? 30);
+  async handler(args: { dias?: number; funil?: string }) {
+    const funis = await listarFunis();
+    const pedido = args.funil?.trim().toLowerCase();
+    const escolhido = pedido ? funis.find((f) => f.name.toLowerCase() === pedido) : funis[0];
+    if (pedido && !escolhido) {
+      return `Não existe funil chamado "${args.funil}". Funis: ${funis.map((f) => f.name).join(", ")}.`;
+    }
+    const m = await funnelMetrics(args.dias ?? 30, escolhido?.id);
 
     if (m.estagios.length === 0) {
       return "Nenhum estágio configurado no funil.";
@@ -46,7 +55,8 @@ export const metricasFunil = {
     );
 
     return [
-      `# Funil nos últimos ${m.dias} dias`,
+      `# Funil ${m.funil?.name ?? ""} nos últimos ${m.dias} dias`,
+      funis.length > 1 ? `(Outros funis: ${funis.filter((f) => f.id !== m.funil?.id).map((f) => f.name).join(", ")})` : "",
       "",
       "| Estágio | Passaram | Conversão da etapa anterior | Estão agora | Tempo médio no estágio |",
       "|---|---|---|---|---|",

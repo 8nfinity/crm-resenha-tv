@@ -3,6 +3,7 @@ import { describeScore } from "@/lib/scoring";
 import type { DealCard, StageColumn, StoredScoreFactors } from "@/lib/types";
 import { formatPhone } from "@/lib/evolution/parse";
 import { lerValores, listarCampos, type Campo } from "@/lib/custom-fields";
+import { nomeDaAtividade, sinalDoLead } from "@/lib/atividades";
 
 /**
  * Consultas de leitura compartilhadas entre a interface e as ferramentas do MCP.
@@ -56,10 +57,15 @@ function parseScoreFactors(raw: unknown): StoredScoreFactors {
   return { summary: "", factors: [] };
 }
 
-export async function getStages(): Promise<StageColumn[]> {
-  const stages = await prisma.stage.findMany({ orderBy: { order: "asc" } });
+/** Colunas de um funil (ou de todos, na ordem dos funis). */
+export async function getStages(pipelineId?: string): Promise<StageColumn[]> {
+  const stages = await prisma.stage.findMany({
+    where: pipelineId ? { pipelineId } : undefined,
+    orderBy: [{ pipeline: { order: "asc" } }, { order: "asc" }],
+  });
   return stages.map((s) => ({
     id: s.id,
+    pipelineId: s.pipelineId,
     name: s.name,
     order: s.order,
     color: s.color,
@@ -74,7 +80,8 @@ export async function getStages(): Promise<StageColumn[]> {
  * de conversas do celular. Lead sem mensagem nenhuma vai para baixo, pelo
  * mais novo. O score continua no card, mas não decide a posição.
  */
-export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
+export async function getDealCards(campos?: Campo[], pipelineId?: string): Promise<DealCard[]> {
+  const ativos = { archivedAt: null, ...(pipelineId ? { stage: { pipelineId } } : {}) };
   // Cada ida ao banco custa ~200ms de rede (ele fica em outra região). O que
   // não depende do resultado anterior tem que viajar junto, senão a página
   // paga esse pedágio uma vez por consulta.
@@ -87,9 +94,9 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
   // resposta também custa viagens (centenas de KB não cabem numa ida só).
   // A conta vem à parte — são uma ou duas linhas, e no JOIN ela se repetia
   // inteira em cada um dos cards.
-  const [deals, camposLista, previews, openCounts, contas] = await Promise.all([
+  const [deals, camposLista, previews, abertas, contas] = await Promise.all([
     prisma.deal.findMany({
-      where: { archivedAt: null },
+      where: ativos,
       orderBy: [{ lastInteractionAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       // JOIN de verdade. No modo padrao o Prisma buscaria deals e depois
       // contatos — duas viagens de 200ms para montar um card.
@@ -122,24 +129,49 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
     // O chamador pode já ter as definições — a página do funil precisa delas
     // para os filtros, e buscar duas vezes seria uma viagem jogada fora.
     campos ? Promise.resolve(campos) : listarCampos(),
-    lastMessagePerActiveDeal(),
-    prisma.activity.groupBy({
-      by: ["dealId"],
-      where: { doneAt: null, deal: { archivedAt: null } },
-      _count: { _all: true },
+    lastMessagePerActiveDeal(pipelineId),
+    // As atividades em aberto, só o que o card usa: o ícone (atrasada, hoje,
+    // futura ou nenhuma) sai do prazo mais antigo de cada lead. Em ordem de
+    // prazo, as sem data por último.
+    prisma.activity.findMany({
+      where: { doneAt: null, deal: ativos },
+      orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+      select: { dealId: true, dueAt: true, title: true, type: true, kind: { select: { name: true } } },
     }),
     prisma.whatsAppAccount.findMany({
       select: { id: true, label: true, instanceName: true, color: true },
     }),
   ]);
 
-  const openMap = new Map(openCounts.map((a) => [a.dealId, a._count._all]));
+  const agora = new Date();
+  const porDeal = new Map<string, { total: number; atrasadas: number; primeira: (typeof abertas)[number] }>();
+  for (const a of abertas) {
+    const atual = porDeal.get(a.dealId);
+    const atrasada = a.dueAt !== null && a.dueAt < agora ? 1 : 0;
+    if (atual) {
+      atual.total += 1;
+      atual.atrasadas += atrasada;
+    } else {
+      porDeal.set(a.dealId, { total: 1, atrasadas: atrasada, primeira: a });
+    }
+  }
   const contaPorId = new Map(contas.map((c) => [c.id, c]));
   const camposFinal = camposLista;
 
   return deals.map((deal) => {
     const stored = parseScoreFactors(deal.scoreFactors);
     const conta = contaPorId.get(deal.contact.accountId);
+    const atividades = porDeal.get(deal.id);
+    const proximaAtividade = atividades
+      ? {
+          nome: nomeDaAtividade({
+            title: atividades.primeira.title,
+            type: atividades.primeira.type,
+            tipoNome: atividades.primeira.kind?.name,
+          }),
+          dueAt: atividades.primeira.dueAt?.toISOString() ?? null,
+        }
+      : null;
     return {
       id: deal.id,
       stageId: deal.stageId,
@@ -164,7 +196,10 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
       enteredStageAt: deal.enteredStageAt.toISOString(),
       daysInStage: daysSince(deal.enteredStageAt),
       lastMessagePreview: previews.get(deal.contactId) ?? null,
-      openActivities: openMap.get(deal.id) ?? 0,
+      openActivities: atividades?.total ?? 0,
+      proximaAtividade,
+      atrasadas: atividades?.atrasadas ?? 0,
+      sinal: sinalDoLead(proximaAtividade, agora),
       customValues: lerValores(deal.customValues, camposFinal),
     };
   });
@@ -177,15 +212,23 @@ export async function getDealCards(campos?: Campo[]): Promise<DealCard[]> {
  * grupo" numa passada só. A alternativa portável seria N queries ou uma window
  * function bem mais pesada.
  */
-async function lastMessagePerActiveDeal(): Promise<Map<string, string>> {
-  const rows = await prisma.$queryRaw<
-    { contactId: string; body: string | null; fromMe: boolean; type: string }[]
-  >`
-    SELECT DISTINCT ON (m."contactId") m."contactId", m."body", m."fromMe", m."type"::text
-    FROM "Message" m
-    WHERE m."contactId" IN (SELECT "contactId" FROM "Deal" WHERE "archivedAt" IS NULL)
-    ORDER BY m."contactId", m."timestamp" DESC
-  `;
+async function lastMessagePerActiveDeal(pipelineId?: string): Promise<Map<string, string>> {
+  const rows = pipelineId
+    ? await prisma.$queryRaw<{ contactId: string; body: string | null; fromMe: boolean; type: string }[]>`
+        SELECT DISTINCT ON (m."contactId") m."contactId", m."body", m."fromMe", m."type"::text
+        FROM "Message" m
+        WHERE m."contactId" IN (
+          SELECT d."contactId" FROM "Deal" d JOIN "Stage" s ON s."id" = d."stageId"
+          WHERE d."archivedAt" IS NULL AND s."pipelineId" = ${pipelineId}
+        )
+        ORDER BY m."contactId", m."timestamp" DESC
+      `
+    : await prisma.$queryRaw<{ contactId: string; body: string | null; fromMe: boolean; type: string }[]>`
+        SELECT DISTINCT ON (m."contactId") m."contactId", m."body", m."fromMe", m."type"::text
+        FROM "Message" m
+        WHERE m."contactId" IN (SELECT "contactId" FROM "Deal" WHERE "archivedAt" IS NULL)
+        ORDER BY m."contactId", m."timestamp" DESC
+      `;
 
   return new Map(
     rows.map((r) => {
@@ -222,7 +265,7 @@ export async function getDealDetail(dealId: string) {
           labelEvents: { orderBy: { createdAt: "desc" }, take: 300 },
         },
       },
-      stage: true,
+      stage: { include: { pipeline: { select: { id: true, name: true } } } },
       notes: { orderBy: { createdAt: "desc" } },
       activities: {
         orderBy: { createdAt: "desc" },

@@ -702,16 +702,18 @@ async function aplicar(
 
   const existente = await prisma.deal.findUnique({
     where: { contactId: contato.id },
-    include: { stage: { select: { order: true, name: true } } },
+    include: { stage: { select: { order: true, name: true, pipelineId: true } } },
   });
 
   if (soParaFrente && existente) {
-    // Lead arquivado fica arquivado e lead que já avançou não volta.
+    // Lead arquivado fica arquivado e lead que já avançou não volta. "Adiante"
+    // só existe dentro do mesmo funil: etiqueta de outro funil leva o lead
+    // para lá.
     const motivo = existente.archivedAt
       ? "lead arquivado"
       : existente.stageId === estagio.id
         ? "o lead já está nesse estágio"
-        : existente.stage.order > estagio.order
+        : existente.stage.pipelineId === estagio.pipelineId && existente.stage.order > estagio.order
           ? `o lead já está adiante (${existente.stage.name})`
           : null;
     if (motivo) {

@@ -14,15 +14,19 @@ import { avisarMudanca } from "@/lib/eventos";
  * Ao juntar dois leads da mesma pessoa, vale o estágio de quem andou por
  * último no funil. É o caso da etiqueta que caiu na cópia (chegou pelo LID
  * antes de o CRM saber o telefone): juntar não pode desfazer o movimento.
- * Cópia parada na primeira coluna nunca puxa o lead de volta.
+ * Cópia parada na primeira coluna (de qualquer funil) nunca puxa o lead de volta.
  */
 export function copiaDecideOEstagio(
   manter: { stageId: string; enteredStageAt: Date },
   copia: { stageId: string; enteredStageAt: Date },
-  primeiraColunaId: string | null,
+  primeirasColunas: string | null | ReadonlySet<string>,
 ): boolean {
-  if (copia.stageId === primeiraColunaId || copia.stageId === manter.stageId) return false;
-  return manter.stageId === primeiraColunaId || copia.enteredStageAt > manter.enteredStageAt;
+  const ehPrimeira = (id: string) =>
+    typeof primeirasColunas === "string" || primeirasColunas === null
+      ? id === primeirasColunas
+      : primeirasColunas.has(id);
+  if (ehPrimeira(copia.stageId) || copia.stageId === manter.stageId) return false;
+  return ehPrimeira(manter.stageId) || copia.enteredStageAt > manter.enteredStageAt;
 }
 
 export async function mesclarContatos(manterId: string, removerId: string): Promise<void> {
@@ -64,8 +68,13 @@ export async function mesclarContatos(manterId: string, removerId: string): Prom
         data: { dealId: dealManter.id },
       });
 
-      const primeira = await tx.stage.findFirst({ orderBy: { order: "asc" }, select: { id: true } });
-      const herdaEstagio = copiaDecideOEstagio(dealManter, dealRemover, primeira?.id ?? null);
+      // A primeira coluna de cada funil: é onde o lead nasce, em qualquer um deles.
+      const primeiras = await tx.stage.findMany({
+        orderBy: [{ pipelineId: "asc" }, { order: "asc" }],
+        distinct: ["pipelineId"],
+        select: { id: true },
+      });
+      const herdaEstagio = copiaDecideOEstagio(dealManter, dealRemover, new Set(primeiras.map((s) => s.id)));
       const maior = (a: Date | null, b: Date | null) => (!a ? b : !b ? a : a > b ? a : b);
 
       await tx.deal.update({

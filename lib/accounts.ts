@@ -160,6 +160,7 @@ export async function listarContas() {
     phone: conta.phone,
     status: conta.status,
     color: conta.color,
+    entryPipelineId: conta.entryPipelineId,
     contatos: contatosPorConta.get(conta.id) ?? 0,
     leads: leadsPorConta.get(conta.id) ?? 0,
     lastImportAt: conta.lastImportAt?.toISOString() ?? null,

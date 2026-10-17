@@ -9,8 +9,10 @@ import {
   ChevronRight,
   Clock,
   ExternalLink,
+  List,
   Plus,
   RotateCcw,
+  Search,
   Trash2,
   User,
   X,
@@ -33,6 +35,13 @@ import {
 } from "@/lib/atividades";
 import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
 import { DealPanel } from "@/components/kanban/deal-panel";
+import {
+  FILTROS_LISTA_PADRAO,
+  PERIODOS_LISTA,
+  filtrarLista,
+  filtrosExtrasAtivos,
+  type FiltrosLista,
+} from "@/lib/lista-atividades";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,7 +54,29 @@ import { cn } from "@/lib/utils";
  * o olho e sabe o que é follow-up e o que é reunião.
  */
 
-export type Visao = "dia" | "semana" | "mes" | "agenda";
+/** "lista" é a tabela de atividades; as outras, o calendário. */
+export type Visao = "lista" | "dia" | "semana" | "mes" | "agenda";
+type VisaoCalendario = Exclude<Visao, "lista">;
+
+/** Onde os filtros e a última vista do calendário ficam guardados (só neste navegador). */
+const GUARDA_FILTROS = "crm_calendario_filtros";
+const GUARDA_VISAO = "crm_calendario_visao";
+
+function lerGuardado<T>(chave: string, padrao: T): T {
+  try {
+    const bruto = window.localStorage.getItem(chave);
+    return bruto ? { ...padrao, ...JSON.parse(bruto) } : padrao;
+  } catch {
+    return padrao;
+  }
+}
+function guardar(chave: string, valor: unknown) {
+  try {
+    window.localStorage.setItem(chave, typeof valor === "string" ? valor : JSON.stringify(valor));
+  } catch {
+    // Navegador sem armazenamento (aba anônima): os filtros só não ficam lembrados.
+  }
+}
 
 const HORA_PX = 48;
 /** Atividade não tem duração; na grade ela ocupa um bloco de 1 hora. */
@@ -57,7 +88,7 @@ const semNulo = (t: { type: string; kindId: string | null }) => (t.kindId ? t : 
 /** Cor da atividade: a do tipo criado por você, ou a fixa do tipo. */
 const corDo = (a: { type: string; tipoCor?: string | null }) => a.tipoCor ?? COR_TIPO[a.type as TipoAtividade] ?? COR_TIPO.OTHER;
 
-const NOMES_VISAO: Record<Visao, string> = { dia: "Dia", semana: "Semana", mes: "Mês", agenda: "Programação" };
+const NOMES_VISAO: Record<VisaoCalendario, string> = { dia: "Dia", semana: "Semana", mes: "Mês", agenda: "Programação" };
 const DIAS_CURTOS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
 
 // ── Datas ────────────────────────────────────────────────────────────────────
@@ -110,12 +141,16 @@ export function Calendario({
   atividades: iniciais,
   atrasadasTotal,
   leads,
+  responsaveis,
+  funis,
 }: {
   visao: Visao;
   dataIso: string;
   atividades: AtividadeCalendario[];
   atrasadasTotal: number;
   leads: { id: string; nome: string }[];
+  responsaveis: { id: string; nome: string }[];
+  funis: { id: string; nome: string }[];
 }) {
   const router = useRouter();
   const ref = deChave(dataIso);
@@ -140,13 +175,41 @@ export function Calendario({
     return () => clearInterval(t);
   }, []);
 
+  // Filtros da Lista (e responsável/funil, que valem no calendário também).
+  // Guardados neste navegador; lidos só depois de montar, para o desenho do
+  // servidor e o da tela baterem.
+  const [filtros, setFiltrosEstado] = useState<FiltrosLista>(FILTROS_LISTA_PADRAO);
+  const [ultimaVisaoCal, setUltimaVisaoCal] = useState<VisaoCalendario>("semana");
+  useEffect(() => {
+    setFiltrosEstado(lerGuardado(GUARDA_FILTROS, FILTROS_LISTA_PADRAO));
+    try {
+      const v = window.localStorage.getItem(GUARDA_VISAO) as VisaoCalendario | null;
+      if (v && v in NOMES_VISAO) setUltimaVisaoCal(v);
+    } catch {}
+  }, []);
+  const setFiltros = (f: FiltrosLista) => {
+    setFiltrosEstado(f);
+    guardar(GUARDA_FILTROS, f);
+  };
+
   function ir(v: Visao, d: Date) {
+    if (v !== "lista") {
+      setUltimaVisaoCal(v);
+      guardar(GUARDA_VISAO, v);
+    }
     router.push(`/calendario?visao=${v}&data=${chaveDia(d)}`, { scroll: false });
   }
 
   const visiveis = useMemo(
-    () => atividades.filter((a) => !ocultos.has(a.tipo) && (mostrarFeitas || !a.doneAt)),
-    [atividades, ocultos, mostrarFeitas],
+    () =>
+      atividades.filter(
+        (a) =>
+          !ocultos.has(a.tipo) &&
+          (mostrarFeitas || !a.doneAt) &&
+          (filtros.responsavel === "-" ? a.responsavel === null : !filtros.responsavel || a.responsavel?.id === filtros.responsavel) &&
+          (!filtros.funil || a.deal.funilId === filtros.funil),
+      ),
+    [atividades, ocultos, mostrarFeitas, filtros.responsavel, filtros.funil],
   );
   const porDia = useMemo(() => {
     const m = new Map<string, AtividadeCalendario[]>();
@@ -179,8 +242,8 @@ export function Calendario({
 
   return (
     <div className="flex min-h-0 flex-1 gap-4 px-4 pb-4 pt-4 sm:px-8">
-      {/* ── Barra lateral ── */}
-      <aside className="scroll-thin hidden w-64 shrink-0 flex-col gap-5 overflow-y-auto lg:flex">
+      {/* ── Barra lateral (só no calendário; a lista tem a própria barra de filtros) ── */}
+      <aside className={cn("scroll-thin hidden w-64 shrink-0 flex-col gap-5 overflow-y-auto", visao !== "lista" && "lg:flex")}>
         <button
           onClick={() => setCriar({ data: chaveDia(ref), hora: "09:00" })}
           className="inline-flex w-fit items-center gap-3 rounded-2xl bg-[var(--color-surface)] py-3.5 pl-4 pr-6 text-sm font-semibold shadow-[var(--shadow-card)] backdrop-blur-2xl transition-colors hover:bg-[var(--color-surface-2)]"
@@ -229,6 +292,8 @@ export function Calendario({
           </ul>
         </div>
 
+        <FiltrosDePessoaEFunil filtros={filtros} onChange={setFiltros} responsaveis={responsaveis} funis={funis} vertical />
+
         <div className="rounded-2xl border border-[var(--color-border)] p-3 text-xs">
           <p className="flex justify-between">
             <span className="text-[var(--color-muted)]">A fazer hoje</span>
@@ -243,7 +308,25 @@ export function Calendario({
 
       {/* ── Área principal ── */}
       <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[28px]">
+        {visao === "lista" ? (
+          <VisaoLista
+            atividades={atividades}
+            agora={agora}
+            filtros={filtros}
+            onFiltros={setFiltros}
+            responsaveis={responsaveis}
+            funis={funis}
+            proprios={proprios}
+            alternador={<AlternarModo lista onCalendario={() => ir(ultimaVisaoCal, ref)} onLista={() => {}} />}
+            onCriar={() => setCriar({ data: chaveDia(agora ?? ref), hora: "09:00" })}
+            onAbrir={setDetalheId}
+            onAbrirLead={setLeadAberto}
+            onAlternar={(a) => void alternar(a)}
+          />
+        ) : (
+        <>
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+          <AlternarModo lista={false} onLista={() => ir("lista", ref)} onCalendario={() => {}} />
           <button
             onClick={() => ir(visao, agora ?? new Date())}
             className="rounded-full border px-4 py-1.5 text-sm font-semibold hover:bg-[var(--color-surface-2)]"
@@ -267,7 +350,7 @@ export function Calendario({
               <Plus className="size-5" />
             </button>
             <div className="flex rounded-full border p-0.5">
-              {(Object.keys(NOMES_VISAO) as Visao[]).map((v) => (
+              {(Object.keys(NOMES_VISAO) as VisaoCalendario[]).map((v) => (
                 <button
                   key={v}
                   onClick={() => ir(v, ref)}
@@ -305,6 +388,8 @@ export function Calendario({
         )}
         {visao === "agenda" && (
           <VisaoAgenda ref_={ref} hojeChave={hojeChave} porDia={porDia} onAbrir={setDetalheId} onAlternar={(a) => void alternar(a)} />
+        )}
+        </>
         )}
       </section>
 
@@ -748,6 +833,314 @@ function VisaoAgenda({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Lista ↔ Calendário ───────────────────────────────────────────────────────
+
+/** Os dois botões do topo, como no Pipedrive: a lista e o calendário. */
+function AlternarModo({ lista, onLista, onCalendario }: { lista: boolean; onLista: () => void; onCalendario: () => void }) {
+  const botao = (ativo: boolean) =>
+    cn(
+      "grid h-8 w-10 place-items-center rounded-full transition-colors",
+      ativo ? "bolha text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
+    );
+  return (
+    <div className="flex shrink-0 rounded-full border p-0.5" role="group" aria-label="Modo de exibição">
+      <button onClick={onLista} className={botao(lista)} aria-pressed={lista} title="Lista">
+        <List className="size-4" />
+      </button>
+      <button onClick={onCalendario} className={botao(!lista)} aria-pressed={!lista} title="Calendário">
+        <CalendarDays className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+/** Responsável e funil: valem na lista e no calendário. */
+function FiltrosDePessoaEFunil({
+  filtros,
+  onChange,
+  responsaveis,
+  funis,
+  vertical = false,
+}: {
+  filtros: FiltrosLista;
+  onChange: (f: FiltrosLista) => void;
+  responsaveis: { id: string; nome: string }[];
+  funis: { id: string; nome: string }[];
+  vertical?: boolean;
+}) {
+  const estilo = (ativo: boolean) =>
+    cn(
+      "rounded-full px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]",
+      ativo ? "bolha font-semibold text-white" : "border bg-transparent text-[var(--color-muted)]",
+      vertical && "w-full",
+    );
+  return (
+    <div className={cn("flex gap-2", vertical ? "flex-col" : "flex-wrap items-center")}>
+      {vertical && <p className="text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)]">Filtros</p>}
+      <select
+        value={filtros.responsavel}
+        onChange={(e) => onChange({ ...filtros, responsavel: e.target.value })}
+        aria-label="Responsável"
+        className={estilo(Boolean(filtros.responsavel))}
+      >
+        <option value="">Todos os responsáveis</option>
+        {responsaveis.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.nome}
+          </option>
+        ))}
+        <option value="-">Sem responsável</option>
+      </select>
+      {funis.length > 1 && (
+        <select
+          value={filtros.funil}
+          onChange={(e) => onChange({ ...filtros, funil: e.target.value })}
+          aria-label="Funil"
+          className={estilo(Boolean(filtros.funil))}
+        >
+          <option value="">Todos os funis</option>
+          {funis.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.nome}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
+// ── Visão Lista (tabela) ─────────────────────────────────────────────────────
+
+/** "Hoje, 14:00" · "Amanhã, 09:00" · "qua., 22/10 às 09:00" */
+function prazoCurto(iso: string, agora: Date | null): string {
+  const ref = agora ?? new Date();
+  const dia = chaveDia(iso);
+  const amanha = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + 1);
+  const ontem = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - 1);
+  if (dia === chaveDia(ref)) return `Hoje, ${hora(iso)}`;
+  if (dia === chaveDia(amanha)) return `Amanhã, ${hora(iso)}`;
+  if (dia === chaveDia(ontem)) return `Ontem, ${hora(iso)}`;
+  const d = new Date(iso);
+  const data = d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", ...(d.getFullYear() !== ref.getFullYear() ? { year: "2-digit" } : {}) });
+  return `${data} às ${hora(iso)}`;
+}
+
+function VisaoLista({
+  atividades,
+  agora,
+  filtros,
+  onFiltros,
+  responsaveis,
+  funis,
+  proprios,
+  alternador,
+  onCriar,
+  onAbrir,
+  onAbrirLead,
+  onAlternar,
+}: {
+  atividades: AtividadeCalendario[];
+  agora: Date | null;
+  filtros: FiltrosLista;
+  onFiltros: (f: FiltrosLista) => void;
+  responsaveis: { id: string; nome: string }[];
+  funis: { id: string; nome: string }[];
+  proprios: ReturnType<typeof useTiposProprios>["proprios"];
+  alternador: React.ReactNode;
+  onCriar: () => void;
+  onAbrir: (id: string) => void;
+  onAbrirLead: (dealId: string) => void;
+  onAlternar: (a: AtividadeCalendario) => void;
+}) {
+  // Até montar, sem relógio: a lista espera um instante em vez de desenhar
+  // "hoje" pelo fuso do servidor.
+  const linhas = useMemo(
+    () => (agora ? filtrarLista(atividades, filtros, agora) : []),
+    [atividades, filtros, agora],
+  );
+  const set = (p: Partial<FiltrosLista>) => onFiltros({ ...filtros, ...p });
+  const tipos = opcoesDeTipo(proprios);
+  const alternarTipo = (chave: string) =>
+    set({ tipos: filtros.tipos.includes(chave) ? filtros.tipos.filter((t) => t !== chave) : [...filtros.tipos, chave] });
+  const extras = filtrosExtrasAtivos(filtros);
+  const variosFunis = funis.length > 1;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Linha 1: modo, título, criar */}
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+        {alternador}
+        <h1 className="ml-1 text-lg font-bold sm:text-xl">Atividades</h1>
+        <span className="text-sm tabular-nums text-[var(--color-muted)]">{agora ? linhas.length : "…"}</span>
+        <button
+          onClick={onCriar}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--color-ink)] px-4 py-1.5 text-sm font-semibold text-[var(--color-on-ink)]"
+        >
+          <Plus className="size-4" strokeWidth={2.5} /> Atividade
+        </button>
+      </div>
+
+      {/* Linha 2: tipos (como os botões do Pipedrive) e período */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => set({ tipos: [] })}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-semibold",
+              filtros.tipos.length === 0 ? "bolha text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
+            )}
+          >
+            Tudo
+          </button>
+          {tipos.map((o) => {
+            const ativo = filtros.tipos.includes(o.chave);
+            return (
+              <button
+                key={o.chave}
+                onClick={() => alternarTipo(o.chave)}
+                aria-pressed={ativo}
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors"
+                style={
+                  ativo
+                    ? { borderColor: o.cor, backgroundColor: `color-mix(in srgb, ${o.cor} 22%, transparent)`, color: "var(--color-text)" }
+                    : { color: "var(--color-muted)" }
+                }
+              >
+                <span className="size-2 rounded-full" style={{ backgroundColor: o.cor }} />
+                {o.nome}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1 lg:ml-auto">
+          {PERIODOS_LISTA.map((p) => (
+            <button
+              key={p.valor}
+              onClick={() => set({ periodo: p.valor })}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                filtros.periodo === p.valor ? "bolha text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
+              )}
+            >
+              {p.rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Linha 3: período escolhido, busca, responsável, funil */}
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5">
+        {filtros.periodo === "periodo" && (
+          <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted)]">
+            de
+            <input type="date" value={filtros.de} onChange={(e) => set({ de: e.target.value })} className="rounded-full border bg-transparent px-2.5 py-1 text-sm text-[var(--color-text)]" />
+            até
+            <input type="date" value={filtros.ate} onChange={(e) => set({ ate: e.target.value })} className="rounded-full border bg-transparent px-2.5 py-1 text-sm text-[var(--color-text)]" />
+          </span>
+        )}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
+          <input
+            value={filtros.busca}
+            onChange={(e) => set({ busca: e.target.value })}
+            placeholder="Buscar assunto, lead ou telefone…"
+            className="w-64 rounded-full border bg-transparent py-1.5 pl-8 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+          />
+        </div>
+        <FiltrosDePessoaEFunil filtros={filtros} onChange={onFiltros} responsaveis={responsaveis} funis={funis} />
+        {extras > 0 && (
+          <button
+            onClick={() => onFiltros({ ...filtros, tipos: [], responsavel: "", funil: "", busca: "" })}
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          >
+            <X className="size-3.5" /> Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {/* Tabela */}
+      <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+        <table className="w-full min-w-[56rem] border-collapse text-sm">
+          <thead className="sticky top-0 z-10 bg-[var(--color-solido)]">
+            <tr className="text-left text-xs font-semibold text-[var(--color-muted)]">
+              <th className="w-24 px-4 py-2.5">Concluído</th>
+              <th className="px-3 py-2.5">Assunto</th>
+              <th className="px-3 py-2.5">Lead</th>
+              <th className="px-3 py-2.5">Prazo</th>
+              <th className="px-3 py-2.5">Responsável</th>
+              <th className="px-3 py-2.5">Telefone</th>
+              {variosFunis && <th className="px-3 py-2.5">Funil</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {agora && linhas.length === 0 && (
+              <tr>
+                <td colSpan={variosFunis ? 7 : 6} className="px-4 py-12 text-center text-sm text-[var(--color-muted)]">
+                  Nenhuma atividade com esses filtros.
+                </td>
+              </tr>
+            )}
+            {linhas.map((a) => {
+              const s = situacao(a, agora ?? undefined);
+              const atrasada = s === "atrasada";
+              return (
+                <tr key={a.id} className="border-t transition-colors hover:bg-[var(--color-surface-2)]">
+                  <td className="px-4 py-2">
+                    <button
+                      onClick={() => onAlternar(a)}
+                      aria-label={a.doneAt ? "Reabrir" : "Marcar como feita"}
+                      title={a.doneAt ? "Reabrir" : "Marcar como feita"}
+                      className={cn(
+                        "grid size-5 place-items-center rounded-full border-2 transition-colors",
+                        a.doneAt
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-on-ink)]"
+                          : "border-[var(--color-muted)]/60 hover:border-[var(--color-accent)]",
+                      )}
+                    >
+                      {a.doneAt && <Check className="size-3" strokeWidth={3.5} />}
+                    </button>
+                  </td>
+                  <td className="max-w-[18rem] px-3 py-2">
+                    <button onClick={() => onAbrir(a.id)} className="flex min-w-0 items-center gap-2 text-left" title={tituloNaAgenda(a)}>
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: corDo(a) }} />
+                      <span
+                        className={cn(
+                          "truncate font-semibold hover:underline",
+                          a.doneAt && "text-[var(--color-muted)] line-through",
+                          atrasada && "text-[var(--color-hot)]",
+                        )}
+                      >
+                        {tituloNaAgenda(a)}
+                      </span>
+                    </button>
+                  </td>
+                  <td className="max-w-[14rem] px-3 py-2">
+                    <button onClick={() => onAbrirLead(a.deal.id)} className="max-w-full truncate text-left hover:underline" title={a.deal.estagio}>
+                      {a.deal.nome}
+                    </button>
+                  </td>
+                  <td className={cn("whitespace-nowrap px-3 py-2 tabular-nums", atrasada ? "font-semibold text-[var(--color-hot)]" : "text-[var(--color-muted)]")}>
+                    {a.doneAt && filtros.periodo === "concluidas"
+                      ? `feita ${prazoCurto(a.doneAt, agora)}`
+                      : a.dueAt
+                        ? prazoCurto(a.dueAt, agora)
+                        : "sem data"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-[var(--color-muted)]">{a.responsavel?.nome ?? "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums text-[var(--color-muted)]">{a.deal.telefone ?? "—"}</td>
+                  {variosFunis && <td className="whitespace-nowrap px-3 py-2 text-[var(--color-muted)]">{a.deal.funilNome}</td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

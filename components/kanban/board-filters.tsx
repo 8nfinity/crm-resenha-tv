@@ -3,6 +3,7 @@
 import { Search, X } from "lucide-react";
 import type { Campo } from "@/lib/custom-fields";
 import type { DealCard } from "@/lib/types";
+import { sinalDoLead, type SinalAtividades } from "@/lib/atividades";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,6 +19,8 @@ export type Filtros = {
   temperatura: "todas" | "quente" | "morno" | "frio";
   parados: number | null;
   contaId: string | null;
+  /** O ícone de atividades do card: atrasadas, hoje, futuras, sem nenhuma. */
+  atividade: "todas" | SinalAtividades;
   campos: Record<string, string>;
 };
 
@@ -26,6 +29,7 @@ export const FILTROS_VAZIOS: Filtros = {
   temperatura: "todas",
   parados: null,
   contaId: null,
+  atividade: "todas",
   campos: {},
 };
 
@@ -35,6 +39,7 @@ export function filtrosAtivos(f: Filtros): number {
     (f.temperatura !== "todas" ? 1 : 0) +
     (f.parados !== null ? 1 : 0) +
     (f.contaId ? 1 : 0) +
+    (f.atividade !== "todas" ? 1 : 0) +
     Object.values(f.campos).filter(Boolean).length
   );
 }
@@ -47,7 +52,7 @@ function naFaixa(score: number, t: Filtros["temperatura"]): boolean {
   return true;
 }
 
-export function aplicarFiltros(deals: DealCard[], f: Filtros): DealCard[] {
+export function aplicarFiltros(deals: DealCard[], f: Filtros, agora: Date | null = null): DealCard[] {
   const termo = f.busca.trim().toLowerCase();
   // Busca por telefone ignora formatação: você digita "98765" e acha
   // "+55 11 98765-4321".
@@ -72,6 +77,11 @@ export function aplicarFiltros(deals: DealCard[], f: Filtros): DealCard[] {
     if (!naFaixa(d.score, f.temperatura)) return false;
     if (f.parados !== null && d.daysInStage < f.parados) return false;
     if (f.contaId && d.account.id !== f.contaId) return false;
+    if (f.atividade !== "todas") {
+      // O mesmo cálculo do ícone do card: o filtro acha exatamente o que a tela mostra.
+      const sinal = agora ? sinalDoLead(d.proximaAtividade, agora) : d.sinal;
+      if (sinal !== f.atividade) return false;
+    }
 
     for (const [campoId, valor] of Object.entries(f.campos)) {
       if (!valor) continue;
@@ -135,6 +145,18 @@ export function BoardFilters({
           { valor: "7", rotulo: "Parados há 7+ dias" },
           { valor: "14", rotulo: "Parados há 14+ dias" },
           { valor: "30", rotulo: "Parados há 30+ dias" },
+        ]}
+      />
+
+      <Seletor
+        valor={filtros.atividade}
+        onChange={(v) => set({ atividade: v as Filtros["atividade"] })}
+        opcoes={[
+          { valor: "todas", rotulo: "Todas as atividades" },
+          { valor: "atrasada", rotulo: "🔴 Com atividade atrasada" },
+          { valor: "hoje", rotulo: "🟢 Atividade para hoje" },
+          { valor: "futura", rotulo: "⚪ Próxima em outro dia" },
+          { valor: "nenhuma", rotulo: "⚠️ Sem atividade marcada" },
         ]}
       />
 

@@ -21,7 +21,7 @@ export function rotuloTipo(tipo: string): string {
 
 /** Cor de cada tipo fixo — como as "agendas" do Google: bate o olho e sabe o que é. */
 export const COR_TIPO: Record<TipoAtividade, string> = {
-  FOLLOW_UP: "#2fe38c",
+  FOLLOW_UP: "#46c22d",
   MEETING: "#5eb8ff",
   CALL: "#a78bfa",
   PROPOSAL: "#f2d417",
@@ -110,6 +110,28 @@ export function situacao(
   if (prazo < agora) return "atrasada";
   if (chaveDia(prazo) === chaveDia(agora)) return "hoje";
   return "agendada";
+}
+
+/**
+ * O ícone de atividades no card do lead, como no Pipedrive:
+ *   atrasada  vermelho — tem atividade em aberto com o prazo vencido
+ *   hoje      verde    — a próxima é hoje (e nada atrasado)
+ *   futura    cinza    — a próxima é num outro dia (ou não tem data)
+ *   nenhuma   amarelo  — nada marcado para este lead
+ *
+ * `proxima` é a de prazo mais antigo: se alguma está atrasada, é ela.
+ */
+export type SinalAtividades = "atrasada" | "hoje" | "futura" | "nenhuma";
+
+export function sinalDoLead(
+  proxima: { dueAt: string | null } | null,
+  agora = new Date(),
+): SinalAtividades {
+  if (!proxima) return "nenhuma";
+  const s = situacao({ dueAt: proxima.dueAt, doneAt: null }, agora);
+  if (s === "atrasada") return "atrasada";
+  if (s === "hoje") return "hoje";
+  return "futura";
 }
 
 /** Valor inicial do campo de data: amanhã, 09:00 — o follow-up mais comum. */

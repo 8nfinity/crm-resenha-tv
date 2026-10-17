@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { StageEditor } from "@/components/stage-editor";
+import { PipedriveConfig } from "@/components/pipedrive-config";
 import { CopyField } from "@/components/copy-field";
 import { EtiquetasEIgnorados } from "@/components/contatos-ignorados";
 import { CustomFieldEditor } from "@/components/custom-field-editor";
@@ -150,10 +151,20 @@ export default async function ConfiguracoesPage() {
           <section className="card p-6">
             <h2 className="text-base font-semibold">Estágios do funil</h2>
             <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
-              As colunas do kanban. Renomear é seguro a qualquer momento; apagar
-              só é possível em estágio vazio e sem histórico.
+              As colunas do kanban, de cada funil. Renomear é seguro a qualquer momento; apagar
+              só é possível em estágio vazio e sem histórico. Funis novos se criam no seletor da tela Funil.
             </p>
             <StageEditor />
+          </section>
+
+          <section id="pipedrive" className="card scroll-mt-4 p-6">
+            <h2 className="text-base font-semibold">Pipedrive</h2>
+            <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
+              Leva leads do CRM para o Pipedrive: cria a pessoa (nome e telefone) e o negócio no funil escolhido,
+              com uma nota com as últimas mensagens e o link de volta para o lead. Sem duplicar — enviar de novo
+              atualiza o mesmo negócio.
+            </p>
+            <PipedriveConfig />
           </section>
           </>)}
         </div>

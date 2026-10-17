@@ -8,9 +8,11 @@ export const runtime = "nodejs";
 const patchSchema = z.object({
   label: z.string().trim().min(1).max(40).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  /** Funil onde caem os leads novos deste número (nulo: o primeiro funil). */
+  entryPipelineId: z.string().min(1).nullable().optional(),
 });
 
-/** Renomeia ou recolore a conta. Não toca na instância da Evolution. */
+/** Renomeia, recolore ou troca o funil de entrada da conta. Não toca na instância da Evolution. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

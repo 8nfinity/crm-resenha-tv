@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { contactName } from "@/lib/queries";
+import { formatPhone } from "@/lib/evolution/parse";
 import { numerosDeFollowUp } from "@/lib/follow-ups";
 import { chaveDoTipo } from "@/lib/atividades";
 
@@ -31,8 +32,34 @@ export type AtividadeCalendario = {
     nome: string;
     estagio: string;
     estagioCor: string;
+    /** Telefone do lead já formatado; nulo quando o WhatsApp não informou. */
+    telefone: string | null;
+    funilId: string;
+    funilNome: string;
   };
+  /** Quem marcou a atividade. Nulo nas automáticas ou de usuário removido. */
+  responsavel: { id: string; nome: string } | null;
 };
+
+const CAMPOS = {
+  id: true,
+  type: true,
+  kindId: true,
+  kind: { select: { name: true, color: true } },
+  title: true,
+  dueAt: true,
+  doneAt: true,
+  createdAt: true,
+  createdBy: { select: { id: true, name: true } },
+  deal: {
+    select: {
+      id: true,
+      title: true,
+      stage: { select: { name: true, color: true, pipeline: { select: { id: true, name: true } } } },
+      contact: { select: { savedName: true, pushName: true, phone: true, waJid: true } },
+    },
+  },
+} as const;
 
 export async function atividadesEntre(inicio: Date, fim: Date): Promise<AtividadeCalendario[]> {
   const linhas = await prisma.activity.findMany({
@@ -45,26 +72,33 @@ export async function atividadesEntre(inicio: Date, fim: Date): Promise<Atividad
     },
     orderBy: [{ dueAt: "asc" }, { doneAt: "asc" }],
     relationLoadStrategy: "join",
-    select: {
-      id: true,
-      type: true,
-      kindId: true,
-      kind: { select: { name: true, color: true } },
-      title: true,
-      dueAt: true,
-      doneAt: true,
-      createdAt: true,
-      deal: {
-        select: {
-          id: true,
-          title: true,
-          stage: { select: { name: true, color: true } },
-          contact: { select: { savedName: true, pushName: true, phone: true, waJid: true } },
-        },
-      },
-    },
+    select: CAMPOS,
   });
+  return montar(linhas);
+}
 
+/**
+ * Atividades da vista Lista: TUDO o que está em aberto, de qualquer data (as
+ * atrasadas de meses atrás e as marcadas para longe), mais o que foi feito
+ * nos últimos 60 dias. A lista filtra o período na tela, sem ir ao servidor.
+ */
+export async function atividadesParaLista(): Promise<AtividadeCalendario[]> {
+  const desde = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const linhas = await prisma.activity.findMany({
+    where: {
+      deal: { archivedAt: null },
+      OR: [{ doneAt: null }, { doneAt: { gte: desde } }],
+    },
+    orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+    relationLoadStrategy: "join",
+    select: CAMPOS,
+  });
+  return montar(linhas);
+}
+
+type Linha = Awaited<ReturnType<typeof prisma.activity.findMany<{ select: typeof CAMPOS }>>>[number];
+
+async function montar(linhas: Linha[]): Promise<AtividadeCalendario[]> {
   const numeros = await numerosDeFollowUp(linhas.filter((a) => a.type === "FOLLOW_UP").map((a) => a.deal.id));
 
   return linhas.map((a) => ({
@@ -83,8 +117,22 @@ export async function atividadesEntre(inicio: Date, fim: Date): Promise<Atividad
       nome: a.deal.title ?? contactName(a.deal.contact),
       estagio: a.deal.stage.name,
       estagioCor: a.deal.stage.color,
+      telefone: formatPhone(a.deal.contact.phone),
+      funilId: a.deal.stage.pipeline.id,
+      funilNome: a.deal.stage.pipeline.name,
     },
+    responsavel: a.createdBy ? { id: a.createdBy.id, nome: a.createdBy.name } : null,
   }));
+}
+
+/** Quem pode ser responsável: os usuários ativos, para o filtro. */
+export async function responsaveis(): Promise<{ id: string; nome: string }[]> {
+  const usuarios = await prisma.user.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  return usuarios.map((u) => ({ id: u.id, nome: u.name }));
 }
 
 /** Leads ativos, só id e nome — a lista de escolha ao agendar pelo calendário. */

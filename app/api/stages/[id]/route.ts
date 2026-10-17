@@ -27,9 +27,9 @@ export async function PATCH(
   if (!atual) return NextResponse.json({ error: "Coluna não encontrada" }, { status: 404 });
 
   if (mover) {
-    // Só troca com vizinha do mesmo tipo: uma coluna em andamento não passa
-    // para depois de Ganho/Perdido, que fecham o funil.
-    const mesmoTipo = { isWon: atual.isWon, isLost: atual.isLost };
+    // Só troca com vizinha do mesmo funil e do mesmo tipo: uma coluna em
+    // andamento não passa para depois de Ganho/Perdido, que fecham o funil.
+    const mesmoTipo = { pipelineId: atual.pipelineId, isWon: atual.isWon, isLost: atual.isLost };
     const vizinha = await prisma.stage.findFirst({
       where:
         mover === "esquerda"
@@ -89,6 +89,18 @@ export async function DELETE(
     );
   }
 
+  // Lead novo cai na primeira coluna em andamento do funil: sem nenhuma, ele
+  // não teria onde entrar.
+  const emAndamento = await prisma.stage.count({
+    where: { pipelineId: stage.pipelineId, isWon: false, isLost: false },
+  });
+  if (emAndamento <= 1) {
+    return NextResponse.json(
+      { error: `"${stage.name}" é a única coluna em andamento deste funil — é nela que os leads novos entram. Crie outra antes de excluir.` },
+      { status: 409 },
+    );
+  }
+
   const [deals, transicoes] = await Promise.all([
     prisma.deal.count({ where: { stageId: id } }),
     prisma.stageTransition.count({ where: { OR: [{ toStageId: id }, { fromStageId: id }] } }),
@@ -115,10 +127,14 @@ export async function DELETE(
       prisma.stageTransition.deleteMany({ where: { fromStageId: moverPara, toStageId: moverPara } }),
       // Etiqueta do WhatsApp que levava para cá passa a levar para o destino.
       prisma.whatsAppLabel.updateMany({ where: { stageId: id }, data: { stageId: moverPara } }),
+      prisma.systemState.updateMany({ where: { pipedriveAutoStageId: id }, data: { pipedriveAutoStageId: moverPara } }),
       prisma.stage.delete({ where: { id } }),
     ]);
   } else {
-    await prisma.stage.delete({ where: { id } });
+    await prisma.$transaction([
+      prisma.systemState.updateMany({ where: { pipedriveAutoStageId: id }, data: { pipedriveAutoStageId: null } }),
+      prisma.stage.delete({ where: { id } }),
+    ]);
   }
 
   avisarMudanca({ dealIds: [], motivo: "funil" });

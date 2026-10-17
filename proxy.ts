@@ -52,13 +52,19 @@ function exigeAdministrador(request: NextRequest): boolean {
   if (sob(c, "/api/contatos-ignorados")) return true;
   // Situação e teste dos avisos por e-mail.
   if (sob(c, "/api/avisos-email")) return true;
-  // Estrutura: colunas do funil, campos próprios, conteúdo do playbook.
+  // Estrutura: funis e suas colunas, campos próprios, conteúdo do playbook.
   if (
     !leitura &&
-    (sob(c, "/api/stages") || sob(c, "/api/custom-fields") || sob(c, "/api/playbook") || sob(c, "/api/tipos-atividade"))
+    (sob(c, "/api/stages") ||
+      sob(c, "/api/pipelines") ||
+      sob(c, "/api/custom-fields") ||
+      sob(c, "/api/playbook") ||
+      sob(c, "/api/tipos-atividade"))
   ) {
     return true;
   }
+  // Integração com o Pipedrive: o token dá acesso à conta da empresa lá.
+  if (sob(c, "/api/pipedrive")) return true;
   // Apagar um lead de vez reescreve as métricas; arquivar continua liberado.
   if (request.method === "DELETE" && /^\/api\/deals\/[^/]+$/.test(c) && request.nextUrl.searchParams.get("permanente") === "true") {
     return true;
