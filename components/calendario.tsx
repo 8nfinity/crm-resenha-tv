@@ -472,6 +472,53 @@ function MiniMes({
   );
 }
 
+// ── Quantas atividades no dia ────────────────────────────────────────────────
+
+/**
+ * Quantas atividades o dia tem, no cabeçalho de cada dia. Vermelho se alguma
+ * em aberto já venceu; apagado quando todas estão feitas. Conta o que os
+ * filtros deixam na tela.
+ */
+function ContagemDoDia({
+  itens,
+  compacta = false,
+  className,
+}: {
+  itens: AtividadeCalendario[];
+  /** No mês, só o número (o espaço é pequeno). */
+  compacta?: boolean;
+  className?: string;
+}) {
+  if (itens.length === 0) return null;
+  const abertas = itens.filter((a) => !a.doneAt).length;
+  const feitas = itens.length - abertas;
+  const atrasada = itens.some((a) => situacao(a) === "atrasada");
+  const nome = itens.length === 1 ? "atividade" : "atividades";
+  const titulo = [
+    `${itens.length} ${nome}`,
+    feitas > 0 ? `${feitas} ${feitas === 1 ? "feita" : "feitas"}` : null,
+    atrasada ? "tem atrasada" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <span
+      title={titulo}
+      className={cn(
+        "inline-flex w-fit items-center justify-center rounded px-1.5 text-[10px] font-bold tabular-nums leading-4",
+        atrasada
+          ? "bg-[var(--color-hot)] text-white"
+          : abertas === 0
+            ? "bg-[var(--color-surface-2)] text-[var(--color-muted)] line-through"
+            : "bg-[color-mix(in_srgb,var(--color-accent)_22%,transparent)] text-[var(--color-text)]",
+        className,
+      )}
+    >
+      {compacta ? itens.length : `${itens.length} ${nome}`}
+    </span>
+  );
+}
+
 // ── Visão Mês ────────────────────────────────────────────────────────────────
 
 function VisaoMes({
@@ -512,6 +559,7 @@ function VisaoMes({
                 foraDoMes && "bg-[var(--color-bg)]/40",
               )}
             >
+              <div className="relative flex items-center justify-center">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -519,13 +567,15 @@ function VisaoMes({
                 }}
                 className={cn(
                   // min-w em vez de largura fixa: o dia 1 leva o mês junto ("1 out").
-                  "mx-auto grid h-7 min-w-7 place-items-center whitespace-nowrap rounded-full px-1.5 text-xs tabular-nums hover:bg-[var(--color-surface-2)]",
+                  "grid h-7 min-w-7 place-items-center whitespace-nowrap rounded-full px-1.5 text-xs tabular-nums hover:bg-[var(--color-surface-2)]",
                   foraDoMes && "text-[var(--color-muted)]",
                   k === hojeChave && "bg-[var(--color-ink)] font-bold text-[var(--color-on-ink)] hover:bg-[var(--color-ink)]",
                 )}
               >
                 {d.getDate() === 1 ? `${d.getDate()} ${d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}` : d.getDate()}
               </button>
+                <ContagemDoDia itens={itens} compacta className="absolute right-0" />
+              </div>
               {itens.slice(0, 3).map((a) => (
                 <Chip key={a.id} a={a} onAbrir={onAbrir} />
               ))}
@@ -662,6 +712,7 @@ function VisaoGrade({
               >
                 {d.getDate()}
               </button>
+              <ContagemDoDia itens={porDia.get(k) ?? []} className="mx-auto mt-1" />
               {semHora.map((a) => (
                 <Chip key={a.id} a={a} onAbrir={onAbrir} />
               ))}
@@ -783,6 +834,7 @@ function VisaoAgenda({
               <span className="ml-1.5 text-xs uppercase text-[var(--color-muted)]">
                 {d.toLocaleDateString("pt-BR", { month: "short", weekday: "short" }).replace(/\./g, "")}
               </span>
+              <ContagemDoDia itens={porDia.get(k) ?? []} className="mt-1" />
             </div>
             <ul className="flex min-w-0 flex-1 flex-col gap-1">
               {(porDia.get(k) ?? []).map((a) => (
@@ -1006,6 +1058,18 @@ function VisaoLista({
   const extras = filtrosExtrasAtivos(filtros);
   // "⚠️ Sem atividade" troca a tabela: em vez de atividades, os leads sem nada marcado.
   const semAtividade = filtros.periodo === "sem-atividade";
+  // O número de cada botão de período, com os demais filtros valendo.
+  const contagens = useMemo(() => {
+    const c: Partial<Record<FiltrosLista["periodo"], number>> = {};
+    if (!agora) return c;
+    for (const p of PERIODOS_LISTA) {
+      c[p.valor] =
+        p.valor === "sem-atividade"
+          ? filtrarLeadsSemAtividade(leadsSemAtividade, filtros).length
+          : filtrarLista(atividades, { ...filtros, periodo: p.valor }, agora).length;
+    }
+    return c;
+  }, [atividades, leadsSemAtividade, filtros, agora]);
   const leads = useMemo(
     () => (semAtividade ? filtrarLeadsSemAtividade(leadsSemAtividade, filtros) : []),
     [semAtividade, leadsSemAtividade, filtros],
@@ -1044,6 +1108,20 @@ function VisaoLista({
               )}
             >
               {p.rotulo}
+              {/* Quantas há em cada período, com os outros filtros aplicados
+                  ("Hoje 3"). "Período…" depende das datas, fica sem número. */}
+              {agora && p.valor !== "periodo" && (
+                <span
+                  className={cn(
+                    "ml-1.5 rounded px-1 tabular-nums",
+                    p.valor === "vencido" && (contagens[p.valor] ?? 0) > 0
+                      ? "bg-[var(--color-hot)] text-white"
+                      : "bg-[var(--color-surface-2)]",
+                  )}
+                >
+                  {contagens[p.valor] ?? 0}
+                </span>
+              )}
             </button>
           ))}
         </div>
