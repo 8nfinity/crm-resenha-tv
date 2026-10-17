@@ -18,7 +18,7 @@ import {
 import type { Usuario } from "@/lib/auth/usuario";
 import { ehAdministrador, NOME_PAPEL } from "@/lib/auth/papeis";
 import { cn } from "@/lib/utils";
-import { AoVivo } from "@/components/ao-vivo";
+import { AoVivo, EVENTO_MUDOU } from "@/components/ao-vivo";
 
 const NAV = [
   // "Hoje" vem primeiro: e a tela que diz o que fazer, nao a que mostra o estado.
@@ -47,8 +47,46 @@ const TITULOS: Record<string, string> = {
  * alto e um ícone com nome curto por tela; a atual ganha o laranja e um
  * traço à esquerda.
  */
+/**
+ * Atividades em aberto marcadas para hoje (no relógio de quem vê), para o
+ * número no ícone do Calendário. Busca ao abrir, a cada aviso do "Ao vivo"
+ * (atividade criada, feita, apagada), ao voltar para a aba e a cada minuto.
+ */
+function usePendentesDeHoje(ligado: boolean) {
+  const [dados, setDados] = useState<{ pendentes: number; atrasadas: number } | null>(null);
+
+  useEffect(() => {
+    if (!ligado) return;
+    let vivo = true;
+    async function buscar() {
+      const agora = new Date();
+      const de = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+      const ate = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1);
+      const res = await fetch(
+        `/api/activities/hoje?de=${encodeURIComponent(de.toISOString())}&ate=${encodeURIComponent(ate.toISOString())}`,
+      ).catch(() => null);
+      if (vivo && res?.ok) setDados(await res.json());
+    }
+    void buscar();
+    const t = setInterval(() => void buscar(), 60_000);
+    const aoMudar = () => void buscar();
+    const aoVoltar = () => document.visibilityState === "visible" && void buscar();
+    window.addEventListener(EVENTO_MUDOU, aoMudar);
+    document.addEventListener("visibilitychange", aoVoltar);
+    return () => {
+      vivo = false;
+      clearInterval(t);
+      window.removeEventListener(EVENTO_MUDOU, aoMudar);
+      document.removeEventListener("visibilitychange", aoVoltar);
+    };
+  }, [ligado]);
+
+  return dados;
+}
+
 export function MenuLateral({ usuario }: { usuario: Usuario | null }) {
   const pathname = usePathname();
+  const hoje = usePendentesDeHoje(pathname !== "/login" && usuario !== null);
   const ativo = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   // A tela de login é só o formulário.
@@ -81,7 +119,24 @@ export function MenuLateral({ usuario }: { usuario: Usuario | null }) {
             )}
           >
             {ativo(href) && <span className="absolute -left-1.5 top-2 bottom-2 w-[3px] rounded-full bg-[var(--color-accent)]" />}
-            <Icone className={cn("size-5", ativo(href) && "text-[var(--color-accent)]")} strokeWidth={ativo(href) ? 2.4 : 2} />
+            <span className="relative">
+              <Icone className={cn("size-5", ativo(href) && "text-[var(--color-accent)]")} strokeWidth={ativo(href) ? 2.4 : 2} />
+              {/* No Calendário: quantas atividades ainda faltam hoje. Vermelho
+                  quando alguma já passou do horário. */}
+              {href === "/calendario" && hoje && hoje.pendentes > 0 && (
+                <span
+                  title={`${hoje.pendentes} ${hoje.pendentes === 1 ? "atividade pendente" : "atividades pendentes"} hoje${
+                    hoje.atrasadas > 0 ? ` · ${hoje.atrasadas} já ${hoje.atrasadas === 1 ? "passou" : "passaram"} do horário` : ""
+                  }`}
+                  className={cn(
+                    "absolute -right-2.5 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] font-bold leading-none tabular-nums ring-2 ring-black",
+                    hoje.atrasadas > 0 ? "bg-[var(--color-hot)] text-white" : "bg-[var(--color-accent)] text-[var(--color-on-ink)]",
+                  )}
+                >
+                  {hoje.pendentes > 99 ? "99+" : hoje.pendentes}
+                </span>
+              )}
+            </span>
             <span className="max-w-full truncate">{label}</span>
           </Link>
         ))}
