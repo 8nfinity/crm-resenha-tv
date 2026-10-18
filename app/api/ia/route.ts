@@ -22,6 +22,11 @@ const schema = z.object({
   regras: z.string().max(4000),
   colunaQualificadoId: z.string().min(1).nullable(),
   colunaAgendadoId: z.string().min(1).nullable(),
+  // Horário de atendimento, cruzado com o calendário (ver lib/ia/agenda.ts).
+  agendaDias: z.string().regex(/^[0-6](,[0-6])*$|^$/),
+  agendaJanelas: z.string().regex(/^(\d{2}:\d{2}-\d{2}:\d{2})(,\d{2}:\d{2}-\d{2}:\d{2})*$|^$/),
+  duracaoMin: z.number().int().min(10).max(240),
+  antecedenciaMin: z.number().int().min(0).max(10080),
 });
 
 export async function PUT(request: Request) {

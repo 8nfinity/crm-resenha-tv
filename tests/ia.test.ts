@@ -46,10 +46,20 @@ test("ia: 'digitando…' proporcional ao tamanho, entre 1,5 e 6 segundos", () =>
 });
 
 test("ia: instruções trazem o que a empresa escreveu e avisam quando falta", () => {
-  const cheio = instrucoes({ nome: "Lia", empresa: "Vendemos anúncios.", qualificacao: "Perguntar a cidade.", agenda: "Seg a sex, 9h-18h.", regras: "" });
+  const cheio = instrucoes({
+    nome: "Lia",
+    empresa: "Vendemos anúncios.",
+    qualificacao: "Perguntar a cidade.",
+    agenda: "Por videochamada.",
+    regras: "",
+    horario: "Atendimento para reuniões: segunda, 09:00–12:00.",
+  });
   assert.match(cheio, /Você é Lia/);
   assert.match(cheio, /Vendemos anúncios\./);
-  assert.match(cheio, /Seg a sex, 9h-18h\./);
+  assert.match(cheio, /segunda, 09:00–12:00/);
+  // Com horário definido, ela sempre consulta o calendário antes de oferecer.
+  assert.match(cheio, /SEMPRE use ver_horarios_livres/);
+  assert.match(cheio, /Como acontece a reunião: Por videochamada\./);
   assert.doesNotMatch(cheio, /Regras da empresa/);
 
   const vazio = instrucoes({ nome: "Lia", empresa: "", qualificacao: "", agenda: "", regras: "" });
@@ -75,7 +85,7 @@ test("ia: contexto do lead traz a hora de Brasília e a reunião já marcada", (
 test("ia: ferramentas estritas, com todos os campos obrigatórios", () => {
   assert.deepEqual(
     FERRAMENTAS.map((f) => f.name),
-    ["registrar_qualificacao", "agendar_reuniao", "passar_para_humano"],
+    ["ver_horarios_livres", "registrar_qualificacao", "agendar_reuniao", "passar_para_humano"],
   );
   for (const f of FERRAMENTAS) {
     assert.equal(f.strict, true);

@@ -547,8 +547,15 @@ model AgenteIA {
   empresa      String   @default("") @db.Text
   /// O que perguntar e o que faz um lead estar qualificado.
   qualificacao String   @default("") @db.Text
-  /// Dias, horários, duração e como acontece a reunião (link, endereço).
+  /// Como acontece a reunião (link, endereço, quem participa).
   agenda       String   @default("") @db.Text
+  /// Horário de atendimento para reuniões, que a IA cruza com o calendário:
+  /// dias da semana (0 = domingo … 6 = sábado), faixas "09:00-12:00,14:00-18:00",
+  /// duração de cada reunião e a antecedência mínima para marcar.
+  agendaDias      String @default("1,2,3,4,5")
+  agendaJanelas   String @default("09:00-12:00,14:00-18:00")
+  duracaoMin      Int    @default(30)
+  antecedenciaMin Int    @default(120)
   /// Regras extras: tom, o que nunca dizer, quando chamar um humano.
   regras       String   @default("") @db.Text
   /// Para onde ela move o lead ao qualificar e ao agendar (colunas do funil).

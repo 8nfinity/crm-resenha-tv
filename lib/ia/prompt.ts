@@ -12,6 +12,8 @@ export type ConfigTexto = {
   qualificacao: string;
   agenda: string;
   regras: string;
+  /** O horário de atendimento em uma frase (ver descreverRegra). Vazio: sem horário definido. */
+  horario?: string;
 };
 
 /**
@@ -30,7 +32,19 @@ export function instrucoes(c: ConfigTexto): string {
 
     secao("A empresa", c.empresa, "(A empresa ainda não descreveu o que faz. Seja breve, pergunte do que a pessoa precisa e passe para um humano se ela quiser detalhes.)"),
     secao("Como qualificar", c.qualificacao, "Descubra, com naturalidade: quem é a pessoa (nome, empresa ou projeto), o que ela precisa, e se há interesse real em avançar."),
-    secao("Agenda de reuniões", c.agenda, "(Sem horários definidos. Não marque reunião: diga que a equipe vai propor um horário e use passar_para_humano.)"),
+    c.horario
+      ? secao(
+          "Agenda de reuniões",
+          [
+            c.horario,
+            "Os horários livres vêm do calendário da equipe: SEMPRE use ver_horarios_livres antes de oferecer qualquer horário, e ofereça só horários que ela devolveu. Nunca invente nem 'chute' um horário.",
+            c.agenda.trim() ? `Como acontece a reunião: ${c.agenda.trim()}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          "",
+        )
+      : secao("Agenda de reuniões", "", "(Sem horário de atendimento definido. Não marque reunião: diga que a equipe vai propor um horário e use passar_para_humano.)"),
     c.regras.trim() ? secao("Regras da empresa", c.regras, "") : "",
 
     `## Como escrever no WhatsApp
@@ -42,7 +56,8 @@ export function instrucoes(c: ConfigTexto): string {
 
     `## Ferramentas
 - registrar_qualificacao: assim que tiver as informações de qualificação (mesmo que a pessoa não esteja qualificada), registre um resumo. Use de novo se descobrir algo importante depois.
-- agendar_reuniao: só depois que a pessoa CONFIRMAR um dia e horário específicos, dentro da agenda acima. Antes, ofereça 2 ou 3 opções de horário. Depois de agendar, confirme o dia e a hora para a pessoa.
+- ver_horarios_livres: consulta o calendário e devolve os horários livres. Use antes de oferecer horários (e de novo se a pessoa pedir outro dia). Ofereça 2 ou 3 opções, em dias diferentes quando der.
+- agendar_reuniao: só depois que a pessoa CONFIRMAR um dos horários livres, usando o ISO exato que ver_horarios_livres devolveu. Se ela pedir um horário fora da lista, consulte de novo e ofereça o mais próximo. Depois de agendar, confirme o dia e a hora para a pessoa.
 - passar_para_humano: quando a pessoa pedir para falar com alguém, reclamar, perguntar algo que você não sabe, quiser negociar ou fechar, ou quando a conversa não for de um possível cliente (fornecedor, candidato a vaga, engano). Avise a pessoa que alguém da equipe vai continuar o atendimento. Depois disso você não responde mais.
 - Se a mensagem do contato não pede resposta (ex.: só "ok", "obrigado" depois de agendado), responda bem curto ou encerre com cordialidade.`,
   ]
@@ -136,6 +151,27 @@ export function tempoDigitando(texto: string): number {
 }
 
 export const FERRAMENTAS: Anthropic.Tool[] = [
+  {
+    name: "ver_horarios_livres",
+    description:
+      "Consulta o calendário da equipe e devolve os horários livres para reunião (já descontando o que está marcado e respeitando o horário de atendimento).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        data_inicial: {
+          type: "string",
+          description: "Primeiro dia a consultar, AAAA-MM-DD. Vazio (\"\") = hoje.",
+        },
+        quantos_dias: {
+          type: "integer",
+          description: "Quantos dias consultar a partir da data inicial (1 a 14). Use 5 se a pessoa não pediu um dia.",
+        },
+      },
+      required: ["data_inicial", "quantos_dias"],
+      additionalProperties: false,
+    },
+  },
   {
     name: "registrar_qualificacao",
     description:

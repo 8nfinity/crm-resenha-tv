@@ -15,6 +15,16 @@ import {
   instrucoes,
   tempoDigitando,
 } from "@/lib/ia/prompt";
+import {
+  UM_DIA_MS,
+  conferirHorario,
+  descreverHorarios,
+  descreverRegra,
+  horariosLivres,
+  inicioDoDia,
+  lerRegra,
+  type Intervalo,
+} from "@/lib/ia/agenda";
 
 /**
  * IA de atendimento: responde pelo WhatsApp os leads do funil escolhido,
@@ -134,6 +144,7 @@ export async function retomar(dealId: string): Promise<void> {
 // ─── A resposta ──────────────────────────────────────────────────────────────
 
 type Acao =
+  | { tipo: "horarios"; dataInicial: string; quantosDias: number }
   | { tipo: "qualificacao"; qualificado: boolean; resumo: string }
   | { tipo: "reuniao"; inicio: string; resumo: string }
   | { tipo: "humano"; motivo: string };
@@ -167,7 +178,7 @@ export async function pensarResposta(p: {
       output_config: { effort: "low" },
       system: [
         // Fixo e em cache; o contexto do lead (data, coluna) vem depois.
-        { type: "text", text: instrucoes(p.cfg), cache_control: { type: "ephemeral" } },
+        { type: "text", text: instrucoes({ ...p.cfg, horario: horarioDaConfig(p.cfg) }), cache_control: { type: "ephemeral" } },
         { type: "text", text: p.contexto },
       ],
       tools: FERRAMENTAS,
@@ -186,7 +197,9 @@ export async function pensarResposta(p: {
     for (const uso of usos) {
       const entrada = uso.input as Record<string, unknown>;
       const acao: Acao | null =
-        uso.name === "registrar_qualificacao"
+        uso.name === "ver_horarios_livres"
+          ? { tipo: "horarios", dataInicial: String(entrada.data_inicial ?? ""), quantosDias: Number(entrada.quantos_dias ?? 5) }
+          : uso.name === "registrar_qualificacao"
           ? { tipo: "qualificacao", qualificado: Boolean(entrada.qualificado), resumo: String(entrada.resumo ?? "") }
           : uso.name === "agendar_reuniao"
             ? { tipo: "reuniao", inicio: String(entrada.inicio ?? ""), resumo: String(entrada.resumo ?? "") }
@@ -199,7 +212,8 @@ export async function pensarResposta(p: {
       }
       try {
         const r = await p.executar(acao);
-        acoes.push(acao);
+        // Consultar a agenda não é uma ação no CRM: não entra na lista.
+        if (acao.tipo !== "horarios") acoes.push(acao);
         resultados.push({ type: "tool_result", tool_use_id: uso.id, content: r });
       } catch (e) {
         resultados.push({ type: "tool_result", tool_use_id: uso.id, content: (e as Error).message, is_error: true });
@@ -293,6 +307,8 @@ async function executarAcao(
   acao: Acao,
   cfg: Awaited<ReturnType<typeof lerConfigIA>>,
 ): Promise<string> {
+  if (acao.tipo === "horarios") return consultarHorarios(cfg, acao.dataInicial, acao.quantosDias);
+
   if (acao.tipo === "qualificacao") {
     await prisma.note.create({
       data: { dealId, body: `🤖 Qualificação (IA): ${acao.qualificado ? "QUALIFICADO" : "não qualificado"}\n${acao.resumo}` },
@@ -305,7 +321,11 @@ async function executarAcao(
   if (acao.tipo === "reuniao") {
     const inicio = new Date(acao.inicio);
     if (Number.isNaN(inicio.getTime())) throw new Error("Data inválida. Use ISO 8601 com fuso, ex.: 2026-10-20T14:30:00-03:00.");
-    if (inicio.getTime() < Date.now()) throw new Error("Esse horário já passou. Confirme um horário futuro com a pessoa.");
+    const regra = lerRegra(cfg);
+    const ocupados = await ocupadosEntre(new Date(inicio.getTime() - UM_DIA_MS), new Date(inicio.getTime() + UM_DIA_MS), regra.duracaoMin);
+    const conferido = conferirHorario(regra, { agora: new Date(), inicio, ocupados });
+    // Não grava: a IA lê o motivo, consulta de novo e oferece outro horário.
+    if (!conferido.ok) throw new Error(`${conferido.motivo} Use ver_horarios_livres e ofereça outro horário.`);
     await prisma.$transaction([
       prisma.activity.create({
         data: {
@@ -326,6 +346,42 @@ async function executarAcao(
   await pausar(dealId, `A IA passou para um humano: ${acao.motivo}`);
   await avisarEquipe(dealId, nome, acao.motivo);
   return "Conversa passada para a equipe. Despeça-se avisando que alguém vai continuar o atendimento.";
+}
+
+/** O horário de atendimento em uma frase, ou vazio quando não há dias/faixas definidos. */
+function horarioDaConfig(cfg: Awaited<ReturnType<typeof lerConfigIA>>): string {
+  const regra = lerRegra(cfg);
+  return regra.dias.length && regra.janelas.length ? descreverRegra(regra) : "";
+}
+
+/**
+ * O que já está no calendário entre duas datas: toda atividade com prazo
+ * (reunião, ligação, follow-up…), ocupando a duração de uma reunião. É o
+ * calendário da equipe inteira — a IA não marca por cima de nada.
+ */
+async function ocupadosEntre(de: Date, ate: Date, duracaoMin: number): Promise<Intervalo[]> {
+  const atividades = await prisma.activity.findMany({
+    where: { dueAt: { gte: new Date(de.getTime() - duracaoMin * 60_000), lt: ate }, deal: { archivedAt: null } },
+    select: { dueAt: true },
+  });
+  return atividades.map((a) => ({ inicio: a.dueAt!, fim: new Date(a.dueAt!.getTime() + duracaoMin * 60_000) }));
+}
+
+/** Horários livres para a IA ler (ferramenta ver_horarios_livres). Só lê: serve ao simulador também. */
+export async function consultarHorarios(
+  cfg: Awaited<ReturnType<typeof lerConfigIA>>,
+  dataInicial: string,
+  quantosDias: number,
+): Promise<string> {
+  const regra = lerRegra(cfg);
+  if (!regra.dias.length || !regra.janelas.length) {
+    return "A empresa não definiu horário de atendimento. Não marque: passe para um humano.";
+  }
+  const agora = new Date();
+  const de = inicioDoDia(dataInicial, agora);
+  const dias = Math.min(Math.max(Math.round(quantosDias) || 5, 1), 14);
+  const ocupados = await ocupadosEntre(de, new Date(de.getTime() + (dias + 1) * UM_DIA_MS), regra.duracaoMin);
+  return descreverHorarios(horariosLivres(regra, { agora, de, quantosDias: dias, ocupados }));
 }
 
 /** Move só para frente: um lead que já está adiante no funil não volta. */

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-import { iaConfigurada, lerConfigIA, pensarResposta } from "@/lib/ia/agente";
+import { consultarHorarios, iaConfigurada, lerConfigIA, pensarResposta } from "@/lib/ia/agente";
 import { contextoDoLead, historicoParaClaude } from "@/lib/ia/prompt";
 
 export const runtime = "nodejs";
@@ -46,10 +46,13 @@ export async function POST(request: Request) {
         qualificado: false,
         reunioes: [],
       }),
+      // A agenda é lida de verdade (só leitura); o resto só é descrito.
       executar: async (acao) =>
-        acao.tipo === "reuniao" && Number.isNaN(new Date(acao.inicio).getTime())
-          ? Promise.reject(new Error("Data inválida."))
-          : "Feito (simulação: nada foi gravado no CRM).",
+        acao.tipo === "horarios"
+          ? consultarHorarios(cfg, acao.dataInicial, acao.quantosDias)
+          : acao.tipo === "reuniao" && Number.isNaN(new Date(acao.inicio).getTime())
+            ? Promise.reject(new Error("Data inválida."))
+            : "Feito (simulação: nada foi gravado no CRM).",
     });
     return NextResponse.json(r);
   } catch (e) {

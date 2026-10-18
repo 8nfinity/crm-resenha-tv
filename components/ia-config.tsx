@@ -15,7 +15,13 @@ type Config = {
   regras: string;
   colunaQualificadoId: string | null;
   colunaAgendadoId: string | null;
+  agendaDias: string;
+  agendaJanelas: string;
+  duracaoMin: number;
+  antecedenciaMin: number;
 };
+
+const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 type Funil = { id: string; name: string; stages: { id: string; name: string; isWon: boolean; isLost: boolean }[] };
 
 const campo =
@@ -51,6 +57,10 @@ export function IaConfig() {
           regras: d.regras,
           colunaQualificadoId: d.colunaQualificadoId,
           colunaAgendadoId: d.colunaAgendadoId,
+          agendaDias: d.agendaDias,
+          agendaJanelas: d.agendaJanelas,
+          duracaoMin: d.duracaoMin,
+          antecedenciaMin: d.antecedenciaMin,
         });
       });
     void fetch("/api/pipelines")
@@ -159,13 +169,14 @@ export function IaConfig() {
         linhas={4}
         exemplo="Ex.: Perguntar nome do negócio, segmento, cidade e se já anunciou antes. Qualificado: comércio da região com interesse em anunciar nos próximos 30 dias."
       />
+      <Agenda cfg={cfg} set={set} />
       <Texto
-        rotulo="Agenda de reuniões"
-        ajuda="Dias e horários que ela pode oferecer, duração e como acontece (link, endereço, ligação)."
+        rotulo="Como acontece a reunião"
+        ajuda="Videochamada, ligação ou presencial; quem participa; como o link chega."
         valor={cfg.agenda}
         onChange={(agenda) => set({ agenda })}
-        linhas={3}
-        exemplo="Ex.: Segunda a sexta, das 9h às 12h e das 14h às 18h. Reunião de 30 min por videochamada (o link é enviado pela equipe)."
+        linhas={2}
+        exemplo="Ex.: Reunião por videochamada com o Nego Jão; o link é enviado pela equipe no dia."
       />
       <Texto
         rotulo="Regras extras (opcional)"
@@ -224,6 +235,100 @@ export function IaConfig() {
       </div>
 
       <Simulador nome={cfg.nome} />
+    </div>
+  );
+}
+
+/**
+ * Horário de atendimento para reuniões. A IA cruza com o Calendário do CRM:
+ * só oferece o que está livre (qualquer atividade marcada ocupa o horário).
+ */
+function Agenda({ cfg, set }: { cfg: Config; set: (p: Partial<Config>) => void }) {
+  const dias = new Set(cfg.agendaDias.split(",").filter(Boolean).map(Number));
+  const janelas = cfg.agendaJanelas
+    .split(",")
+    .filter(Boolean)
+    .map((j) => j.split("-") as [string, string]);
+  const salvarJanelas = (js: [string, string][]) =>
+    set({ agendaJanelas: js.filter(([a, b]) => a && b && a < b).map(([a, b]) => `${a}-${b}`).join(",") });
+
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-xs text-[var(--color-muted)]">
+        <span className="font-semibold text-[var(--color-text)]">Agenda de reuniões</span> — ela consulta o Calendário do CRM e só
+        oferece horários livres dentro destes dias e faixas. Qualquer atividade já marcada ocupa o horário.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {DIAS.map((nome, i) => (
+          <button
+            key={nome}
+            type="button"
+            onClick={() => {
+              const n = new Set(dias);
+              if (n.has(i)) n.delete(i);
+              else n.add(i);
+              set({ agendaDias: [...n].sort().join(",") });
+            }}
+            className={cn("rounded-md border px-3 py-1 text-xs font-semibold", dias.has(i) ? "bolha border-transparent text-white" : "text-[var(--color-muted)]")}
+          >
+            {nome}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {janelas.map(([a, b], i) => (
+          <span key={i} className="flex items-center gap-1 text-xs text-[var(--color-muted)]">
+            das
+            <input
+              type="time"
+              value={a}
+              onChange={(e) => salvarJanelas(janelas.map((j, k) => (k === i ? [e.target.value, j[1]] : j)))}
+              className="rounded-md border bg-[var(--color-surface)] px-2 py-1 text-sm text-[var(--color-text)]"
+            />
+            às
+            <input
+              type="time"
+              value={b}
+              onChange={(e) => salvarJanelas(janelas.map((j, k) => (k === i ? [j[0], e.target.value] : j)))}
+              className="rounded-md border bg-[var(--color-surface)] px-2 py-1 text-sm text-[var(--color-text)]"
+            />
+            <button type="button" onClick={() => salvarJanelas(janelas.filter((_, k) => k !== i))} className="px-1 hover:text-[var(--color-hot)]" aria-label="Remover faixa">
+              ×
+            </button>
+          </span>
+        ))}
+        <button type="button" onClick={() => salvarJanelas([...janelas, ["14:00", "18:00"]])} className="rounded-md border px-2.5 py-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">
+          + faixa de horário
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-3">
+        <label className="text-xs text-[var(--color-muted)]">
+          Duração da reunião
+          <select value={cfg.duracaoMin} onChange={(e) => set({ duracaoMin: Number(e.target.value) })} className={cn(campo, "mt-1 w-40 text-[var(--color-text)]")}>
+            {[15, 20, 30, 45, 60, 90].map((m) => (
+              <option key={m} value={m}>
+                {m} min
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-[var(--color-muted)]">
+          Antecedência mínima
+          <select value={cfg.antecedenciaMin} onChange={(e) => set({ antecedenciaMin: Number(e.target.value) })} className={cn(campo, "mt-1 w-44 text-[var(--color-text)]")}>
+            {[
+              [60, "1 hora"],
+              [120, "2 horas"],
+              [240, "4 horas"],
+              [1440, "1 dia"],
+              [2880, "2 dias"],
+            ].map(([m, r]) => (
+              <option key={m} value={m}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 }
