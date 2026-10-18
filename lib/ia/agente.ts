@@ -58,6 +58,16 @@ export function iaConfigurada(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+/**
+ * Cliente da Anthropic. Chave criada fora de um workspace (no nível da
+ * organização) exige dizer o workspace em cada chamada: vem de
+ * ANTHROPIC_WORKSPACE_ID. Chave criada dentro de um workspace não precisa.
+ */
+function clienteAnthropic(): Anthropic {
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  return new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
+}
+
 // ─── Gatilhos do webhook ─────────────────────────────────────────────────────
 
 const global_ = globalThis as unknown as {
@@ -141,7 +151,7 @@ export async function pensarResposta(p: {
   contexto: string;
   executar: (acao: Acao) => Promise<string>;
 }): Promise<ResultadoIA> {
-  const client = new Anthropic();
+  const client = clienteAnthropic();
   const mensagens: Anthropic.Beta.BetaMessageParam[] = [...p.historico];
   const textos: string[] = [];
   const acoes: Acao[] = [];

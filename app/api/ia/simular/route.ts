@@ -59,6 +59,17 @@ export async function POST(request: Request) {
     if (e instanceof Anthropic.RateLimitError) {
       return NextResponse.json({ error: "Limite de uso da Anthropic atingido. Tente em instantes." }, { status: 429 });
     }
+    if (e instanceof Anthropic.BadRequestError && e.message.includes("anthropic-workspace-id")) {
+      return NextResponse.json(
+        {
+          error:
+            "A chave da Anthropic foi criada fora de um workspace. Crie a chave dentro de um workspace " +
+            "(console.anthropic.com → Workspaces → Default → API keys) ou adicione na Railway a variável " +
+            "ANTHROPIC_WORKSPACE_ID com o id do workspace.",
+        },
+        { status: 400 },
+      );
+    }
     if (e instanceof Anthropic.APIError) {
       return NextResponse.json({ error: `A Anthropic respondeu com erro ${e.status}: ${e.message}` }, { status: 502 });
     }
