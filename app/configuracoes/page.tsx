@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { StageEditor } from "@/components/stage-editor";
 import { PipedriveConfig } from "@/components/pipedrive-config";
+import { IaConfig } from "@/components/ia-config";
 import { CopyField } from "@/components/copy-field";
 import { EtiquetasEIgnorados } from "@/components/contatos-ignorados";
 import { CustomFieldEditor } from "@/components/custom-field-editor";
@@ -154,6 +155,15 @@ export default async function ConfiguracoesPage() {
               só é possível em estágio vazio e sem histórico. Funis novos se criam no seletor da tela Funil.
             </p>
             <StageEditor />
+          </section>
+
+          <section id="ia" className="card scroll-mt-4 p-6 lg:col-span-2">
+            <h2 className="text-base font-semibold">🤖 IA de atendimento</h2>
+            <p className="mt-1 mb-3 text-xs text-[var(--color-muted)]">
+              Responde pelo WhatsApp os leads do funil escolhido: qualifica, agenda reuniões e passa para a equipe quando precisa.
+              Sai da conversa sozinha quando alguém responde pelo celular. Tudo fica registrado no lead (mensagens com 🤖, notas e a reunião no Calendário).
+            </p>
+            <IaConfig />
           </section>
 
           <section id="pipedrive" className="card scroll-mt-4 p-6">

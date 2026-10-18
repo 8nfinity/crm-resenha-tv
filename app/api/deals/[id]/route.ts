@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db";
 import { getDealDetail } from "@/lib/queries";
 import { exigirAdmin } from "@/lib/auth/usuario";
 import { lerConfig, urlDoNegocio } from "@/lib/pipedrive";
+import { lerConfigIA } from "@/lib/ia/agente";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const [deal, pipedrive] = await Promise.all([getDealDetail(id), lerConfig()]);
+  const [deal, pipedrive, ia] = await Promise.all([getDealDetail(id), lerConfig(), lerConfigIA()]);
 
   if (!deal) {
     return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
@@ -19,6 +20,8 @@ export async function GET(
   // O token não sai daqui: só se está conectado e o endereço do negócio.
   return NextResponse.json({
     ...deal,
+    // A IA de atendimento cuida deste lead? (ligada e no funil dela)
+    ia: { atende: ia.ativo && ia.pipelineId === deal.stage.pipelineId, nome: ia.nome },
     pipedrive: {
       conectado: pipedrive !== null,
       url: pipedrive && deal.pipedriveDealId ? urlDoNegocio(pipedrive.dominio, deal.pipedriveDealId) : null,

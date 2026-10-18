@@ -65,6 +65,8 @@ function exigeAdministrador(request: NextRequest): boolean {
   }
   // Integração com o Pipedrive: o token dá acesso à conta da empresa lá.
   if (sob(c, "/api/pipedrive")) return true;
+  // IA de atendimento: liga, configura e simula (usa a conta da Anthropic).
+  if (sob(c, "/api/ia")) return true;
   // Apagar um lead de vez reescreve as métricas; arquivar continua liberado.
   if (request.method === "DELETE" && /^\/api\/deals\/[^/]+$/.test(c) && request.nextUrl.searchParams.get("permanente") === "true") {
     return true;

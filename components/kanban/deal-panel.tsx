@@ -23,6 +23,8 @@ type DealDetail = {
   messages: {
     id: string;
     fromMe: boolean;
+    /** Enviada pela IA de atendimento. */
+    porIA?: boolean;
     body: string | null;
     type: string;
     timestamp: string;
@@ -33,6 +35,10 @@ type DealDetail = {
   labelEvents: EventoEtiqueta[];
   /** Se o Pipedrive está conectado e, se o lead já foi enviado, o link do negócio lá. */
   pipedrive: { conectado: boolean; url: string | null };
+  /** A IA de atendimento cuida deste lead (ligada e no funil dela)? */
+  ia: { atende: boolean; nome: string };
+  iaPausadaEm: string | null;
+  iaMotivoPausa: string | null;
 };
 
 type EventoEtiqueta = {
@@ -239,6 +245,47 @@ function BotaoPipedrive({ deal, onEnviado }: { deal: DealDetail; onEnviado: () =
         </button>
       )}
       {erro && <p className="mt-1 text-xs text-[var(--color-hot)]">{erro}</p>}
+    </div>
+  );
+}
+
+/**
+ * A IA de atendimento neste lead: atendendo (com botão para pausar) ou
+ * pausada (com o motivo e o botão para devolver a conversa a ela).
+ */
+function SituacaoIA({ deal, onMudou }: { deal: DealDetail; onMudou: () => void }) {
+  const [salvando, setSalvando] = useState(false);
+  const pausada = Boolean(deal.iaPausadaEm);
+
+  async function alternar() {
+    setSalvando(true);
+    await fetch(`/api/deals/${deal.id}/ia`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: pausada ? "retomar" : "pausar" }),
+    }).catch(() => null);
+    setSalvando(false);
+    onMudou();
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+      <span
+        className={cn(
+          "rounded px-2 py-0.5 font-semibold",
+          pausada ? "bg-[var(--color-surface-2)] text-[var(--color-muted)]" : "bg-[color-mix(in_srgb,var(--color-accent)_22%,transparent)]",
+        )}
+        title={pausada ? (deal.iaMotivoPausa ?? undefined) : undefined}
+      >
+        🤖 {pausada ? "IA pausada" : `${deal.ia.nome} atendendo`}
+      </span>
+      <button
+        onClick={() => void alternar()}
+        disabled={salvando}
+        className="rounded border px-2 py-0.5 font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50"
+      >
+        {salvando ? "…" : pausada ? "Devolver para a IA" : "Assumir conversa"}
+      </button>
     </div>
   );
 }
@@ -456,6 +503,7 @@ export function DealPanel({
       labelEvents: bruto.labelEvents ?? [],
       scoreFactors: bruto.scoreFactors ?? [],
       pipedrive: bruto.pipedrive ?? { conectado: false, url: null },
+      ia: bruto.ia ?? { atende: false, nome: "IA" },
     });
   }
 
@@ -612,6 +660,7 @@ export function DealPanel({
                 {erroEdicao && <p className="mt-1 text-xs text-[var(--color-hot)]">{erroEdicao}</p>}
                 <MoverLead deal={deal} onMovido={() => void load()} />
                 {deal.pipedrive.conectado && <BotaoPipedrive deal={deal} onEnviado={() => void load()} />}
+                {deal.ia.atende && <SituacaoIA deal={deal} onMudou={() => void load()} />}
               </div>
 
               <div className="flex items-center gap-1">
@@ -823,6 +872,9 @@ export function DealPanel({
                           : "self-start bg-[var(--color-surface-2)]",
                       )}
                     >
+                      {m.porIA && (
+                        <p className="mb-0.5 text-[10px] font-bold text-[var(--color-accent)]">🤖 {deal.ia.nome} (IA)</p>
+                      )}
                       <p className="whitespace-pre-wrap break-words">
                         {m.body ?? <em className="opacity-60">{m.type}</em>}
                       </p>

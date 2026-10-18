@@ -525,4 +525,27 @@ export const evolution = {
       },
     });
   },
+
+  /**
+   * Envia uma mensagem de texto. Usado pela IA de atendimento — o resto do
+   * CRM só lê o WhatsApp.
+   *
+   * `digitandoMs`: a Evolution mostra "digitando…" por esse tempo antes de
+   * enviar, como uma pessoa. Devolve o id da mensagem no WhatsApp: o aviso
+   * que volta pelo webhook com esse id é reconhecido como da IA, e não como
+   * alguém respondendo pelo celular.
+   */
+  async enviarTexto(
+    instanceName: string,
+    numero: string,
+    texto: string,
+    digitandoMs = 0,
+  ): Promise<{ id: string | null }> {
+    const data = await request<{ key?: { id?: string } }>(`/message/sendText/${instanceName}`, {
+      method: "POST",
+      body: { number: numero, text: texto, delay: digitandoMs },
+      esperaMs: 30_000 + digitandoMs,
+    });
+    return { id: data?.key?.id ?? null };
+  },
 };

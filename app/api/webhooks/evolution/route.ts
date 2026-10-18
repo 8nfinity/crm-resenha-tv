@@ -3,7 +3,8 @@ import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { recalculateScore } from "@/lib/deals";
 import { ingestLiveMessage, upsertContact } from "@/lib/ingest";
-import { isPersonJid } from "@/lib/evolution/parse";
+import { isPersonJid, parseMessage } from "@/lib/evolution/parse";
+import { iaMensagemEnviada, iaMensagemRecebida } from "@/lib/ia/agente";
 import {
   aplicarEtiqueta,
   naFilaDeEtiquetas,
@@ -160,7 +161,14 @@ async function handleMessages(conta: { id: string; instanceName: string }, data:
 
   for (const message of messages) {
     const dealId = await ingestLiveMessage(conta, message);
-    if (dealId) touched.add(dealId);
+    if (!dealId) continue;
+    touched.add(dealId);
+    // IA de atendimento: mensagem do contato pode ganhar resposta; mensagem
+    // enviada por alguém da equipe tira a IA da conversa. (Ela mesma confere
+    // se o lead é do funil dela e se está ligada.)
+    const parsed = parseMessage(message);
+    if (parsed?.fromMe) iaMensagemEnviada(dealId, parsed.waMessageId);
+    else if (parsed) iaMensagemRecebida(dealId);
   }
   if (touched.size === 0) return;
 

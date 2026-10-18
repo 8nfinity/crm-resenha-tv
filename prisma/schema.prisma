@@ -256,6 +256,11 @@ model Deal {
   pipedrivePersonId Int?
   pipedriveSentAt   DateTime?
 
+  /// A IA de atendimento saiu desta conversa (alguém respondeu pelo celular,
+  /// ela passou para um humano, ou foi pausada à mão). Nula: ela atende.
+  iaPausadaEm  DateTime?
+  iaMotivoPausa String?
+
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -314,6 +319,8 @@ model Message {
   body        String?     @db.Text
   timestamp   DateTime
   createdAt   DateTime    @default(now())
+  /// Enviada pela IA de atendimento (aparece com 🤖 no painel do lead).
+  porIA       Boolean     @default(false)
 
   contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
@@ -522,4 +529,30 @@ model PlaybookFile {
   uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
+}
+
+/// Configuração da IA de atendimento (uma linha só, id "singleton").
+///
+/// Ela qualifica e agenda reuniões pelo WhatsApp, mas só para os leads do
+/// funil escolhido — o "funil de teste" enquanto ela é avaliada.
+model AgenteIA {
+  id           String   @id @default("singleton")
+  ativo        Boolean  @default(false)
+  /// Funil cujos leads ela atende. Lead em outro funil: ela não responde.
+  pipelineId   String?
+  /// Como ela se apresenta ("Lia, da Resenha TV").
+  nome         String   @default("Lia")
+  modelo       String   @default("claude-opus-5-5")
+  /// O que a empresa faz, o que vende, para quem — o "playbook" dela.
+  empresa      String   @default("") @db.Text
+  /// O que perguntar e o que faz um lead estar qualificado.
+  qualificacao String   @default("") @db.Text
+  /// Dias, horários, duração e como acontece a reunião (link, endereço).
+  agenda       String   @default("") @db.Text
+  /// Regras extras: tom, o que nunca dizer, quando chamar um humano.
+  regras       String   @default("") @db.Text
+  /// Para onde ela move o lead ao qualificar e ao agendar (colunas do funil).
+  colunaQualificadoId String?
+  colunaAgendadoId    String?
+  updatedAt    DateTime @updatedAt
 }
