@@ -118,13 +118,13 @@ export function BoardFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-6">
-      <div className="relative">
+      <div className="relative w-full sm:w-auto">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
         <input
           value={filtros.busca}
           onChange={(e) => set({ busca: e.target.value })}
           placeholder="Buscar por nome, telefone ou mensagem…"
-          className="w-64 rounded-md border bg-[var(--color-surface)] py-1.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
+          className="w-full sm:w-64 rounded-md border bg-[var(--color-surface)] py-1.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
         />
       </div>
 

@@ -23,6 +23,7 @@ export type AtividadeCalendario = {
   /** Cor do tipo criado por você; nula nos tipos fixos (a tela usa a cor fixa). */
   tipoCor: string | null;
   title: string | null;
+  notes: string | null;
   dueAt: string | null;
   doneAt: string | null;
   createdAt: string;
@@ -48,6 +49,7 @@ const CAMPOS = {
   kindId: true,
   kind: { select: { name: true, color: true } },
   title: true,
+  notes: true,
   dueAt: true,
   doneAt: true,
   createdAt: true,
@@ -109,6 +111,7 @@ async function montar(linhas: Linha[]): Promise<AtividadeCalendario[]> {
     tipoNome: a.kind?.name ?? null,
     tipoCor: a.kind?.color ?? null,
     title: a.title,
+    notes: a.notes,
     dueAt: a.dueAt?.toISOString() ?? null,
     doneAt: a.doneAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),

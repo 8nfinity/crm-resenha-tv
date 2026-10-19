@@ -39,7 +39,8 @@ export default async function RootLayout({
         {/* Layout do Pipedrive: menu lateral, e à direita a barra de topo e a tela. */}
         <div className="flex min-h-0 flex-1">
           <MenuLateral usuario={usuario} />
-          <div className="flex min-w-0 flex-1 flex-col">
+          {/* No celular, espaço para a barra de navegação de baixo. */}
+          <div className="flex min-w-0 flex-1 flex-col pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0">
             <BarraTopo usuario={usuario} />
             <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <SessaoProvider papel={usuario?.role ?? null}>{children}</SessaoProvider>

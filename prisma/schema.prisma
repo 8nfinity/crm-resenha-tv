@@ -41,6 +41,11 @@ model WhatsAppAccount {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  /// Só entram no CRM os contatos etiquetados no celular: mensagem e
+  /// importação deixam de criar lead sozinhas. A etiqueta ligada a uma coluna
+  /// (em Configurações → Etiquetas) é o que traz o lead e o que o move.
+  soComEtiqueta Boolean @default(false)
+
   /// Funil onde caem os leads novos deste número. Nulo: o primeiro funil.
   entryPipelineId String?
   entryPipeline   Pipeline? @relation(fields: [entryPipelineId], references: [id], onDelete: SetNull)
@@ -133,6 +138,9 @@ model Contact {
   pushName      String? // nome que a pessoa definiu no WhatsApp
   savedName     String? // nome como está salvo na sua agenda
   profilePicUrl String?
+  /// Dados do cadastro manual (botão "Novo lead"), editáveis no painel.
+  email         String?
+  empresa       String?
   isGroup       Boolean   @default(false)
   isBusiness    Boolean   @default(false)
   /// Quando foi marcado para ignorar (etiqueta ou à mão). Nulo = visível.
@@ -252,6 +260,9 @@ model Deal {
 
   /// Negócio e pessoa criados no Pipedrive quando o lead foi enviado para lá.
   /// Guardados para mandar de novo só atualizar, sem duplicar.
+  /// De onde veio o lead ("Instagram", "Indicação"…), no cadastro manual.
+  origem            String?
+
   pipedriveDealId   Int?
   pipedrivePersonId Int?
   pipedriveSentAt   DateTime?

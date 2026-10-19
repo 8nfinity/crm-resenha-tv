@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Board } from "@/components/kanban/board";
 import { SeletorDeFunil } from "@/components/kanban/seletor-funil";
+import { NovoLead } from "@/components/kanban/novo-lead";
 import { getDealCards, getStages } from "@/lib/queries";
 import { listarCampos } from "@/lib/custom-fields";
 import { escolherFunil, listarFunis } from "@/lib/funis";
@@ -48,10 +49,12 @@ export default async function FunilPage({
   // campos são buscados duas vezes, só que ao mesmo tempo que o resto, então
   // custam zero de tempo adicional. Com o banco a 200ms de distância, o que
   // importa é o número de RODADAS, não o de consultas.
-  const [stages, deals, campos] = await Promise.all([
+  const [stages, deals, campos, contas] = await Promise.all([
     getStages(funil.id),
     getDealCards(undefined, funil.id),
     listarCampos(),
+    // Para o cadastro de lead: a qual número de WhatsApp ele pertence.
+    prisma.whatsAppAccount.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, label: true, instanceName: true, phone: true } }),
   ]);
 
   const hot = deals.filter((d) => d.score >= 70).length;
@@ -63,6 +66,10 @@ export default async function FunilPage({
       {/* Barra do funil, como a do Pipedrive: o funil, o total em R$ e quantos
           negócios; à direita os sinais de atenção. */}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5 sm:px-6">
+        <NovoLead
+          colunas={stages}
+          contas={contas.map((c) => ({ id: c.id, nome: c.label ?? (c.phone ? `+${c.phone}` : c.instanceName) }))}
+        />
         <SeletorDeFunil atual={{ id: funil.id, name: funil.name }} />
         <p className="text-sm tabular-nums text-[var(--color-muted)]">
           <strong className="text-[var(--color-text)]">{formatCurrency(total) ?? "R$ 0"}</strong>

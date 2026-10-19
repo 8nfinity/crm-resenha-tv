@@ -12,11 +12,15 @@ const patchSchema = z
     title: z.string().trim().max(200).nullable().optional(),
     notes: z.string().trim().max(5000).nullable().optional(),
     dueAt: z.iso.datetime().nullable().optional(),
+    /** Trocar o tipo: um fixo, ou OTHER + kindId (tipo criado por você). */
+    type: z.enum(["FOLLOW_UP", "MEETING", "CALL", "PROPOSAL", "OTHER"]).optional(),
+    kindId: z.string().min(1).nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, "nada para alterar");
 
 /**
- * Altera uma atividade: concluir, reabrir, remarcar ou renomear.
+ * Altera uma atividade: concluir, reabrir, remarcar, renomear, trocar o tipo
+ * ou as anotações.
  *
  * A hora da conclusão é a do SERVIDOR, não a que o navegador mandaria: é o
  * registro de quando foi feito, e não deve depender do relógio de quem clicou.
@@ -31,7 +35,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Dados inválidos", detail: parsed.error.issues }, { status: 400 });
   }
 
-  const { feita, title, notes, dueAt } = parsed.data;
+  const { feita, title, notes, dueAt, type, kindId } = parsed.data;
 
   try {
     const atividade = await prisma.activity.update({
@@ -40,6 +44,8 @@ export async function PATCH(
         ...(feita !== undefined ? { doneAt: feita ? new Date() : null } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),
+        // Tipo próprio só existe com type OTHER; tipo fixo apaga o próprio.
+        ...(type !== undefined ? { type, kindId: type === "OTHER" ? (kindId ?? null) : null } : {}),
         // Remarcou: o lembrete por e-mail vale de novo para o horário novo.
         ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null, reminderSentAt: null } : {}),
       },

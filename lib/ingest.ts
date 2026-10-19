@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { createDealForContact } from "@/lib/deals";
+import { leadAutomatico } from "@/lib/deals";
 import { identidades, isPersonJid, jidToPhone, parseMessage } from "@/lib/evolution/parse";
 import { avisoEscondeOLid, lidEscondidoNoAviso, variantesDoTelefone } from "@/lib/identidade-contato";
 import { mesclarContatos } from "@/lib/mesclar-contatos";
@@ -252,7 +252,10 @@ export async function ingestLiveMessage(
   const inserted = await ingestMessages(contact.id, [raw]);
   if (inserted === 0) return null; // já tínhamos essa mensagem
 
-  const deal = await createDealForContact(contact.id);
+  // Número que só aceita contatos etiquetados: a mensagem fica guardada, mas
+  // só vira lead quando a etiqueta for posta no celular.
+  const deal = await leadAutomatico(contact.id);
+  if (!deal) return null;
 
   // O funil é ordenado pela última mensagem do lead: atualiza já, para o card
   // subir na hora (o recálculo do score vem depois e leva alguns segundos).

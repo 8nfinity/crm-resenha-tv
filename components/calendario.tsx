@@ -10,6 +10,7 @@ import {
   Clock,
   ExternalLink,
   List,
+  Pencil,
   Plus,
   RotateCcw,
   Search,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/atividades";
 import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
 import { DealPanel } from "@/components/kanban/deal-panel";
+import { EditarAtividade } from "@/components/editar-atividade";
 import {
   FILTROS_LISTA_PADRAO,
   PERIODOS_LISTA,
@@ -386,6 +388,10 @@ export function Calendario({
           onAbrirLead={() => {
             setDetalheId(null);
             setLeadAberto(detalhe.deal.id);
+          }}
+          onEditado={() => {
+            setDetalheId(null);
+            router.refresh();
           }}
         />
       )}
@@ -1143,7 +1149,7 @@ function VisaoLista({
             value={filtros.busca}
             onChange={(e) => set({ busca: e.target.value })}
             placeholder={semAtividade ? "Buscar lead ou telefone…" : "Buscar assunto, lead ou telefone…"}
-            className="w-64 rounded-full border bg-transparent py-1.5 pl-8 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+            className="w-full sm:w-64 rounded-full border bg-transparent py-1.5 pl-8 pr-3 text-sm outline-none placeholder:text-[var(--color-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
           />
         </div>
         <FiltrosDePessoaEFunil
@@ -1346,17 +1352,33 @@ function Detalhe({
   onAlternar,
   onApagar,
   onAbrirLead,
+  onEditado,
 }: {
   a: AtividadeCalendario;
   onFechar: () => void;
   onAlternar: () => void;
   onApagar: () => void;
   onAbrirLead: () => void;
+  onEditado: () => void;
 }) {
   const s = situacao(a);
+  const [editando, setEditando] = useState(false);
+
+  if (editando) {
+    return (
+      <Modal onFechar={onFechar}>
+        <h2 className="mb-3 text-base font-bold">Editar atividade</h2>
+        <EditarAtividade atividade={a} onCancelar={() => setEditando(false)} onSalvo={onEditado} />
+      </Modal>
+    );
+  }
+
   return (
     <Modal onFechar={onFechar}>
       <div className="flex justify-end gap-1">
+        <button onClick={() => setEditando(true)} aria-label="Editar" title="Editar" className="grid size-8 place-items-center rounded-full text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]">
+          <Pencil className="size-4" />
+        </button>
         <button onClick={onApagar} aria-label="Excluir" title="Excluir" className="grid size-8 place-items-center rounded-full text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-hot)]">
           <Trash2 className="size-4" />
         </button>
@@ -1400,6 +1422,11 @@ function Detalhe({
         <Linha icone={CalendarDays} titulo="Criada em">
           {dataHora(a.createdAt)}
         </Linha>
+        {a.notes && (
+          <Linha icone={Pencil} titulo="Anotações">
+            <span className="whitespace-pre-wrap">{a.notes}</span>
+          </Linha>
+        )}
       </dl>
 
       <button

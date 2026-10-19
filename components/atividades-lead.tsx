@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarPlus, Check, CheckCheck, Trash2 } from "lucide-react";
+import { CalendarPlus, Check, CheckCheck, Pencil, Trash2 } from "lucide-react";
+import { EditarAtividade } from "@/components/editar-atividade";
 import {
   dataHora,
   diaSemanaHora,
@@ -24,6 +25,7 @@ export type AtividadeDoLead = {
   /** Tipo criado por você, quando tem. */
   kindId?: string | null;
   title: string | null;
+  notes?: string | null;
   dueAt: string | null;
   doneAt: string | null;
   createdAt: string;
@@ -190,14 +192,14 @@ export function AtividadesLead({
 
       <Lista titulo="A fazer" vazio="Nada agendado para este lead.">
         {aFazer.map((a) => (
-          <Item key={a.id} a={a} proprios={proprios} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: true })} onApagar={() => void apagar(a.id)} />
+          <Item key={a.id} a={a} proprios={proprios} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: true })} onApagar={() => void apagar(a.id)} onEditado={onMudou} />
         ))}
       </Lista>
 
       {feitas.length > 0 && (
         <Lista titulo="Feitas">
           {feitas.map((a) => (
-            <Item key={a.id} a={a} proprios={proprios} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: false })} onApagar={() => void apagar(a.id)} />
+            <Item key={a.id} a={a} proprios={proprios} numero={numeros.get(a.id)} onAlternar={() => void alterar(a.id, { feita: false })} onApagar={() => void apagar(a.id)} onEditado={onMudou} />
           ))}
         </Lista>
       )}
@@ -242,6 +244,7 @@ function Item({
   numero,
   onAlternar,
   onApagar,
+  onEditado,
 }: {
   a: AtividadeDoLead;
   proprios: TipoProprio[];
@@ -249,9 +252,26 @@ function Item({
   numero?: number;
   onAlternar: () => void;
   onApagar: () => void;
+  onEditado: () => void;
 }) {
   const s = situacao(a);
   const feita = s === "feita";
+  const [editando, setEditando] = useState(false);
+
+  if (editando) {
+    return (
+      <li className="rounded-md border border-[var(--color-accent)]/50 bg-[var(--color-surface-2)] p-3">
+        <EditarAtividade
+          atividade={a}
+          onCancelar={() => setEditando(false)}
+          onSalvo={() => {
+            setEditando(false);
+            onEditado();
+          }}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="group flex items-start gap-3 rounded-md bg-[var(--color-surface-2)] p-3">
@@ -312,13 +332,22 @@ function Item({
             <dd className="inline">{dataHora(a.createdAt)}</dd>
           </div>
         </dl>
+        {a.notes && <p className="mt-1.5 whitespace-pre-wrap text-xs text-[var(--color-text)]/85">{a.notes}</p>}
       </div>
 
+      <button
+        onClick={() => setEditando(true)}
+        aria-label="Editar atividade"
+        title="Editar atividade"
+        className="rounded-full p-1 text-[var(--color-muted)] hover:text-[var(--color-text)]"
+      >
+        <Pencil className="size-3.5" />
+      </button>
       <button
         onClick={onApagar}
         aria-label="Apagar atividade"
         title="Apagar atividade"
-        className="rounded-full p-1 text-[var(--color-muted)] opacity-0 transition-opacity hover:text-[var(--color-hot)] group-hover:opacity-100 focus:opacity-100"
+        className="rounded-full p-1 text-[var(--color-muted)] transition-opacity hover:text-[var(--color-hot)] sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
       >
         <Trash2 className="size-3.5" />
       </button>

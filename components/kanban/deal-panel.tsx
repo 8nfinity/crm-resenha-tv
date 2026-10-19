@@ -19,7 +19,15 @@ type DealDetail = {
   scoreFactors: ScoreFactor[];
   stageId: string;
   stage: { name: string; color: string; pipeline: { id: string; name: string } };
-  contact: { phone: string | null; profilePicUrl: string | null; waJid: string };
+  contact: {
+    phone: string | null;
+    profilePicUrl: string | null;
+    waJid: string;
+    email?: string | null;
+    empresa?: string | null;
+  };
+  /** De onde veio (cadastro manual). */
+  origem?: string | null;
   messages: {
     id: string;
     fromMe: boolean;
@@ -658,6 +666,18 @@ export function DealPanel({
                   </p>
                 )}
                 {erroEdicao && <p className="mt-1 text-xs text-[var(--color-hot)]">{erroEdicao}</p>}
+                {/* Dados do cadastro manual, quando existem. */}
+                {(deal.contact.empresa || deal.contact.email || deal.origem) && (
+                  <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-[var(--color-muted)]">
+                    {deal.contact.empresa && <span>{deal.contact.empresa}</span>}
+                    {deal.contact.email && (
+                      <a href={`mailto:${deal.contact.email}`} className="hover:text-[var(--color-text)] hover:underline">
+                        {deal.contact.email}
+                      </a>
+                    )}
+                    {deal.origem && <span>Origem: {deal.origem}</span>}
+                  </p>
+                )}
                 <MoverLead deal={deal} onMovido={() => void load()} />
                 {deal.pipedrive.conectado && <BotaoPipedrive deal={deal} onEnviado={() => void load()} />}
                 {deal.ia.atende && <SituacaoIA deal={deal} onMudou={() => void load()} />}

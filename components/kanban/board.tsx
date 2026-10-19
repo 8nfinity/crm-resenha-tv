@@ -209,7 +209,7 @@ export function Board({
           liberar();
         }}
       >
-        <div className="scroll-thin flex min-h-0 flex-1 gap-2 overflow-x-auto px-4 pb-4 pt-3 sm:px-6">
+        <div className="scroll-thin flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-4 pt-3 sm:snap-none sm:px-6">
           {stages.map((stage) => (
             <Column
               key={stage.id}
@@ -269,7 +269,7 @@ function Column({
   const totalValue = deals.reduce((sum, d) => sum + (d.value ?? 0), 0);
 
   return (
-    <div className="flex w-[272px] shrink-0 flex-col rounded-md bg-[var(--color-surface)]">
+    <div className="flex w-[85vw] shrink-0 snap-center flex-col rounded-md bg-[var(--color-surface)] sm:w-[272px]">
       {/* Cabeçalho em seta, como as etapas do Pipedrive: nome, e embaixo o
           total em R$ e quantos negócios. A cor da coluna fica no traço. */}
       <div className="relative py-2 pl-3 pr-5">

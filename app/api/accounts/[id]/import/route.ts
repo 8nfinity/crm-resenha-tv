@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { evolution } from "@/lib/evolution/client";
 import { contactName } from "@/lib/queries";
 import { isPersonJid, jidAlternativo, jidToPhone } from "@/lib/evolution/parse";
-import { createDealForContact, recalculateScore } from "@/lib/deals";
+import { leadAutomatico, recalculateScore } from "@/lib/deals";
 import { ingestMessages, upsertContact } from "@/lib/ingest";
 import { avisarMudanca } from "@/lib/eventos";
 import { etiquetasDoChat } from "@/lib/ignorar";
@@ -217,8 +217,10 @@ export async function POST(
         contato = await upsertContact({ accountId, waJid, alt, pushName });
       }
 
-      const deal = await createDealForContact(contato.id);
-      await recalculateScore(deal.id);
+      // Número só com etiqueta: importa a conversa, mas só vira lead quem
+      // estiver etiquetado (a etiqueta traz o lead).
+      const deal = await leadAutomatico(contato.id);
+      if (deal) await recalculateScore(deal.id);
 
       return { waJid, nome: contactName(contato), mensagensNovas };
     } catch (error) {

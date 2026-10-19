@@ -10,6 +10,8 @@ const patchSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   /** Funil onde caem os leads novos deste número (nulo: o primeiro funil). */
   entryPipelineId: z.string().min(1).nullable().optional(),
+  /** Só entram no CRM os contatos etiquetados no celular. */
+  soComEtiqueta: z.boolean().optional(),
 });
 
 /** Renomeia, recolore ou troca o funil de entrada da conta. Não toca na instância da Evolution. */

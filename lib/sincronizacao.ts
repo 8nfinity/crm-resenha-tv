@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { createDealForContact, recalculateScore } from "@/lib/deals";
+import { leadAutomatico, recalculateScore } from "@/lib/deals";
 import { evolution } from "@/lib/evolution/client";
 import { isPersonJid, jidAlternativo } from "@/lib/evolution/parse";
 import type { EvolutionChat } from "@/lib/evolution/types";
@@ -134,7 +134,8 @@ export async function varrerConta(conta: { id: string; instanceName: string; sta
       if (novas === 0) continue;
 
       resultado.mensagensNovas += novas;
-      const deal = await createDealForContact(contato.id);
+      const deal = await leadAutomatico(contato.id);
+      if (!deal) continue; // número só com etiqueta: guarda a conversa, sem lead
       await recalculateScore(deal.id);
       afetados.add(deal.id);
     } catch (error) {

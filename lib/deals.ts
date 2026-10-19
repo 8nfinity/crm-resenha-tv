@@ -95,6 +95,23 @@ export async function createDealForContact(contactId: string, stageId?: string) 
 }
 
 /**
+ * Lead do contato quando chega mensagem ou importação: o que já existe, ou
+ * um novo. Nulo quando o número está no modo "só entram contatos
+ * etiquetados" e este ainda não é lead — a conversa fica guardada, e o lead
+ * nasce quando a etiqueta for posta no celular (ver lib/labels.ts).
+ */
+export async function leadAutomatico(contactId: string): Promise<{ id: string } | null> {
+  const contato = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: { deals: { select: { id: true }, take: 1 }, account: { select: { soComEtiqueta: true } } },
+  });
+  if (!contato) return null;
+  if (contato.deals[0]) return contato.deals[0];
+  if (contato.account.soComEtiqueta) return null;
+  return createDealForContact(contactId);
+}
+
+/**
  * Funil onde caem os leads novos do número por onde o contato chegou. Nulo:
  * o número não escolheu, vale o primeiro funil.
  */

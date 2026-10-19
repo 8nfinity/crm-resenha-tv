@@ -161,6 +161,7 @@ export async function listarContas() {
     status: conta.status,
     color: conta.color,
     entryPipelineId: conta.entryPipelineId,
+    soComEtiqueta: conta.soComEtiqueta,
     contatos: contatosPorConta.get(conta.id) ?? 0,
     leads: leadsPorConta.get(conta.id) ?? 0,
     lastImportAt: conta.lastImportAt?.toISOString() ?? null,

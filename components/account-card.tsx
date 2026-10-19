@@ -395,6 +395,7 @@ export function AccountCard({
         )}
       </div>
 
+      <EntradaDeLeads conta={conta} onMudou={onMudou} />
       <FunilDeEntrada conta={conta} onMudou={onMudou} />
 
       {erro && <p className="mt-2 text-xs text-[var(--color-hot)]">{erro}</p>}
@@ -566,5 +567,61 @@ function FunilDeEntrada({ conta, onMudou }: { conta: ContaResumo; onMudou: () =>
       </select>
       {salvando && <Loader2 className="size-3.5 animate-spin" />}
     </label>
+  );
+}
+
+/**
+ * Quem entra no CRM por este número: todas as conversas, ou só os contatos
+ * que forem etiquetados no celular (a etiqueta ligada a uma coluna em
+ * Configurações → Etiquetas traz o lead, e outra etiqueta o move).
+ */
+function EntradaDeLeads({ conta, onMudou }: { conta: ContaResumo; onMudou: () => void }) {
+  const [salvando, setSalvando] = useState(false);
+
+  async function escolher(soComEtiqueta: boolean) {
+    if (soComEtiqueta === conta.soComEtiqueta) return;
+    setSalvando(true);
+    await fetch(`/api/accounts/${conta.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ soComEtiqueta }),
+    }).catch(() => null);
+    setSalvando(false);
+    onMudou();
+  }
+
+  const opcao = (ativo: boolean) =>
+    cn(
+      "rounded-md border px-3 py-1.5 text-left text-xs transition-colors",
+      ativo ? "bolha border-transparent text-white" : "text-[var(--color-muted)] hover:text-[var(--color-text)]",
+    );
+
+  return (
+    <div className="mt-3 rounded-md border p-3">
+      <p className="flex items-center gap-2 text-xs font-semibold">
+        Quem entra no CRM por este número
+        {salvando && <Loader2 className="size-3.5 animate-spin" />}
+      </p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <button onClick={() => void escolher(false)} disabled={salvando} className={opcao(!conta.soComEtiqueta)}>
+          <span className="block font-semibold">Todas as conversas</span>
+          Quem mandar mensagem vira lead.
+        </button>
+        <button onClick={() => void escolher(true)} disabled={salvando} className={opcao(conta.soComEtiqueta)}>
+          <span className="block font-semibold">Só contatos etiquetados</span>
+          Vira lead só quem você etiquetar no celular.
+        </button>
+      </div>
+      {conta.soComEtiqueta && (
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-muted)]">
+          As conversas continuam sendo guardadas, mas o lead só aparece no funil quando você puser no celular uma etiqueta
+          ligada a uma coluna (ex.: "Novo lead"). Outra etiqueta, ligada a outra coluna, move o lead. Configure em{" "}
+          <a href="/configuracoes#etiquetas" className="font-semibold text-[var(--color-accent)] hover:underline">
+            Configurações → Etiquetas
+          </a>
+          . Os leads que já estão no funil continuam lá.
+        </p>
+      )}
+    </div>
   );
 }
