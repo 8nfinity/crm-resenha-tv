@@ -25,6 +25,7 @@ import {
   lerRegra,
   type Intervalo,
 } from "@/lib/ia/agenda";
+import { custoUsd } from "@/lib/ia/custo";
 
 /**
  * IA de atendimento: responde pelo WhatsApp os leads do funil escolhido,
@@ -149,7 +150,13 @@ type Acao =
   | { tipo: "reuniao"; inicio: string; resumo: string }
   | { tipo: "humano"; motivo: string };
 
-export type ResultadoIA = { mensagens: string[]; acoes: Acao[]; recusou: boolean };
+export type ResultadoIA = {
+  mensagens: string[];
+  acoes: Acao[];
+  recusou: boolean;
+  /** Quanto custou esta resposta (todas as chamadas dela), em dólares. */
+  custoUsd: number;
+};
 
 /**
  * Pergunta ao Claude o que responder, com as ferramentas de qualificar,
@@ -161,11 +168,14 @@ export async function pensarResposta(p: {
   historico: Anthropic.MessageParam[];
   contexto: string;
   executar: (acao: Acao) => Promise<string>;
+  /** De quem é o consumo, para Métricas: o lead atendido, ou o simulador. */
+  uso: { dealId: string | null; origem: "atendimento" | "simulador" };
 }): Promise<ResultadoIA> {
   const client = clienteAnthropic();
   const mensagens: Anthropic.Beta.BetaMessageParam[] = [...p.historico];
   const textos: string[] = [];
   const acoes: Acao[] = [];
+  let custoTotal = 0;
 
   for (let volta = 0; volta < 6; volta++) {
     const resposta = await client.beta.messages.create({
@@ -185,7 +195,9 @@ export async function pensarResposta(p: {
       messages: mensagens,
     });
 
-    if (resposta.stop_reason === "refusal") return { mensagens: [], acoes, recusou: true };
+    custoTotal += await registrarUso(p.cfg.modelo, resposta.usage, p.uso);
+
+    if (resposta.stop_reason === "refusal") return { mensagens: [], acoes, recusou: true, custoUsd: custoTotal };
 
     for (const bloco of resposta.content) if (bloco.type === "text" && bloco.text.trim()) textos.push(bloco.text.trim());
 
@@ -222,7 +234,29 @@ export async function pensarResposta(p: {
     mensagens.push({ role: "user", content: resultados });
   }
 
-  return { mensagens: dividirEmMensagens(textos.join("\n\n")), acoes, recusou: false };
+  return { mensagens: dividirEmMensagens(textos.join("\n\n")), acoes, recusou: false, custoUsd: custoTotal };
+}
+
+/**
+ * Grava o consumo de uma chamada (tokens que a própria API informou) e
+ * devolve o custo. Falhar ao gravar não pode atrapalhar o atendimento.
+ */
+async function registrarUso(
+  modelo: string,
+  usage: Anthropic.Beta.BetaUsage,
+  uso: { dealId: string | null; origem: string },
+): Promise<number> {
+  const tokens = {
+    inputTokens: usage.input_tokens ?? 0,
+    outputTokens: usage.output_tokens ?? 0,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+  };
+  const custo = custoUsd(modelo, tokens);
+  await prisma.iaUso
+    .create({ data: { dealId: uso.dealId, origem: uso.origem, modelo, ...tokens, custoUsd: custo } })
+    .catch((e) => console.warn("IA: não deu para registrar o consumo", (e as Error).message));
+  return custo;
 }
 
 /** Responde o lead, se for a vez da IA. Seguro de chamar a mais: confere tudo de novo. */
@@ -269,6 +303,7 @@ export async function responderLead(dealId: string): Promise<void> {
       reunioes: deal.activities.filter((a) => a.dueAt).map((a) => ({ quando: a.dueAt! })),
     }),
     executar: (acao) => executarAcao(deal.id, nome, acao, cfg),
+    uso: { dealId: deal.id, origem: "atendimento" },
   });
 
   if (resultado.recusou) {

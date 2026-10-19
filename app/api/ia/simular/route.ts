@@ -53,6 +53,7 @@ export async function POST(request: Request) {
           : acao.tipo === "reuniao" && Number.isNaN(new Date(acao.inicio).getTime())
             ? Promise.reject(new Error("Data inválida."))
             : "Feito (simulação: nada foi gravado no CRM).",
+      uso: { dealId: null, origem: "simulador" },
     });
     return NextResponse.json(r);
   } catch (e) {

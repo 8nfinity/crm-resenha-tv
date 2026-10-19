@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { aproveitamentoCache, cotacaoDolar } from "@/lib/ia/custo";
 import {
   distribuir,
   resumir,
@@ -405,5 +406,69 @@ export async function followUpsFeitos(): Promise<FollowUpsFeitos> {
         const l = porConta.get(c.id)!;
         return { id: c.id, nome: c.label ?? c.instanceName, cor: c.color, feitos: [l.j1, l.j7, l.j15, l.j30] };
       }),
+  };
+}
+
+// ─── Custo da IA de atendimento ──────────────────────────────────────────────
+
+export type JanelaCustoIA = {
+  dias: number;
+  /** Custo em dólares no WhatsApp (atendimento real). */
+  custoUsd: number;
+  /** Respostas enviadas (cada uma pode ter mais de uma chamada à API). */
+  chamadas: number;
+  leads: number;
+  /** Custo médio por lead atendido; nulo sem lead. */
+  porLeadUsd: number | null;
+  /** Quanto da entrada veio do cache (0 a 1). */
+  cache: number | null;
+  /** Testes no simulador, à parte. */
+  simuladorUsd: number;
+};
+
+/**
+ * Consumo da IA de atendimento em cada janela (hoje, 7 e 30 dias), a partir
+ * do que a própria Anthropic informou em cada chamada (tabela IaUso).
+ */
+export async function custoIA(): Promise<{ janelas: JanelaCustoIA[]; cotacao: number; temRegistro: boolean }> {
+  const janelas = [1, 7, 30];
+  const desde30 = diasAtras(30);
+  const linhas = await prisma.iaUso.findMany({
+    where: { createdAt: { gte: desde30 } },
+    select: {
+      createdAt: true,
+      dealId: true,
+      origem: true,
+      custoUsd: true,
+      inputTokens: true,
+      cacheReadTokens: true,
+      cacheWriteTokens: true,
+    },
+  });
+
+  return {
+    cotacao: cotacaoDolar(),
+    temRegistro: linhas.length > 0,
+    janelas: janelas.map((dias) => {
+      const desde = diasAtras(dias);
+      const naJanela = linhas.filter((l) => l.createdAt >= desde);
+      const reais = naJanela.filter((l) => l.origem === "atendimento");
+      const custoUsd = reais.reduce((s, l) => s + l.custoUsd, 0);
+      const leads = new Set(reais.map((l) => l.dealId).filter(Boolean)).size;
+      const soma = (k: "inputTokens" | "cacheReadTokens" | "cacheWriteTokens") => reais.reduce((s, l) => s + l[k], 0);
+      return {
+        dias,
+        custoUsd,
+        chamadas: reais.length,
+        leads,
+        porLeadUsd: leads > 0 ? custoUsd / leads : null,
+        cache: aproveitamentoCache({
+          inputTokens: soma("inputTokens"),
+          cacheReadTokens: soma("cacheReadTokens"),
+          cacheWriteTokens: soma("cacheWriteTokens"),
+        }),
+        simuladorUsd: naJanela.filter((l) => l.origem === "simulador").reduce((s, l) => s + l.custoUsd, 0),
+      };
+    }),
   };
 }

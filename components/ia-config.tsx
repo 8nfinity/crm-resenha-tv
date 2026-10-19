@@ -370,6 +370,7 @@ function Simulador({ nome }: { nome: string }) {
   const [acoes, setAcoes] = useState<string[]>([]);
   const [texto, setTexto] = useState("");
   const [pensando, setPensando] = useState(false);
+  const [custo, setCusto] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
 
   async function enviar(e: React.FormEvent) {
@@ -390,6 +391,7 @@ function Simulador({ nome }: { nome: string }) {
     if (!res?.ok) return setErro(corpo?.error ?? "A IA não respondeu.");
     if (corpo.recusou) return setErro("A IA não quis responder essa mensagem (no WhatsApp, passaria para a equipe).");
     setConversa([...nova, ...(corpo.mensagens as string[]).map((t) => ({ de: "ia" as const, texto: t }))]);
+    setCusto((c) => c + (Number(corpo.custoUsd) || 0));
     setAcoes((a) => [
       ...a,
       ...(corpo.acoes as { tipo: string; qualificado?: boolean; resumo?: string; inicio?: string; motivo?: string }[]).map((x) =>
@@ -405,12 +407,20 @@ function Simulador({ nome }: { nome: string }) {
   return (
     <div className="mt-2 rounded-md border">
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <p className="text-sm font-semibold">Simulador</p>
+        <p className="text-sm font-semibold">
+          Simulador
+          {custo > 0 && (
+            <span className="ml-2 text-xs font-normal text-[var(--color-muted)]" title="Custo real desta conversa de teste, pelo que a Anthropic informou">
+              custou US$ {custo.toFixed(4)}
+            </span>
+          )}
+        </p>
         <button
           onClick={() => {
             setConversa([]);
             setAcoes([]);
             setErro(null);
+            setCusto(0);
           }}
           className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
         >

@@ -563,3 +563,24 @@ model AgenteIA {
   colunaAgendadoId    String?
   updatedAt    DateTime @updatedAt
 }
+
+/// Consumo de cada chamada da IA de atendimento à Anthropic: tokens e custo.
+/// É de onde sai o custo real em Métricas (por dia, por lead, uso do cache).
+model IaUso {
+  id               String   @id @default(cuid())
+  /// Lead atendido; nulo no simulador.
+  dealId           String?
+  /// "atendimento" (WhatsApp) ou "simulador" (tela de configuração).
+  origem           String
+  modelo           String
+  inputTokens      Int
+  outputTokens     Int
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  /// Custo em dólares, calculado com a tabela de preços em lib/ia/custo.ts.
+  custoUsd         Float
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([dealId])
+}

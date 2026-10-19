@@ -1,6 +1,7 @@
 import {
   activityReport,
   followUpsFeitos,
+  custoIA,
   funnelMetrics,
   JANELAS_FOLLOW_UP,
   tempoDeResposta,
@@ -37,11 +38,12 @@ export default async function MetricasPage({
   // Os links de período mantêm o funil, e os de funil mantêm o período.
   const link = (d: number, f?: string) => `/metricas?dias=${d}${f ? `&funil=${encodeURIComponent(f)}` : ""}`;
 
-  const [funil, atividades, resposta, followUps] = await Promise.all([
+  const [funil, atividades, resposta, followUps, ia] = await Promise.all([
     funnelMetrics(dias, escolhido?.id),
     activityReport(dias),
     tempoDeResposta(dias),
     followUpsFeitos(),
+    custoIA(),
   ]);
 
   // Estágio "perdido" não é um passo adiante: a taxa dele não é conversão.
@@ -91,6 +93,8 @@ export default async function MetricasPage({
         </div>
 
         <FollowUps f={followUps} />
+
+        {ia.temRegistro && <CustoIA r={ia} />}
 
         <TempoDeResposta r={resposta} />
 
@@ -505,6 +509,65 @@ function TempoDeResposta({ r }: { r: RelatorioTempoResposta }) {
  * Não segue o período do topo de propósito: a pergunta aqui é "o ritmo está
  * subindo ou caindo?", e isso só se lê comparando as janelas entre si.
  */
+/**
+ * Quanto a IA de atendimento está custando, pelo que a Anthropic informou em
+ * cada chamada: por janela, por lead atendido, e quanto o cache economiza.
+ */
+function CustoIA({ r }: { r: Awaited<ReturnType<typeof custoIA>> }) {
+  const reais = (usd: number) =>
+    (usd * r.cotacao).toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dolar = (usd: number) => `US$ ${usd.toFixed(usd < 1 ? 4 : 2)}`;
+  return (
+    <section className="card p-6">
+      <CardHeader
+        title="🤖 Custo da IA de atendimento"
+        description={`Custo real de cada resposta, pelo que a Anthropic informou. Em reais pela cotação de R$ ${r.cotacao.toFixed(2).replace(".", ",")} (aproximado: a cobrança é em dólar).`}
+      >
+        <a
+          href="/configuracoes#ia"
+          className="rounded-md border px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
+        >
+          Configurar IA
+        </a>
+      </CardHeader>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        {r.janelas.map((j) => (
+          <div key={j.dias} className="rounded-md bg-[var(--color-surface-2)] p-4">
+            <p className="text-xs text-[var(--color-muted)]">{rotuloJanela(j.dias)}</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-[var(--color-accent)]">{reais(j.custoUsd)}</p>
+            <p className="text-xs tabular-nums text-[var(--color-muted)]">{dolar(j.custoUsd)}</p>
+            <dl className="mt-3 space-y-1 text-xs">
+              <div className="flex justify-between">
+                <dt className="text-[var(--color-muted)]">Leads atendidos</dt>
+                <dd className="tabular-nums">{j.leads}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[var(--color-muted)]">Custo por lead</dt>
+                <dd className="font-semibold tabular-nums">{j.porLeadUsd === null ? "—" : reais(j.porLeadUsd)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[var(--color-muted)]">Chamadas à IA</dt>
+                <dd className="tabular-nums">{j.chamadas}</dd>
+              </div>
+              <div className="flex justify-between" title="Quanto da entrada foi lida do cache, que custa ~10x menos. Quanto maior, melhor.">
+                <dt className="text-[var(--color-muted)]">Aproveitamento do cache</dt>
+                <dd className="tabular-nums">{j.cache === null ? "—" : `${Math.round(j.cache * 100)}%`}</dd>
+              </div>
+              {j.simuladorUsd > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-[var(--color-muted)]">Testes no simulador</dt>
+                  <dd className="tabular-nums">{reais(j.simuladorUsd)}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function FollowUps({ f }: { f: FollowUpsFeitos }) {
   const max = Math.max(1, ...f.janelas.map((j) => j.feitos));
   return (
