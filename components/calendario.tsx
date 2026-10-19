@@ -338,7 +338,7 @@ export function Calendario({
         {/* Filtros do calendário: os mesmos da Lista, em qualquer tamanho de tela. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5">
           <BarraDeTipos tipos={opcoesDeTipo(proprios)} escolhidos={filtros.tipos} onChange={(tipos) => setFiltros({ ...filtros, tipos })} />
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <div className="no-scrollbar flex max-w-full items-center gap-2 overflow-x-auto sm:flex-wrap lg:ml-auto [&>*]:shrink-0">
             <FiltrosDePessoaEFunil filtros={filtros} onChange={setFiltros} responsaveis={responsaveis} funis={funis} />
             <label className="flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm text-[var(--color-muted)]">
               <input
@@ -917,7 +917,7 @@ function BarraDeTipos({
   const alternar = (chave: string) =>
     onChange(escolhidos.includes(chave) ? escolhidos.filter((t) => t !== chave) : [...escolhidos, chave]);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="no-scrollbar flex max-w-full items-center gap-1.5 overflow-x-auto sm:flex-wrap [&>*]:shrink-0 [&>*]:whitespace-nowrap">
       <button
         onClick={() => onChange([])}
         className={cn(

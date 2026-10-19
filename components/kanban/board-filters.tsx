@@ -128,6 +128,8 @@ export function BoardFilters({
         />
       </div>
 
+      {/* No celular os filtros rolam para o lado numa linha só. */}
+      <div className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 sm:contents">
       <Seletor
         valor={filtros.temperatura}
         onChange={(v) => set({ temperatura: v as Filtros["temperatura"] })}
@@ -201,6 +203,7 @@ export function BoardFilters({
           </span>
         </>
       )}
+      </div>
     </div>
   );
 }
@@ -221,7 +224,7 @@ function Seletor({
       value={valor}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]",
+        "shrink-0 rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]",
         ativo
           ? "bolha border-transparent font-semibold text-white"
           : "bg-[var(--color-surface)] text-[var(--color-muted)]",
