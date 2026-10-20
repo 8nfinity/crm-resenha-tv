@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronLeft, ChevronRight, Clock, MessageSquare, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MessageSquare, TriangleAlert, UserRound } from "lucide-react";
 import type { DealCard as DealCardType } from "@/lib/types";
 import { diaSemanaHora, sinalDoLead, type SinalAtividades } from "@/lib/atividades";
 import { cn, formatCurrency, initials, relativeDays } from "@/lib/utils";
@@ -101,9 +101,16 @@ export function DealCardView({
             {initials(deal.contact.name)}
           </span>
         )}
-        <span className="font-semibold tabular-nums text-[var(--color-text)]">{value ?? "R$ 0"}</span>
+        <span className="shrink-0 font-semibold tabular-nums text-[var(--color-text)]">{value ?? "R$ 0"}</span>
+        {/* Responsável pelo lead: o primeiro nome cabe no card; o nome todo no mouse. */}
+        {deal.owner && (
+          <span className="inline-flex min-w-0 items-center gap-1 text-[var(--color-text)]/80" title={`Responsável: ${deal.owner.name}`}>
+            <UserRound className="size-3 shrink-0" />
+            <span className="truncate">{deal.owner.name.split(" ")[0]}</span>
+          </span>
+        )}
 
-        <span className="ml-auto flex items-center gap-2.5">
+        <span className="ml-auto flex shrink-0 items-center gap-2.5">
           <span className="inline-flex items-center gap-1" title="Última mensagem dele">
             <MessageSquare className="size-3" />
             {relativeDays(deal.lastInboundAt)}

@@ -16,6 +16,8 @@ export type DealCard = {
     phone: string | null;
     profilePicUrl: string | null;
   };
+  /** Pessoa do time responsável pelo lead. */
+  owner: { id: string; name: string } | null;
   /** De qual número conectado veio este lead. */
   account: {
     id: string;

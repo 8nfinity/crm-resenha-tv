@@ -114,6 +114,7 @@ export async function getDealCards(campos?: Campo[], pipelineId?: string): Promi
         enteredStageAt: true,
         customValues: true,
         stage: { select: { isWon: true, isLost: true } },
+        owner: { select: { id: true, name: true } },
         contact: {
           select: {
             id: true,
@@ -187,6 +188,7 @@ export async function getDealCards(campos?: Campo[], pipelineId?: string): Promi
         phone: formatPhone(deal.contact.phone),
         profilePicUrl: deal.contact.profilePicUrl,
       },
+      owner: deal.owner,
       account: {
         id: deal.contact.accountId,
         label: conta?.label ?? conta?.instanceName ?? "WhatsApp",
