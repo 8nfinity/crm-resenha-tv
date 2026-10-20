@@ -5,6 +5,7 @@ import type { Campo } from "@/lib/custom-fields";
 import type { DealCard } from "@/lib/types";
 import { sinalDoLead, type SinalAtividades } from "@/lib/atividades";
 import { cn } from "@/lib/utils";
+import { useEquipe } from "@/components/equipe";
 
 /**
  * Filtros do funil.
@@ -16,7 +17,8 @@ import { cn } from "@/lib/utils";
 
 export type Filtros = {
   busca: string;
-  temperatura: "todas" | "quente" | "morno" | "frio";
+  /** Responsável pelo lead: "" todos, "-" sem responsável, ou o id da pessoa. */
+  responsavel: string;
   parados: number | null;
   contaId: string | null;
   /** O ícone de atividades do card: atrasadas, hoje, futuras, sem nenhuma. */
@@ -26,7 +28,7 @@ export type Filtros = {
 
 export const FILTROS_VAZIOS: Filtros = {
   busca: "",
-  temperatura: "todas",
+  responsavel: "",
   parados: null,
   contaId: null,
   atividade: "todas",
@@ -36,20 +38,12 @@ export const FILTROS_VAZIOS: Filtros = {
 export function filtrosAtivos(f: Filtros): number {
   return (
     (f.busca.trim() ? 1 : 0) +
-    (f.temperatura !== "todas" ? 1 : 0) +
+    (f.responsavel ? 1 : 0) +
     (f.parados !== null ? 1 : 0) +
     (f.contaId ? 1 : 0) +
     (f.atividade !== "todas" ? 1 : 0) +
     Object.values(f.campos).filter(Boolean).length
   );
-}
-
-/** As faixas espelham describeScore, para a tela e o Claude concordarem. */
-function naFaixa(score: number, t: Filtros["temperatura"]): boolean {
-  if (t === "quente") return score >= 70;
-  if (t === "morno") return score >= 45 && score < 70;
-  if (t === "frio") return score < 45;
-  return true;
 }
 
 export function aplicarFiltros(deals: DealCard[], f: Filtros, agora: Date | null = null): DealCard[] {
@@ -74,7 +68,7 @@ export function aplicarFiltros(deals: DealCard[], f: Filtros, agora: Date | null
       if (!casaTexto && !casaFone) return false;
     }
 
-    if (!naFaixa(d.score, f.temperatura)) return false;
+    if (f.responsavel === "-" ? d.owner !== null : f.responsavel && d.owner?.id !== f.responsavel) return false;
     if (f.parados !== null && d.daysInStage < f.parados) return false;
     if (f.contaId && d.account.id !== f.contaId) return false;
     if (f.atividade !== "todas") {
@@ -110,6 +104,7 @@ export function BoardFilters({
   visiveis: number;
 }) {
   const ativos = filtrosAtivos(filtros);
+  const equipe = useEquipe();
   const set = (p: Partial<Filtros>) => onChange({ ...filtros, ...p });
 
   // Só campos de seleção viram filtro: texto livre geraria uma lista infinita
@@ -131,13 +126,12 @@ export function BoardFilters({
       {/* No celular os filtros rolam para o lado numa linha só. */}
       <div className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 sm:contents">
       <Seletor
-        valor={filtros.temperatura}
-        onChange={(v) => set({ temperatura: v as Filtros["temperatura"] })}
+        valor={filtros.responsavel}
+        onChange={(v) => set({ responsavel: v })}
         opcoes={[
-          { valor: "todas", rotulo: "Todas as temperaturas" },
-          { valor: "quente", rotulo: "Quentes (70+)" },
-          { valor: "morno", rotulo: "Mornos (45–69)" },
-          { valor: "frio", rotulo: "Frios (<45)" },
+          { valor: "", rotulo: "Todos os responsáveis" },
+          ...equipe.pessoas.map((p) => ({ valor: p.id, rotulo: p.id === equipe.eu ? `${p.nome} (eu)` : p.nome })),
+          { valor: "-", rotulo: "Sem responsável" },
         ]}
       />
 
