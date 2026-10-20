@@ -361,6 +361,8 @@ async function executarAcao(
     const conferido = conferirHorario(regra, { agora: new Date(), inicio, ocupados });
     // Não grava: a IA lê o motivo, consulta de novo e oferece outro horário.
     if (!conferido.ok) throw new Error(`${conferido.motivo} Use ver_horarios_livres e ofereça outro horário.`);
+    // A reunião fica com o responsável pelo lead (sem ele, vai aos administradores).
+    const dono = (await prisma.deal.findUnique({ where: { id: dealId }, select: { ownerId: true } }))?.ownerId ?? null;
     await prisma.$transaction([
       prisma.activity.create({
         data: {
@@ -369,6 +371,7 @@ async function executarAcao(
           title: `Reunião com ${nome}`,
           notes: `${acao.resumo}\n\n(agendada pela IA de atendimento)`,
           dueAt: inicio,
+          assignedToId: dono,
         },
       }),
       prisma.note.create({ data: { dealId, body: `🤖 Reunião agendada pela IA: ${quandoBr(inicio)}\n${acao.resumo}` } }),

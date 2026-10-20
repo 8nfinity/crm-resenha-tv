@@ -17,6 +17,7 @@ import {
   type TipoProprio,
 } from "@/lib/atividades";
 import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
+import { SeletorDePessoa, useEquipe } from "@/components/equipe";
 import { cn } from "@/lib/utils";
 
 export type AtividadeDoLead = {
@@ -29,7 +30,16 @@ export type AtividadeDoLead = {
   dueAt: string | null;
   doneAt: string | null;
   createdAt: string;
+  createdBy?: { id: string; name: string } | null;
+  /** Quem vai fazer; sem ninguém atribuído, vale quem criou. */
+  assignedTo?: { id: string; name: string } | null;
 };
+
+/** Quem vai fazer a atividade: a pessoa atribuída ou, sem ela, quem criou. */
+function responsavelDa(a: AtividadeDoLead): { id: string; nome: string } | null {
+  const p = a.assignedTo ?? a.createdBy;
+  return p ? { id: p.id, nome: p.name } : null;
+}
 
 /**
  * Aba de atividades do painel do lead.
@@ -40,10 +50,13 @@ export type AtividadeDoLead = {
  */
 export function AtividadesLead({
   dealId,
+  donoDoLead = null,
   atividades,
   onMudou,
 }: {
   dealId: string;
+  /** Responsável pelo lead: as atividades novas vão para ele de saída. */
+  donoDoLead?: string | null;
   atividades: AtividadeDoLead[];
   onMudou: () => void;
 }) {
@@ -53,6 +66,10 @@ export function AtividadesLead({
   const [titulo, setTitulo] = useState("");
   const [data, setData] = useState(sugestao.data);
   const [horaStr, setHoraStr] = useState(sugestao.hora);
+  const equipe = useEquipe();
+  // De saída: o responsável pelo lead; sem ele, quem está marcando.
+  const [escolhido, setEscolhido] = useState<string | null>(null);
+  const responsavel = escolhido ?? donoDoLead ?? equipe.eu ?? "";
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -73,6 +90,7 @@ export function AtividadesLead({
           return kindId ? { type, kindId } : { type };
         })(),
         title: titulo.trim() || undefined,
+        assignedToId: responsavel || null,
         ...(jaFeita ? { doneAt: new Date().toISOString() } : { dueAt }),
       }),
     }).catch(() => null);
@@ -162,6 +180,17 @@ export function AtividadesLead({
             />
           </label>
         </div>
+
+        <label className="mt-2 block">
+          <span className="mb-1 block text-[10px] uppercase tracking-wide text-[var(--color-muted)]">Responsável</span>
+          <SeletorDePessoa
+            valor={responsavel}
+            onChange={setEscolhido}
+            pessoas={equipe.pessoas}
+            rotuloVazio="Eu (quem está marcando)"
+            className="w-full rounded-md bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          />
+        </label>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <button
@@ -262,7 +291,7 @@ function Item({
     return (
       <li className="rounded-md border border-[var(--color-accent)]/50 bg-[var(--color-surface-2)] p-3">
         <EditarAtividade
-          atividade={a}
+          atividade={{ ...a, responsavel: responsavelDa(a) }}
           onCancelar={() => setEditando(false)}
           onSalvo={() => {
             setEditando(false);
@@ -325,6 +354,12 @@ function Item({
             <div>
               <dt className="inline">Feita em: </dt>
               <dd className="inline font-medium text-[var(--color-accent)]">{dataHora(a.doneAt)}</dd>
+            </div>
+          )}
+          {responsavelDa(a) && (
+            <div>
+              <dt className="inline">Responsável: </dt>
+              <dd className="inline font-medium text-[var(--color-text)]">{responsavelDa(a)!.nome}</dd>
             </div>
           )}
           <div>

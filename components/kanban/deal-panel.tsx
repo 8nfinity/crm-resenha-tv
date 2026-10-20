@@ -10,6 +10,7 @@ import type { Campo } from "@/lib/custom-fields";
 import { cn, initials } from "@/lib/utils";
 import { corrigirNomeEtiqueta } from "@/lib/etiquetas-nomes";
 import { EVENTO_MUDOU, type DetalheMudou } from "@/components/ao-vivo";
+import { useEquipe } from "@/components/equipe";
 
 type DealDetail = {
   id: string;
@@ -28,6 +29,8 @@ type DealDetail = {
   };
   /** De onde veio (cadastro manual). */
   origem?: string | null;
+  /** Pessoa do time responsável pelo lead. */
+  owner: { id: string; name: string } | null;
   messages: {
     id: string;
     fromMe: boolean;
@@ -196,6 +199,58 @@ function MoverLead({ deal, onMovido }: { deal: DealDetail; onMovido: () => void 
                   {c.name}
                 </option>
               ))}
+        </select>
+      </label>
+      {erro && <p className="mt-1 text-xs text-[var(--color-hot)]">{erro}</p>}
+    </div>
+  );
+}
+
+/** Responsável pelo lead: um selo com o nome; clicar troca a pessoa. */
+function ResponsavelDoLead({ deal, onMudou }: { deal: DealDetail; onMudou: () => void }) {
+  const { pessoas, carregou } = useEquipe();
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const lista = deal.owner && !pessoas.some((p) => p.id === deal.owner!.id) ? [...pessoas, { id: deal.owner.id, nome: deal.owner.name }] : pessoas;
+
+  async function trocar(ownerId: string) {
+    setSalvando(true);
+    setErro(null);
+    const res = await fetch(`/api/deals/${deal.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ownerId: ownerId || null }),
+    }).catch(() => null);
+    setSalvando(false);
+    if (!res?.ok) return setErro("Não deu para trocar o responsável.");
+    onMudou();
+  }
+
+  return (
+    <div className="mt-1">
+      <label
+        className={cn(
+          "relative inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
+          deal.owner ? "text-[var(--color-text)]" : "text-[var(--color-muted)]",
+        )}
+        title="Responsável pelo lead"
+      >
+        {salvando ? <Loader2 className="size-3 animate-spin" /> : <UserRound className="size-3" />}
+        <span className="truncate">{deal.owner?.name ?? "Sem responsável"}</span>
+        <span aria-hidden>▾</span>
+        <select
+          value={deal.owner?.id ?? ""}
+          disabled={!carregou || salvando}
+          onChange={(e) => void trocar(e.target.value)}
+          aria-label="Responsável pelo lead"
+          className="absolute inset-0 cursor-pointer opacity-0"
+        >
+          <option value="">Sem responsável</option>
+          {lista.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nome}
+            </option>
+          ))}
         </select>
       </label>
       {erro && <p className="mt-1 text-xs text-[var(--color-hot)]">{erro}</p>}
@@ -678,7 +733,10 @@ export function DealPanel({
                     {deal.origem && <span>Origem: {deal.origem}</span>}
                   </p>
                 )}
-                <MoverLead deal={deal} onMovido={() => void load()} />
+                <div className="flex flex-wrap items-center gap-x-1.5">
+                  <MoverLead deal={deal} onMovido={() => void load()} />
+                  <ResponsavelDoLead deal={deal} onMudou={() => void load()} />
+                </div>
                 {deal.pipedrive.conectado && <BotaoPipedrive deal={deal} onEnviado={() => void load()} />}
                 {deal.ia.atende && <SituacaoIA deal={deal} onMudou={() => void load()} />}
               </div>
@@ -933,6 +991,7 @@ export function DealPanel({
               {tab === "atividades" && (
                 <AtividadesLead
                   dealId={dealId}
+                  donoDoLead={deal.owner?.id ?? null}
                   atividades={deal.activities}
                   onMudou={() => void load()}
                 />

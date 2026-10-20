@@ -6,6 +6,7 @@ import { createDealForContact, moveDealToStage, recalculateScore } from "@/lib/d
 import { avisarMudanca } from "@/lib/eventos";
 import { usuarioAtual } from "@/lib/auth/usuario";
 import { emailValido, normalizarTelefone } from "@/lib/cadastro-lead";
+import { responsavelValido } from "@/lib/equipe";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,8 @@ const schema = z.object({
   stageId: z.string().min(1),
   /** Número de WhatsApp do CRM a que o contato pertence; sem ele, o primeiro. */
   accountId: z.string().min(1).optional(),
+  /** Pessoa do time responsável pelo lead. Vazio: ninguém. */
+  ownerId: z.string().nullable().optional(),
 });
 
 /**
@@ -41,13 +44,15 @@ export async function POST(request: Request) {
   }
   if (d.email && !emailValido(d.email)) return NextResponse.json({ error: "E-mail inválido." }, { status: 400 });
 
-  const [coluna, conta, usuario] = await Promise.all([
+  const [coluna, conta, usuario, ownerId] = await Promise.all([
     prisma.stage.findUnique({ where: { id: d.stageId }, select: { id: true } }),
     d.accountId
       ? prisma.whatsAppAccount.findUnique({ where: { id: d.accountId }, select: { id: true } })
       : prisma.whatsAppAccount.findFirst({ orderBy: [{ status: "desc" }, { createdAt: "asc" }], select: { id: true } }),
     usuarioAtual(),
+    responsavelValido(d.ownerId),
   ]);
+  if (ownerId === false) return NextResponse.json({ error: "Essa pessoa não está mais no CRM." }, { status: 400 });
   if (!coluna) return NextResponse.json({ error: "Coluna não encontrada." }, { status: 400 });
   if (!conta) return NextResponse.json({ error: "Conecte um número de WhatsApp antes de cadastrar leads." }, { status: 400 });
 
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
     data: {
       ...(d.valor !== undefined && d.valor !== null ? { value: d.valor } : {}),
       ...(d.origem ? { origem: d.origem } : {}),
+      ...(ownerId !== undefined ? { ownerId } : {}),
     },
   });
   await prisma.note.create({

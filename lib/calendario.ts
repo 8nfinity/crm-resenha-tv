@@ -39,7 +39,7 @@ export type AtividadeCalendario = {
     funilId: string;
     funilNome: string;
   };
-  /** Quem marcou a atividade. Nulo nas automáticas ou de usuário removido. */
+  /** Quem vai fazer: a pessoa atribuída ou, sem ela, quem marcou. Nulo nas automáticas sem dono. */
   responsavel: { id: string; nome: string } | null;
 };
 
@@ -54,6 +54,7 @@ const CAMPOS = {
   doneAt: true,
   createdAt: true,
   createdBy: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true } },
   deal: {
     select: {
       id: true,
@@ -125,8 +126,13 @@ async function montar(linhas: Linha[]): Promise<AtividadeCalendario[]> {
       funilId: a.deal.stage.pipeline.id,
       funilNome: a.deal.stage.pipeline.name,
     },
-    responsavel: a.createdBy ? { id: a.createdBy.id, nome: a.createdBy.name } : null,
+    responsavel: responsavelDe(a),
   }));
+}
+
+function responsavelDe(a: { assignedTo: { id: string; name: string } | null; createdBy: { id: string; name: string } | null }) {
+  const p = a.assignedTo ?? a.createdBy;
+  return p ? { id: p.id, nome: p.name } : null;
 }
 
 /** Quem pode ser responsável: os usuários ativos, para o filtro. */

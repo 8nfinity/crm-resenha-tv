@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { ActivityType } from "@/lib/generated/prisma/client";
 import { avisarMudanca } from "@/lib/eventos";
 import { usuarioAtual } from "@/lib/auth/usuario";
+import { responsavelValido } from "@/lib/equipe";
 
 const bodySchema = z.object({
   type: z.enum(["FOLLOW_UP", "MEETING", "CALL", "PROPOSAL", "OTHER"]),
@@ -13,6 +14,8 @@ const bodySchema = z.object({
   notes: z.string().trim().max(5000).optional(),
   dueAt: z.iso.datetime().optional(),
   doneAt: z.iso.datetime().optional(),
+  /** Quem vai fazer. Sem o campo: o responsável pelo lead; nulo: quem criou. */
+  assignedToId: z.string().nullable().optional(),
 });
 
 /**
@@ -40,6 +43,12 @@ export async function POST(
   // Quem marcou recebe o lembrete por e-mail quando o lead não tem vendedor.
   // Sem sessão legível (chamada fora de uma requisição do navegador), cria sem autor.
   const autor = await usuarioAtual().catch(() => null);
+  let assignedToId = await responsavelValido(parsed.data.assignedToId);
+  if (assignedToId === false) return NextResponse.json({ error: "Essa pessoa não está mais no CRM." }, { status: 400 });
+  if (assignedToId === undefined) {
+    const deal = await prisma.deal.findUnique({ where: { id }, select: { ownerId: true } });
+    assignedToId = deal?.ownerId ?? null;
+  }
 
   const activity = await prisma.activity.create({
     data: {
@@ -51,6 +60,7 @@ export async function POST(
       dueAt: dueAt ? new Date(dueAt) : null,
       doneAt: doneAt ? new Date(doneAt) : null,
       createdById: autor?.id ?? null,
+      assignedToId,
     },
   });
 

@@ -263,6 +263,9 @@ model Deal {
   /// De onde veio o lead ("Instagram", "Indicação"…), no cadastro manual.
   origem            String?
 
+  /// Pessoa do time responsável pelo lead. Nula: ninguém ainda.
+  ownerId String?
+
   pipedriveDealId   Int?
   pipedrivePersonId Int?
   pipedriveSentAt   DateTime?
@@ -281,8 +284,10 @@ model Deal {
   transitions StageTransition[]
   activities  Activity[]
   notes       Note[]
+  owner       User?             @relation("ResponsavelDoLead", fields: [ownerId], references: [id], onDelete: SetNull)
 
   @@unique([contactId])
+  @@index([ownerId])
   @@index([stageId, score])
   @@index([lastInboundAt])
   @@index([archivedAt])
@@ -364,6 +369,8 @@ model Activity {
   doneAt    DateTime?
   /// Quem criou (para saber a quem avisar quando o lead não tem vendedor).
   createdById String?
+  /// Quem vai fazer. Nulo: vale quem criou. É quem recebe o lembrete.
+  assignedToId String?
   /// Quando o lembrete por e-mail saiu. Nulo = ainda não avisado.
   reminderSentAt DateTime?
   createdAt DateTime     @default(now())
@@ -375,10 +382,12 @@ model Activity {
 
   deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
   createdBy User? @relation("CriadorDaAtividade", fields: [createdById], references: [id], onDelete: SetNull)
+  assignedTo User? @relation("ResponsavelDaAtividade", fields: [assignedToId], references: [id], onDelete: SetNull)
   /// Apagar o tipo não apaga a atividade: ela volta a ser "Outro".
   kind ActivityKind? @relation(fields: [kindId], references: [id], onDelete: SetNull)
 
   @@index([kindId])
+  @@index([assignedToId])
   @@index([dealId, createdAt])
   @@index([type, doneAt])
   @@index([dueAt])
@@ -480,6 +489,8 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   activities    Activity[]      @relation("CriadorDaAtividade")
+  atividadesDele Activity[]     @relation("ResponsavelDaAtividade")
+  leads         Deal[]          @relation("ResponsavelDoLead")
   playbookFiles PlaybookFile[]
   pushSubscriptions PushSubscription[]
 }

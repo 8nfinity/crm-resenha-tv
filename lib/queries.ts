@@ -269,9 +269,10 @@ export async function getDealDetail(dealId: string) {
       },
       stage: { include: { pipeline: { select: { id: true, name: true } } } },
       notes: { orderBy: { createdAt: "desc" } },
+      owner: { select: { id: true, name: true } },
       activities: {
         orderBy: { createdAt: "desc" },
-        include: { createdBy: { select: { name: true } } },
+        include: { createdBy: { select: { id: true, name: true } }, assignedTo: { select: { id: true, name: true } } },
       },
       transitions: {
         orderBy: { at: "desc" },

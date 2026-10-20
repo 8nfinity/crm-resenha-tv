@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, X } from "lucide-react";
 import { ORIGENS, emailValido, lerValor, normalizarTelefone } from "@/lib/cadastro-lead";
 import { cn } from "@/lib/utils";
+import { SeletorDePessoa, useEquipe } from "@/components/equipe";
 
 type Coluna = { id: string; name: string; isWon: boolean; isLost: boolean };
 
@@ -51,6 +52,10 @@ function Formulario({ colunas, contas, onFechar }: { colunas: Coluna[]; contas: 
   const [stageId, setStageId] = useState(emAndamento[0]?.id ?? colunas[0]?.id ?? "");
   const [accountId, setAccountId] = useState(contas[0]?.id ?? "");
   const [observacao, setObservacao] = useState("");
+  const equipe = useEquipe();
+  // Começa com quem está cadastrando; dá para trocar ou deixar sem ninguém.
+  const [responsavel, setResponsavel] = useState<string | null>(null);
+  const ownerId = responsavel ?? equipe.eu ?? "";
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [existente, setExistente] = useState<string | null>(null);
@@ -86,6 +91,7 @@ function Formulario({ colunas, contas, onFechar }: { colunas: Coluna[]; contas: 
         origem: origem === "Outro" ? outraOrigem : origem,
         observacao,
         stageId,
+        ownerId: ownerId || null,
         ...(accountId ? { accountId } : {}),
       }),
     }).catch(() => null);
@@ -177,6 +183,9 @@ function Formulario({ colunas, contas, onFechar }: { colunas: Coluna[]; contas: 
               </Campo>
             )}
           </div>
+          <Campo rotulo="Responsável">
+            <SeletorDePessoa valor={ownerId} onChange={setResponsavel} pessoas={equipe.pessoas} rotuloVazio="Sem responsável" className={campo} />
+          </Campo>
           <Campo rotulo="Observação">
             <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} maxLength={5000} placeholder="O que ele quer, como chegou até vocês…" className={cn(campo, "resize-y")} />
           </Campo>

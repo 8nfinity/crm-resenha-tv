@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { avisarMudanca } from "@/lib/eventos";
+import { responsavelValido } from "@/lib/equipe";
 import { prisma } from "@/lib/db";
 import { getDealDetail } from "@/lib/queries";
 import { exigirAdmin } from "@/lib/auth/usuario";
@@ -27,6 +30,24 @@ export async function GET(
       url: pipedrive && deal.pipedriveDealId ? urlDoNegocio(pipedrive.dominio, deal.pipedriveDealId) : null,
     },
   });
+}
+
+/** Troca o responsável pelo lead (`ownerId` nulo: ninguém). */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const parsed = z.object({ ownerId: z.string().nullable() }).safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+
+  const ownerId = await responsavelValido(parsed.data.ownerId);
+  if (ownerId === false) return NextResponse.json({ error: "Essa pessoa não está mais no CRM." }, { status: 400 });
+
+  const deal = await prisma.deal.update({ where: { id }, data: { ownerId }, select: { id: true } }).catch(() => null);
+  if (!deal) return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 });
+  avisarMudanca({ dealIds: [id], motivo: "funil" });
+  return NextResponse.json({ ok: true });
 }
 
 /**

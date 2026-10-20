@@ -17,6 +17,7 @@ import {
   Trash2,
   TriangleAlert,
   User,
+  UserRound,
   X,
 } from "lucide-react";
 import type { AtividadeCalendario } from "@/lib/calendario";
@@ -38,6 +39,7 @@ import {
 import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
 import { DealPanel } from "@/components/kanban/deal-panel";
 import { EditarAtividade } from "@/components/editar-atividade";
+import { useEquipe } from "@/components/equipe";
 import {
   FILTROS_LISTA_PADRAO,
   PERIODOS_LISTA,
@@ -1419,6 +1421,9 @@ function Detalhe({
             <span className="text-[var(--color-accent)]">{dataHora(a.doneAt)}</span>
           </Linha>
         )}
+        <Linha icone={UserRound} titulo="Responsável">
+          {a.responsavel?.nome ?? <span className="text-[var(--color-muted)]">Ninguém (vai para os administradores)</span>}
+        </Linha>
         <Linha icone={CalendarDays} titulo="Criada em">
           {dataHora(a.createdAt)}
         </Linha>
@@ -1478,6 +1483,9 @@ function CriarAtividade({
   const [horaStr, setHoraStr] = useState(inicial.hora);
   const [busca, setBusca] = useState("");
   const [lead, setLead] = useState<{ id: string; nome: string } | null>(leadInicial);
+  const equipe = useEquipe();
+  // "lead": fica com o responsável pelo lead (o servidor sabe quem é); "": ninguém.
+  const [responsavel, setResponsavel] = useState("lead");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -1494,7 +1502,12 @@ function CriarAtividade({
     const res = await fetch(`/api/deals/${lead.id}/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...semNulo(tipoDaChave(tipo)), title: titulo.trim() || undefined, dueAt }),
+      body: JSON.stringify({
+        ...semNulo(tipoDaChave(tipo)),
+        title: titulo.trim() || undefined,
+        dueAt,
+        ...(responsavel === "lead" ? {} : { assignedToId: responsavel || null }),
+      }),
     }).catch(() => null);
     setSalvando(false);
     if (!res?.ok) return setErro("Não deu para salvar. Tente de novo.");
@@ -1556,6 +1569,19 @@ function CriarAtividade({
               {termo && sugestoes.length === 0 && <p className="mt-1 text-xs text-[var(--color-muted)]">Nenhum lead com esse nome.</p>}
             </div>
           )}
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <UserRound className="mt-2.5 size-4 shrink-0 text-[var(--color-muted)]" />
+          <select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} aria-label="Responsável" className={campo}>
+            <option value="lead">Responsável pelo lead (sem ele, eu)</option>
+            {equipe.pessoas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+                {p.id === equipe.eu ? " (eu)" : ""}
+              </option>
+            ))}
+          </select>
         </div>
 
         {erro && <p className="mt-3 text-xs text-[var(--color-hot)]">{erro}</p>}

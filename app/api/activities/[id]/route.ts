@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { avisarMudanca } from "@/lib/eventos";
+import { responsavelValido } from "@/lib/equipe";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,8 @@ const patchSchema = z
     /** Trocar o tipo: um fixo, ou OTHER + kindId (tipo criado por você). */
     type: z.enum(["FOLLOW_UP", "MEETING", "CALL", "PROPOSAL", "OTHER"]).optional(),
     kindId: z.string().min(1).nullable().optional(),
+    /** Quem vai fazer. Nulo: vale quem criou. */
+    assignedToId: z.string().nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, "nada para alterar");
 
@@ -36,6 +39,8 @@ export async function PATCH(
   }
 
   const { feita, title, notes, dueAt, type, kindId } = parsed.data;
+  const assignedToId = await responsavelValido(parsed.data.assignedToId);
+  if (assignedToId === false) return NextResponse.json({ error: "Essa pessoa não está mais no CRM." }, { status: 400 });
 
   try {
     const atividade = await prisma.activity.update({
@@ -44,6 +49,7 @@ export async function PATCH(
         ...(feita !== undefined ? { doneAt: feita ? new Date() : null } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),
+        ...(assignedToId !== undefined ? { assignedToId } : {}),
         // Tipo próprio só existe com type OTHER; tipo fixo apaga o próprio.
         ...(type !== undefined ? { type, kindId: type === "OTHER" ? (kindId ?? null) : null } : {}),
         // Remarcou: o lembrete por e-mail vale de novo para o horário novo.

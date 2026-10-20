@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { chaveDia, chaveDoTipo, juntarDataHora, tipoDaChave } from "@/lib/atividades";
 import { SeletorDeTipo, useTiposProprios } from "@/components/tipos-atividade";
+import { SeletorDePessoa, useEquipe } from "@/components/equipe";
 
 export type AtividadeEditavel = {
   id: string;
@@ -12,6 +13,8 @@ export type AtividadeEditavel = {
   title: string | null;
   notes?: string | null;
   dueAt: string | null;
+  /** Quem vai fazer hoje (a pessoa atribuída ou, sem ela, quem criou). */
+  responsavel?: { id: string; nome: string } | null;
 };
 
 /** "14:30" no fuso de quem está vendo. */
@@ -40,6 +43,8 @@ export function EditarAtividade({
   const [notas, setNotas] = useState(atividade.notes ?? "");
   const [data, setData] = useState(atividade.dueAt ? chaveDia(atividade.dueAt) : "");
   const [hora, setHora] = useState(atividade.dueAt ? horaLocal(atividade.dueAt) : "09:00");
+  const equipe = useEquipe();
+  const [responsavel, setResponsavel] = useState(atividade.responsavel?.id ?? "");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -58,6 +63,8 @@ export function EditarAtividade({
         notes: notas.trim() || null,
         // Sem data: a atividade fica "sem data" (vale para o que foi registrado como feito).
         dueAt: data ? juntarDataHora(data, hora) : null,
+        // Só manda se mudou: quem nunca foi atribuído continua "quem criou".
+        ...(responsavel !== (atividade.responsavel?.id ?? "") ? { assignedToId: responsavel || null } : {}),
       }),
     }).catch(() => null);
     setSalvando(false);
@@ -82,6 +89,17 @@ export function EditarAtividade({
           <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} disabled={!data} className={campo} />
         </label>
       </div>
+      <label>
+        <span className="mb-1 block text-[10px] uppercase tracking-wide text-[var(--color-muted)]">Responsável</span>
+        <SeletorDePessoa
+          valor={responsavel}
+          onChange={setResponsavel}
+          pessoas={equipe.pessoas}
+          atual={atividade.responsavel}
+          rotuloVazio="Quem criou a atividade"
+          className={campo}
+        />
+      </label>
       <textarea
         value={notas}
         onChange={(e) => setNotas(e.target.value)}

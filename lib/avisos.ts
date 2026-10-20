@@ -120,6 +120,7 @@ function horaCurta(d: Date): string {
 
 const INCLUI_ATIVIDADE = {
   createdBy: { select: SELECIONA_PESSOA },
+  assignedTo: { select: SELECIONA_PESSOA },
   kind: { select: { name: true } },
   deal: {
     select: {
@@ -137,6 +138,9 @@ type AtividadeComLead = {
   dueAt: Date | null;
   createdById: string | null;
   createdBy: Pessoa | null;
+  /** Quem vai fazer; nulo, vale quem criou. */
+  assignedToId: string | null;
+  assignedTo: Pessoa | null;
   /** Tipo criado por você ("Avaliação"), quando tem. */
   kind?: { name: string } | null;
   /** Número do follow-up no lead (1º, 2º…), preenchido depois da busca. */
@@ -212,7 +216,7 @@ export async function enviarLembretes(agora = new Date()): Promise<number> {
     const semAparelho = new Set<string>();
     if (canal.push) {
       for (const a of atividades) {
-        const pessoas = responsaveisDaAtividade({ criador: a.createdBy, admins });
+        const pessoas = responsaveisDaAtividade({ criador: a.assignedTo ?? a.createdBy, admins });
         const n = await enviarPush(
           pessoas.map((p) => p.id),
           {
@@ -231,7 +235,7 @@ export async function enviarLembretes(agora = new Date()): Promise<number> {
     // E-mail: um por pessoa, com todas as atividades dela na janela.
     const porPessoa = new Map<string, { pessoa: Pessoa; itens: AtividadeComLead[] }>();
     for (const a of atividades) {
-      const destinos = canal.email ? escolherDestinatarios({ criador: a.createdBy, admins }) : [];
+      const destinos = canal.email ? escolherDestinatarios({ criador: a.assignedTo ?? a.createdBy, admins }) : [];
       // Ninguém para avisar por canal nenhum: marca para não procurar de novo.
       if (destinos.length === 0 && (!canal.push || semAparelho.has(a.id))) avisadas.add(a.id);
       for (const p of destinos) {
@@ -340,7 +344,7 @@ export async function enviarResumoDiario({ agora = new Date(), forcar = false } 
       const minhas = time
         ? atividades
         : atividades.filter(
-            (a) => a.createdById === pessoa.id,
+            (a) => (a.assignedToId ?? a.createdById) === pessoa.id,
           );
       if (minhas.length === 0) continue;
 
@@ -386,7 +390,8 @@ function emailDeResumo(pessoa: Pessoa, deHoje: AtividadeComLead[], atrasadas: At
     const resto = itens.length - mostrar.length;
     const linha = (a: AtividadeComLead) => {
       const momento = comDia ? quando(a.dueAt!) : horaCurta(a.dueAt!);
-      const vendedor = time && a.createdBy ? ` · marcada por ${a.createdBy.name}` : "";
+      const dono = a.assignedTo ?? a.createdBy;
+      const vendedor = time && dono ? ` · com ${dono.name}` : "";
       return {
         html: `<tr><td style="padding:8px 0;border-bottom:1px solid #3a2818"><span style="color:${cor};font-weight:700">${escaparHtml(momento)}</span> · <strong style="color:#ffffff">${escaparHtml(descricao(a))}</strong> · ${escaparHtml(nomeDoLead(a))}<span style="color:#a8968a">${escaparHtml(vendedor)}</span></td></tr>`,
         texto: `- ${momento} · ${descricao(a)} · ${nomeDoLead(a)}${vendedor}`,
