@@ -87,6 +87,13 @@ export function DealCardView({
               número ainda não informado
             </p>
           )}
+          {/* Responsável pelo lead, numa linha própria para o nome caber. */}
+          {deal.owner && (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-[var(--color-text)]/80" title={`Responsável: ${deal.owner.name}`}>
+              <UserRound className="size-3 shrink-0" />
+              <span className="truncate">{deal.owner.name}</span>
+            </p>
+          )}
         </div>
         {/* Negócio fechado (Ganho/Perdido) não precisa de próximo passo. */}
         {!deal.fechado && <SinalDeAtividades deal={deal} agora={agora} />}
@@ -102,13 +109,6 @@ export function DealCardView({
           </span>
         )}
         <span className="shrink-0 font-semibold tabular-nums text-[var(--color-text)]">{value ?? "R$ 0"}</span>
-        {/* Responsável pelo lead: o primeiro nome cabe no card; o nome todo no mouse. */}
-        {deal.owner && (
-          <span className="inline-flex min-w-0 items-center gap-1 text-[var(--color-text)]/80" title={`Responsável: ${deal.owner.name}`}>
-            <UserRound className="size-3 shrink-0" />
-            <span className="truncate">{deal.owner.name.split(" ")[0]}</span>
-          </span>
-        )}
 
         <span className="ml-auto flex shrink-0 items-center gap-2.5">
           <span className="inline-flex items-center gap-1" title="Última mensagem dele">
