@@ -1105,7 +1105,7 @@ function VisaoLista({
           <BarraDeTipos tipos={opcoesDeTipo(proprios)} escolhidos={filtros.tipos} onChange={(tipos) => set({ tipos })} />
         )}
 
-        <div className="flex flex-wrap items-center gap-1 lg:ml-auto">
+        <div className="no-scrollbar flex max-w-full items-center gap-1 overflow-x-auto sm:flex-wrap lg:ml-auto [&>*]:shrink-0 [&>*]:whitespace-nowrap">
           {PERIODOS_LISTA.map((p) => (
             <button
               key={p.valor}
@@ -1174,8 +1174,48 @@ function VisaoLista({
       {semAtividade ? (
         <TabelaSemAtividade leads={leads} variosFunis={variosFunis} agora={agora} onAbrirLead={onAbrirLead} onAgendar={onAgendar} />
       ) : (
-      /* Tabela */
-      <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+      <>
+      {/* Celular: um cartão por atividade, no lugar da tabela. */}
+      <ul className="scroll-thin min-h-0 flex-1 divide-y overflow-y-auto sm:hidden">
+        {agora && linhas.length === 0 && (
+          <li className="px-4 py-12 text-center text-sm text-[var(--color-muted)]">Nenhuma atividade com esses filtros.</li>
+        )}
+        {linhas.map((a) => {
+          const atrasada = situacao(a, agora ?? undefined) === "atrasada";
+          return (
+            <li key={a.id} className="flex items-start gap-3 px-4 py-3">
+              <button
+                onClick={() => onAlternar(a)}
+                aria-label={a.doneAt ? "Reabrir" : "Marcar como feita"}
+                className={cn(
+                  "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border-2",
+                  a.doneAt ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-on-ink)]" : "border-[var(--color-muted)]/60",
+                )}
+              >
+                {a.doneAt && <Check className="size-3.5" strokeWidth={3.5} />}
+              </button>
+              <button onClick={() => onAbrir(a.id)} className="min-w-0 flex-1 text-left">
+                <span className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: corDo(a) }} />
+                  <span className={cn("truncate text-sm font-semibold", a.doneAt && "text-[var(--color-muted)] line-through", atrasada && "text-[var(--color-hot)]")}>
+                    {tituloNaAgenda(a)}
+                  </span>
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-[var(--color-text)]/85">{a.deal.nome}</span>
+                <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-[var(--color-muted)]">
+                  <span className={cn("tabular-nums", atrasada && "font-semibold text-[var(--color-hot)]")}>
+                    {a.doneAt && filtros.periodo === "concluidas" ? `feita ${prazoCurto(a.doneAt, agora)}` : a.dueAt ? prazoCurto(a.dueAt, agora) : "sem data"}
+                  </span>
+                  {a.responsavel && <span>· {a.responsavel.nome}</span>}
+                  {variosFunis && <span>· {a.deal.funilNome}</span>}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {/* Tabela */}
+      <div className="scroll-thin hidden min-h-0 flex-1 overflow-auto sm:block">
         <table className="w-full min-w-[56rem] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-[var(--color-solido)]">
             <tr className="text-left text-xs font-semibold text-[var(--color-muted)]">
@@ -1251,6 +1291,7 @@ function VisaoLista({
           </tbody>
         </table>
       </div>
+      </>
       )}
     </div>
   );
@@ -1274,7 +1315,36 @@ function TabelaSemAtividade({
   onAgendar: (lead: { id: string; nome: string }) => void;
 }) {
   return (
-    <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+    <>
+    {/* Celular: um cartão por lead. */}
+    <ul className="scroll-thin min-h-0 flex-1 divide-y overflow-y-auto sm:hidden">
+      {leads.length === 0 && (
+        <li className="px-4 py-12 text-center text-sm text-[var(--color-muted)]">Todo lead tem um próximo passo marcado. 👏</li>
+      )}
+      {leads.map((l) => (
+        <li key={l.id} className="flex items-center gap-3 px-4 py-3">
+          <button onClick={() => onAbrirLead(l.id)} className="min-w-0 flex-1 text-left">
+            <span className="flex items-center gap-2">
+              <TriangleAlert className="size-4 shrink-0 text-[var(--color-warm)]" />
+              <span className="truncate text-sm font-semibold">{l.nome}</span>
+            </span>
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-[var(--color-muted)]">
+              <span className="size-2 rounded-full" style={{ backgroundColor: l.colunaCor }} />
+              {variosFunis && <span>{l.funilNome} ·</span>}
+              {l.coluna}
+              {l.ultimaConversa && <span>· conversa {prazoCurto(l.ultimaConversa, agora)}</span>}
+            </span>
+          </button>
+          <button
+            onClick={() => onAgendar({ id: l.id, nome: l.nome })}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold"
+          >
+            <Plus className="size-3.5" /> Agendar
+          </button>
+        </li>
+      ))}
+    </ul>
+    <div className="scroll-thin hidden min-h-0 flex-1 overflow-auto sm:block">
       <table className="w-full min-w-[48rem] border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-[var(--color-solido)]">
           <tr className="text-left text-xs font-semibold text-[var(--color-muted)]">
@@ -1325,6 +1395,7 @@ function TabelaSemAtividade({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

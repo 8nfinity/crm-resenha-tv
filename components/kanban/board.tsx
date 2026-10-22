@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCorners,
@@ -20,6 +21,7 @@ import { useDroppable } from "@dnd-kit/core";
 import type { DealCard, StageColumn } from "@/lib/types";
 import type { Campo } from "@/lib/custom-fields";
 import { DealCardView } from "./deal-card";
+import { cn } from "@/lib/utils";
 import { ColunaMenu, NovaColuna } from "./coluna-menu";
 import { useEhAdmin } from "@/components/sessao";
 import { DealPanel } from "./deal-panel";
@@ -80,11 +82,31 @@ export function Board({
   const [openDealId, setOpenDealId] = useState<string | null>(leadInicial);
   const [error, setError] = useState<string | null>(null);
 
-  // Um pequeno limiar impede que um clique para abrir o card seja interpretado
-  // como início de arrasto.
+  // Mouse: um pequeno limiar impede que um clique para abrir o card vire
+  // arrasto. Toque: só arrasta segurando o card um instante — deslizar o dedo
+  // continua rolando as colunas, como em qualquer app de celular.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
+  const trilho = useRef<HTMLDivElement>(null);
+  const [colunaVisivel, setColunaVisivel] = useState(0);
+  // Celular: a coluna na tela é a que está mais perto da borda esquerda.
+  function aoRolar() {
+    const el = trilho.current;
+    if (!el) return;
+    const filhos = [...el.children] as HTMLElement[];
+    let melhor = 0;
+    filhos.forEach((f, i) => {
+      if (Math.abs(f.offsetLeft - el.scrollLeft - 16) < Math.abs(filhos[melhor].offsetLeft - el.scrollLeft - 16)) melhor = i;
+    });
+    setColunaVisivel(melhor);
+  }
+  function irParaColuna(i: number) {
+    const el = trilho.current;
+    const alvo = el?.children[i] as HTMLElement | undefined;
+    if (el && alvo) el.scrollTo({ left: alvo.offsetLeft - 16, behavior: "smooth" });
+  }
 
   const visiveis = useMemo(() => aplicarFiltros(deals, filtros, agora), [deals, filtros, agora]);
 
@@ -199,6 +221,22 @@ export function Board({
         visiveis={visiveis.length}
       />
 
+      {/* Celular: uma coluna por vez; esta barra mostra todas e pula direto. */}
+      <div className="no-scrollbar flex gap-1.5 overflow-x-auto border-b px-4 py-2 sm:hidden">
+        {stages.map((stage, i) => (
+          <button
+            key={stage.id}
+            onClick={() => irParaColuna(i)}
+            className={cn(
+              "shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold",
+              i === colunaVisivel ? "border-[var(--color-accent)] text-[var(--color-text)]" : "text-[var(--color-muted)]",
+            )}
+          >
+            {stage.name} <span className="tabular-nums opacity-70">{byStage.get(stage.id)?.length ?? 0}</span>
+          </button>
+        ))}
+      </div>
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -209,7 +247,7 @@ export function Board({
           liberar();
         }}
       >
-        <div className="scroll-thin flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-4 pt-3 sm:snap-none sm:px-6">
+        <div ref={trilho} onScroll={aoRolar} className="scroll-thin flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-4 pt-3 sm:snap-none sm:px-6">
           {stages.map((stage) => (
             <Column
               key={stage.id}

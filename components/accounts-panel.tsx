@@ -89,8 +89,8 @@ export function AccountsPanel() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <div className="flex-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-[12rem] flex-1">
           <p className="text-sm">
             {contas.length} {contas.length === 1 ? "número" : "números"} ·{" "}
             {conectadas} conectado{conectadas === 1 ? "" : "s"}

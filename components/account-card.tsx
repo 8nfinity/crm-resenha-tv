@@ -294,7 +294,7 @@ export function AccountCard({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <section className="card p-6">
+    <section className="card p-4 sm:p-6">
       <div className="flex flex-wrap items-center gap-3">
         <span
           className={cn(
@@ -308,7 +308,8 @@ export function AccountCard({
           style={conectado ? { backgroundColor: conta.color } : undefined}
         />
 
-        <div className="min-w-0 flex-1">
+        {/* Nome e situação com espaço mínimo: no celular os botões descem de linha. */}
+        <div className="min-w-[12rem] flex-1">
           {editandoNome ? (
             <input
               autoFocus
