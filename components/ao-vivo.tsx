@@ -16,7 +16,7 @@ const ESPERA_MS = 250;
 // Ao voltar para a aba, só recarrega se ficou fora por um tempo.
 const FORA_DA_ABA_MS = 30_000;
 // Rede de segurança: de quanto em quanto tempo conferir o carimbo dos dados.
-const CONFERIR_MS = 15_000;
+const CONFERIR_MS = 60_000;
 
 type Carimbo = { versao: string; whatsapp: { conectados: number; contas: number } };
 
